@@ -10,6 +10,22 @@ from userauths.models import User
 def index(request):
     return render(request, "landing/index.html",{})
 
+
+def modules(request):
+    return render(request, "landing/modules.html",{})
+
+def how_it_works(request):
+    return render(request, "landing/how_it_works.html",{})
+
+def pricing(request):
+    return render(request, "landing/pricing.html",{})
+
+def faqs(request):
+    return render(request, "landing/faqs.html",{})
+
+def demo(request):
+    return render(request, "landing/demo.html",{})
+
 def LoginView(request):
     if request.method == "POST":
         email = request.POST.get("email")
@@ -22,7 +38,8 @@ def LoginView(request):
             if user is not None:
                 login(request, user)
                 messages.success(request, "Welcome Back!")
-                return redirect("userauths:sign-in")
+                print("User authenticated successfully")
+                return redirect("school:dashboard")
             else:
                 messages.warning(request, "Username or password does not exist")
                 return redirect("userauths:sign-in")
@@ -31,11 +48,11 @@ def LoginView(request):
             messages.warning(request, "User does not exist")
             return redirect("userauths:sign-in")
 
-    if request.user.is_authenticated:
-        messages.warning(request, "You are already logged In")
-        return redirect("wallet:dashboard")
+    # if request.user.is_authenticated:
+    #     messages.warning(request, "You are already logged In")
+    #     return redirect("wallet:dashboard")
 
-    return render(request, "users/sign-in.html")
+    return render(request, "landing/login.html",{})
 
 @login_required
 def logoutView(request):

@@ -1,0 +1,68 @@
+{% extends 'school/base.html' %}
+{% block title %}Dashboard Overview{% endblock %}
+
+{% block content %}
+<section class="bg-light">
+  <div class="container">
+    <div class="row g-4">
+
+      <!-- Total Teachers -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-primary mb-2">
+              <i class="bi bi-person-badge-fill fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Total Teachers</h5>
+            <h3 class="fw-bold">{{ total_teachers|default:"1,245" }}</h3>
+            <p class="text-muted small mb-0">+5% since last week</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Students -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-success mb-2">
+              <i class="bi bi-person-lines-fill fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Total Students</h5>
+            <h3 class="fw-bold">{{ total_students|default:"24,580" }}</h3>
+            <p class="text-muted small mb-0">+8% this month</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Parents -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-warning mb-2">
+              <i class="bi bi-person-heart fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Parents</h5>
+            <h3 class="fw-bold">{{ total_parents|default:"356" }}</h3>
+            <p class="text-muted small mb-0">+3% this week</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scholarships -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-danger mb-2">
+              <i class="bi bi-gem fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Scholarships</h5>
+            <h3 class="fw-bold">{{ total_scholarships|default:"78" }}</h3>
+            <p class="text-muted small mb-0">-2% vs last week</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+{% endblock %}

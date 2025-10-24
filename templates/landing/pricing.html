@@ -1,0 +1,143 @@
+{% extends 'landing/base.html' %}
+{% block title %}Pricing | Kiswate Digital Academy App{% endblock %}
+
+{% block content %}
+<section id="pricing" class="pricing" style="padding:120px 0; background:#0b0b0b;">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="section-title text-white fw-bold">Simple, Transparent Pricing</h2>
+      <p class="section-sub text-secondary">Start small, scale across campuses anytime.</p>
+      <div class="divider my-4"></div>
+    </div>
+
+    <div class="row g-5 justify-content-center">
+      <!-- Starter -->
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+        <div class="price-card text-center h-100 p-5">
+          <h5 class="text-green fw-bold">Starter</h5>
+          <h2 class="my-3 text-white">KES 7,500 <small class="text-secondary">/ month</small></h2>
+          <ul class="list-unstyled text-secondary mb-4 fs-6">
+            <li class="py-2">✅ Up to 2 devices</li>
+            <li class="py-2">✅ 1 campus / 500 users</li>
+            <li class="py-2">✅ Attendance & notifications</li>
+          </ul>
+          <a href="#demo" class="btn cta-btn btn-outline-green w-100 py-3 fw-semibold">Try Starter</a>
+        </div>
+      </div>
+
+      <!-- Growth -->
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+        <div class="price-card price-pop text-center h-100 p-5 position-relative">
+          <span class="badge-popular">Most Popular</span>
+          <h5 class="text-green fw-bold">Growth</h5>
+          <h2 class="my-3 text-white">KES 19,500 <small class="text-secondary">/ month</small></h2>
+          <ul class="list-unstyled text-secondary mb-4 fs-6">
+            <li class="py-2">✅ Multi-campus</li>
+            <li class="py-2">✅ Up to 8 devices</li>
+            <li class="py-2">✅ Analytics + APIs</li>
+
+          </ul>
+          <a href="#demo" class="btn cta-btn btn-green w-100 py-3 fw-semibold">Choose Growth</a>
+        </div>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="200">
+        <div class="price-card text-center h-100 p-5">
+          <h5 class="text-green fw-bold">Enterprise</h5>
+          <h2 class="my-3 text-white">Custom</h2>
+          <ul class="list-unstyled text-secondary mb-4 fs-6">
+            <li class="py-2">✅ Private cloud / On-prem</li>
+            <li class="py-2">✅ Unlimited devices & users</li>
+            <li class="py-2">✅ Dedicated support & SLAs</li>
+          </ul>
+          <a href="#demo" class="btn cta-btn btn-outline-green w-100 py-3 fw-semibold">Talk to Sales</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+<style>
+  .price-card {
+    background: #141414;
+    border: 2px solid rgba(0, 184, 113, 0.3);
+    border-radius: 25px;
+    transition: all 0.35s ease;
+    box-shadow: 0 0 25px rgba(0, 184, 113, 0.05);
+    min-height: 450px;
+  }
+
+  .price-card:hover {
+    transform: translateY(-10px);
+    border-color: #00b871;
+    box-shadow: 0 0 40px rgba(0, 184, 113, 0.25);
+  }
+
+  .price-pop {
+    background: linear-gradient(145deg, #0e0e0e, #1a1a1a);
+    border: 2px solid #00b871;
+    box-shadow: 0 0 50px rgba(0, 184, 113, 0.3);
+  }
+
+  .badge-popular {
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #00b871;
+    color: #fff;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 15px rgba(0, 184, 113, 0.5);
+  }
+
+  .btn-green {
+    background: #00b871;
+    color: #fff;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+  }
+
+  .btn-green:hover {
+    background: #00d680;
+    transform: scale(1.05);
+  }
+
+  .btn-outline-green {
+    border: 2px solid #00b871;
+    color: #00b871;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+  }
+
+  .btn-outline-green:hover {
+    background: #00b871;
+    color: #fff;
+    transform: scale(1.05);
+  }
+
+  .divider {
+    width: 100px;
+    height: 3px;
+    background: #00b871;
+    border-radius: 3px;
+    margin: 0 auto;
+  }
+
+  .text-green {
+    color: #00b871 !important;
+  }
+
+  @media (max-width: 768px) {
+    .price-card {
+      padding: 2.5rem 1.5rem;
+      min-height: 400px;
+    }
+  }
+</style>

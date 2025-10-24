@@ -1,0 +1,159 @@
+{% extends 'school/base.html' %}
+{% block title %}Dashboard | {{ school.name }}{% endblock %}
+{% block content %}
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand" data-aos="fade-right">
+      <i class="bi bi-shield-lock-fill"></i>
+      <span>School Admin Console</span>
+    </div>
+    <nav class="d-flex flex-column gap-1">
+      <!-- Dashboard -->
+      <a class="side-link active" href="{% url 'school:dashboard' %}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+
+      <!-- Administration -->
+      <a class="side-link has-sub" href="#" data-toggle="administration">
+        <i class="bi bi-gear-wide-connected"></i> Administration
+      </a>
+      <ul class="sub-menu" id="administration">
+        <li><a href=""><i class="bi bi-building"></i> Schools</a></li>
+        <li><a href=""><i class="bi bi-diagram-3"></i> Grades</a></li>
+        <li><a href=""><i class="bi bi-key"></i> Smart IDs</a></li>
+      </ul>
+
+      <!-- Users -->
+      <a class="side-link has-sub" href="#" data-toggle="users">
+        <i class="bi bi-people"></i> Users
+      </a>
+      <ul class="sub-menu" id="users">
+        <li><a href=""><i class="bi bi-person-lines-fill"></i> Students</a></li>
+        <li><a href=""><i class="bi bi-person-badge"></i> Staff</a></li>
+        <li><a href=""><i class="bi bi-person-heart"></i> Parents</a></li>
+      </ul>
+
+      <!-- LMS -->
+      <a class="side-link has-sub" href="#" data-toggle="lms">
+        <i class="bi bi-easel"></i> LMS
+      </a>
+      <ul class="sub-menu" id="lms">
+        <li><a href=""><i class="bi bi-journal-text"></i> Subjects</a></li>
+        <li><a href=""><i class="bi bi-clipboard-check"></i> Enrollments</a></li>
+        <li><a href=""><i class="bi bi-camera-video"></i> Virtual Classes</a></li>
+        <li><a href=""><i class="bi bi-check-circle"></i> Attendance</a></li>
+        <li><a href=""><i class="bi bi-file-earmark-text"></i> Assignments</a></li>
+        <li><a href=""><i class="bi bi-file-earmark-check"></i> Submissions</a></li>
+      </ul>
+
+      <!-- Library -->
+      <a class="side-link has-sub" href="#" data-toggle="library">
+        <i class="bi bi-book"></i> Library
+      </a>
+      <ul class="sub-menu" id="library">
+        <li><a href=""><i class="bi bi-book-half"></i> Books</a></li>
+        <li><a href=""><i class="bi bi-journal"></i> Chapters</a></li>
+        <li><a href=""><i class="bi bi-unlock"></i> Access</a></li>
+      </ul>
+
+      <!-- Finance -->
+      <a class="side-link has-sub" href="#" data-toggle="finance">
+        <i class="bi bi-cash-coin"></i> Finance
+      </a>
+      <ul class="sub-menu" id="finance">
+        <li><a href=""><i class="bi bi-credit-card"></i> Payments</a></li>
+      </ul>
+
+      <!-- Discipline -->
+      <a class="side-link has-sub" href="#" data-toggle="discipline">
+        <i class="bi bi-exclamation-triangle"></i> Discipline
+      </a>
+      <ul class="sub-menu" id="discipline">
+        <li><a href=""><i class="bi bi-clipboard-data"></i> Records</a></li>
+      </ul>
+
+      <!-- Certificates -->
+      <a class="side-link has-sub" href="#" data-toggle="certificates">
+        <i class="bi bi-award"></i> Certificates
+      </a>
+      <ul class="sub-menu" id="certificates">
+        <li><a href=""><i class="bi bi-file-earmark-pdf"></i> List</a></li>
+      </ul>
+
+      <!-- Scholarships -->
+      <a class="side-link has-sub" href="#" data-toggle="scholarships">
+        <i class="bi bi-gem"></i> Scholarships
+      </a>
+      <ul class="sub-menu" id="scholarships">
+        <li><a href=""><i class="bi bi-file-earmark-plus"></i> Applications</a></li>
+        <li><a href=""><i class="bi bi-arrow-down-circle"></i> Disbursements</a></li>
+      </ul>
+
+      <!-- Settings -->
+      <a class="side-link" href="">
+        <i class="bi bi-gear"></i> Settings
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="header d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+        <h6 class="m-0 fw-bold">Dashboard</h6>
+      </div>
+      <div class="searchbar d-none d-md-block" style="max-width: 380px;">
+        <input class="form-control form-control-sm" type="search" placeholder="Search…" />
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge badge-dark rounded-pill px-2 py-1">
+          <i class="bi bi-calendar3 me-1"></i> <span id="today">{{ current_date|date:"M d, Y" }}</span>
+        </span>
+        <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
+      </div>
+    </header>
+
+    <section class="content container-fluid">
+      {% include 'school/partials/dashboard_cards.html' %}
+      {% include 'school/partials/dashboard_tables.html' %}
+    </section>
+  </main>
+</div>
+
+<!-- Simple JS for sub-menu toggle (add to base.html or inline) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const toggles = document.querySelectorAll('[data-toggle]');
+  toggles.forEach(toggle => {
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      const targetId = this.getAttribute('data-toggle');
+      const subMenu = document.getElementById(targetId);
+      subMenu.classList.toggle('show');
+    });
+  });
+});
+</script>
+
+<!-- CSS for sub-menus (add to base.css) -->
+<style>
+.sub-menu {
+  list-style: none;
+  padding-left: 1.5rem;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.sub-menu.show {
+  max-height: 500px; /* Adjust as needed */
+}
+.sub-menu li a {
+  padding: 0.5rem 0;
+  font-size: 0.9em;
+  color: #6c757d;
+}
+</style>
+
+{% endblock %}

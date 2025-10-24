@@ -1,0 +1,100 @@
+{% extends 'landing/base.html' %}
+{% block title %}Demo | Kiswate Digital Academy{% endblock %}
+
+{% block content %}
+<section id="demo" style="padding:100px 0; background:linear-gradient(145deg, #0b0b0b, #141414);">
+  <div class="container">
+    <div class="row g-5 align-items-center">
+      
+      <!-- Left: Demo Form -->
+      <div class="col-lg-7" data-aos="fade-right">
+        <h2 class="section-title text-white fw-bold mb-3">Ready to Modernize Your Campus?</h2>
+        <p class="section-sub text-secondary fs-5 mb-4">Book a 30-minute walkthrough. We’ll connect a demo device and show live events flowing into the cloud.</p>
+        <div class="divider mb-5"></div>
+        
+        <form class="row g-4 shadow-lg p-4 rounded-4 bg-dark bg-opacity-25 backdrop-blur">
+          <div class="col-md-6">
+            <label class="form-label text-light fw-semibold">School Name</label>
+            <input class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3" placeholder="e.g., Sunrise Academy" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label text-light fw-semibold">Contact Email</label>
+            <input type="email" class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3" placeholder="admin@school.ac.ke" />
+          </div>
+          <div class="col-12">
+            <label class="form-label text-light fw-semibold">Message</label>
+            <textarea class="form-control bg-white text-dark border-0 shadow-sm rounded-3" rows="4" placeholder="Tell us about your campuses and devices…"></textarea>
+          </div>
+          <div class="col-12 text-end mt-3">
+            <button class="btn btn-green py-3 px-5 fw-semibold rounded-3 shadow">Request Demo</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Right: Info Card -->
+      <div class="col-lg-5" data-aos="fade-left">
+        <div class="hero-card bg-gradient-dark p-5 rounded-4 shadow-lg text-white h-100">
+          <h5 class="fw-bold mb-4 text-green">Why SchoolCloud?</h5>
+          <ul class="small text-secondary mb-0 ps-3">
+            <li class="mb-3">🇰🇪 Built for local realities (M-Pesa, offline-ready)</li>
+            <li class="mb-3">⚡ Fast rollout – no local servers needed</li>
+            <li>🌍 Scales from one gate to nationwide networks</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+<style>
+  /* Divider reuse from pricing */
+  .divider {
+    width: 100px;
+    height: 3px;
+    background: #00b871;
+    border-radius: 3px;
+  }
+
+  /* Green accent */
+  .text-green {
+    color: #00b871 !important;
+  }
+
+  /* Button style */
+  .btn-green {
+    background: #00b871;
+    color: #fff;
+    border: none;
+    transition: all 0.3s ease;
+  }
+
+  .btn-green:hover {
+    background: #00d680;
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 0 20px rgba(0, 184, 113, 0.4);
+  }
+
+  /* Card background */
+  .hero-card {
+    background: linear-gradient(160deg, #121212, #1c1c1c);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* Form field focus effects */
+  .form-control:focus {
+    box-shadow: 0 0 0 0.25rem rgba(0, 184, 113, 0.25);
+    border-color: #00b871;
+  }
+
+  /* Responsiveness */
+  @media (max-width: 768px) {
+    #demo {
+      padding: 60px 0;
+    }
+    .hero-card {
+      margin-top: 40px;
+    }
+  }
+</style>
+  

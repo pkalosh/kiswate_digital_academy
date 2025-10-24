@@ -1,0 +1,117 @@
+<!-- MODULES -->
+{% extends 'landing/base.html' %}
+{% block title %}Modules | Kiswate Digital Academy{% endblock %}
+
+{% block content %}
+<section class="py-6" id="modules" style="padding:100px 0; background-color:#0d1117;">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="section-title text-light">Everything Your Campus Needs</h2>
+      <p class="section-sub text-secondary">Modular, cloud-based features that work beautifully together.</p>
+    </div>
+
+    <div class="row g-4">
+      {% comment %} CARD STYLE: bigger, rounded, padded {% endcomment %}
+      <style>
+        .module-card {
+          background: #1a1f2b;
+          color: #ddd;
+          padding: 2rem 1.8rem;
+          border-radius: 1.2rem;
+          height: 100%;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+          transition: all 0.3s ease;
+        }
+        .module-card:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .module-card h5 {
+          color: #28a745;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+        .module-card p {
+          font-size: 1rem;
+        }
+        .module-card ul li {
+          margin-bottom: 0.4rem;
+        }
+      </style>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+        <div class="module-card">
+          <h5 class="mb-3">Smart Access Control</h5>
+          <p class="mb-4">Fingerprint · Face · Card · PIN with cloud policies, zones & schedules.</p>
+          <ul class="mb-0 small">
+            <li>Door & gate rules, visitor passes</li>
+            <li>Offline buffering & auto sync</li>
+            <li>Alerts on unauthorized attempts</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
+        <div class="module-card">
+          <h5 class="mb-3">Attendance & Class Check-ins</h5>
+          <p class="mb-4">Realtime in/out logs mapped to classes, dorms, and labs.</p>
+          <ul class="mb-0 small">
+            <li>Auto-attendance from access events</li>
+            <li>Homeroom and session tracking</li>
+            <li>Exports to CSV/PDF</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+        <div class="module-card">
+          <h5 class="mb-3">Analytics & Insights</h5>
+          <p class="mb-4">Trends, heatmaps, and risk flags that inform decisions.</p>
+          <ul class="mb-0 small">
+            <li>Absenteeism predictors</li>
+            <li>Peak hour congestion</li>
+            <li>Device health dashboards</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+        <div class="module-card">
+          <h5 class="mb-3">Parent Notifications</h5>
+          <p class="mb-4">SMS/Email alerts for entry/exit, late departures, and incidents.</p>
+          <ul class="mb-0 small">
+            <li>Configurable templates</li>
+            <li>Quiet hours & throttling</li>
+            <li>Delivery reports</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
+        <div class="module-card">
+          <h5 class="mb-3">Billing & Subscriptions</h5>
+          <p class="mb-4">Tenant plans, device limits, and automated invoicing (M-Pesa/Stripe).</p>
+          <ul class="mb-0 small">
+            <li>Usage-based or per-device</li>
+            <li>Invoice PDFs & receipts</li>
+            <li>Webhooks for finance systems</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+        <div class="module-card">
+          <h5 class="mb-3">Developer APIs</h5>
+          <p class="mb-4">REST & Webhooks to integrate with SIS, HRMIS, and ERPs.</p>
+          <ul class="mb-0 small">
+            <li>OpenAPI/Swagger docs</li>
+            <li>API keys per tenant</li>
+            <li>Events: access-granted/denied</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+<!-- Compare this snippet from templates/landing/base.html: -->

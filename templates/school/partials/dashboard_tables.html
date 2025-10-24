@@ -1,0 +1,51 @@
+{% extends 'school/base.html' %}
+{% block title %}Dashboard Tables{% endblock %}
+
+{% block content %}
+<section class="py-5">
+  <div class="container">
+    <h2 class="fw-bold mb-4 text-center">Recent Activities</h2>
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">User</th>
+                <th scope="col">Email</th>
+                <th scope="col">Status</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Date</th>
+                <th scope="col" class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for activity in recent_activities %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>
+                  <img src="{{ activity.user.profile_picture.url|default:'https://i.pravatar.cc/40?img='|add:forloop.counter }}" alt="User" class="rounded-circle me-2" width="40" height="40">
+                  <span class="fw-semibold">{{ activity.user.get_full_name }}</span>
+                </td>
+                <td>{{ activity.user.email }}</td>
+                <td><span class="badge bg-{{ activity.status|lower }}">{{ activity.get_status_display }}</span></td>
+                <td>${{ activity.amount|default:"0" }}</td>
+                <td>{{ activity.date|date:"M d, Y" }}</td>
+                <td class="text-center">
+                  <a href="" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteActivity({{ activity.id }})"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted">No recent activities.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

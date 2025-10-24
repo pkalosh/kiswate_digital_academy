@@ -1,0 +1,40 @@
+  <!-- FAQ -->
+   {% extends 'landing/base.html' %}
+{% block title %}FAQs | Kiswate Digital Academy App{% endblock %}
+
+{% block content %}
+  <section id="faq" style="padding:80px 0">
+    <div class="container">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <p class="section-sub">Everything you need to know before getting started.</p>
+      </div>
+      <div class="accordion" id="faqAcc" data-aos="fade-up">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="q1">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#a1">Does it work with ZKTeco / Suprema / Hikvision?</button>
+          </h2>
+          <div id="a1" class="accordion-collapse collapse show" data-bs-parent="#faqAcc">
+            <div class="accordion-body">Yes. We support common protocols and provide an integration agent or direct API. Offline buffering ensures no data loss.</div>
+          </div>
+        </div>
+        <div class="accordion-item mt-2">
+          <h2 class="accordion-header" id="q2">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a2">Can parents receive entry/exit SMS?</button>
+          </h2>
+          <div id="a2" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+            <div class="accordion-body">Absolutely. You can enable SMS/email per student, set quiet hours, and customize templates.</div>
+          </div>
+        </div>
+        <div class="accordion-item mt-2">
+          <h2 class="accordion-header" id="q3">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#a3">Is this secure and compliant?</button>
+          </h2>
+          <div id="a3" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+            <div class="accordion-body">Data-in-transit is protected with TLS; at rest with encryption. Role‑based access, audit logs, and per‑tenant isolation are included.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

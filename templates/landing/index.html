@@ -1,5 +1,5 @@
 {% extends 'landing/base.html' %}
-{% block title %}Home | Kiswate Digital Academy App{% endblock %}
+{% block title %}Home | Kiswate Digital Academy{% endblock %}
 
 {% block content %}
 <header class="hero" id="home">
@@ -29,13 +29,8 @@
   </div>
 </header>
 
-{% include 'partials/modules.html' %}
-{% include 'partials/how.html' %}
-{% include 'partials/integrations.html' %}
-{% include 'partials/analytics.html' %}
-{% include 'partials/pricing.html' %}
-{% include 'partials/testimonials.html' %}
-{% include 'partials/faq.html' %}
-{% include 'partials/demo.html' %}
-{% include 'partials/login.html' %}
+
+{% include 'landing/partials/analytics.html' %}
+{% include 'landing/partials/testimonials.html' %}
+
 {% endblock %}

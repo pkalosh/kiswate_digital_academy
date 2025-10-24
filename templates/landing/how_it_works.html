@@ -1,0 +1,151 @@
+{% extends 'landing/base.html' %}
+{% block title %}How It Works | Kiswate Digital Academy App{% endblock %}
+
+{% block content %}
+<section id="how" style="padding:120px 0; background:radial-gradient(circle at top left, #0b0b0b 60%, #121212);">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="section-title text-white fw-bold">How It Works</h2>
+      <p class="section-sub text-secondary fs-5">Simple setup · Real-time sync · Powerful control.</p>
+      <div class="divider my-4"></div>
+    </div>
+
+    <div class="row g-5 justify-content-center">
+
+      <!-- Step 1 -->
+      <div class="col-md-6 col-lg-3" data-aos="fade-up">
+        <div class="how-card text-center p-5 h-100 position-relative">
+          <div class="icon-wrap mx-auto mb-4">
+            <i class="bi bi-router"></i>
+          </div>
+          <h5 class="text-white mb-3 fw-semibold">Connect Devices</h5>
+          <p class="text-secondary mb-0">
+            Enroll biometric or RFID readers securely — ZKTeco, Suprema, Hikvision, and more.
+          </p>
+          <span class="step-number">1</span>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="100">
+        <div class="how-card text-center p-5 h-100 position-relative">
+          <div class="icon-wrap mx-auto mb-4">
+            <i class="bi bi-people"></i>
+          </div>
+          <h5 class="text-white mb-3 fw-semibold">Sync People & Rules</h5>
+          <p class="text-secondary mb-0">
+            Manage students, staff, and time zones all from a unified cloud dashboard.
+          </p>
+          <span class="step-number">2</span>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="200">
+        <div class="how-card text-center p-5 h-100 position-relative">
+          <div class="icon-wrap mx-auto mb-4">
+            <i class="bi bi-play-circle"></i>
+          </div>
+          <h5 class="text-white mb-3 fw-semibold">Go Live</h5>
+          <p class="text-secondary mb-0">
+            Start real-time monitoring instantly. Devices sync even in offline mode.
+          </p>
+          <span class="step-number">3</span>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="300">
+        <div class="how-card text-center p-5 h-100 position-relative">
+          <div class="icon-wrap mx-auto mb-4">
+            <i class="bi bi-bell"></i>
+          </div>
+          <h5 class="text-white mb-3 fw-semibold">Track & Notify</h5>
+          <p class="text-secondary mb-0">
+            Generate attendance reports, trigger alerts, and notify via SMS or email.
+          </p>
+          <span class="step-number">4</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+{% include 'landing/partials/integrations.html' %}
+{% endblock %}
+
+<style>
+  /* Reusable green */
+  .text-green { color: #00b871 !important; }
+  .divider {
+    width: 100px;
+    height: 3px;
+    background: #00b871;
+    border-radius: 3px;
+    margin: 0 auto;
+  }
+
+  /* How cards */
+  .how-card {
+    background: linear-gradient(145deg, #141414, #1b1b1b);
+    border: 1px solid rgba(0, 184, 113, 0.25);
+    border-radius: 20px;
+    transition: all 0.35s ease;
+    box-shadow: 0 0 20px rgba(0, 184, 113, 0.05);
+    overflow: hidden;
+  }
+
+  .how-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 0 35px rgba(0, 184, 113, 0.25);
+    border-color: #00b871;
+  }
+
+  /* Step number indicator */
+  .step-number {
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    background: #00b871;
+    color: #fff;
+    width: 35px;
+    height: 35px;
+    line-height: 35px;
+    font-weight: 700;
+    border-radius: 50%;
+    font-size: 0.95rem;
+    box-shadow: 0 0 10px rgba(0, 184, 113, 0.4);
+  }
+
+  /* Icon circle styling */
+  .icon-wrap {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,184,113,0.15), rgba(0,184,113,0.05));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #00b871;
+    font-size: 2.5rem;
+    transition: all 0.4s ease;
+  }
+
+  .how-card:hover .icon-wrap {
+    transform: scale(1.1);
+    background: radial-gradient(circle, rgba(0,184,113,0.3), rgba(0,184,113,0.1));
+    color: #00d680;
+  }
+
+  @media (max-width: 768px) {
+    .how-card {
+      padding: 2rem 1.5rem;
+    }
+    .icon-wrap {
+      width: 65px;
+      height: 65px;
+      font-size: 2rem;
+    }
+  }
+</style>
