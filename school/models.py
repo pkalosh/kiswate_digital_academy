@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 import uuid
+from django.utils import timezone
 from userauths.models import User
 
 # Choice constants (isolated for reuse)
@@ -367,3 +368,339 @@ class ScholarshipDisbursement(models.Model):
 
     def __str__(self):
         return f"Disbursement for {self.application.title}"
+
+
+class SubscriptionPlan(models.Model):
+    """
+    Defines the different subscription plans for the Smart Shule platform.
+    These are global plans offered to schools.
+    """
+    PLAN_TYPE_CHOICES = (
+        ('basic_school', 'Basic School Plan'),
+        ('standard_school', 'Standard School Plan'),
+        ('premium_school', 'Premium School Plan'),
+        ('custom_school', 'Custom Enterprise Plan'),
+        # Add other plans based on features/student capacity/etc.
+    )
+    BILLING_CYCLE_CHOICES = (
+        ('monthly', 'Monthly'),
+        ('annually', 'Annually'),
+        ('quarterly', 'Quarterly'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True, choices=PLAN_TYPE_CHOICES,
+                            help_text="Name of the subscription plan (e.g., Basic School, Premium School)")
+    description = models.TextField(blank=True, help_text="Detailed description of the plan's benefits.")
+
+    # Base pricing for the plan
+    base_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0.00)],
+        help_text="Base price of the plan per billing cycle."
+    )
+    
+    # Example of dynamic pricing: per student, per bus, etc.
+    # You could have a separate model for pricing tiers if it gets complex
+    price_per_student = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+                                            help_text="Additional cost per student per month/year.")
+    price_per_bus = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+                                         help_text="Additional cost per bus per month/year.")
+    price_per_parent = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+                                         help_text="Additional cost per parent per month/year.")
+    # Features: This is key for dynamic feature unlocking
+    # Example: {"max_students": 500, "max_buses": 5, "sms_notifications": True, "whatsapp_integration": False, "realtime_tracking": True}
+    features_json = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="JSON object listing features and limits included in this plan. "
+                  "E.g., {'max_students': 500, 'max_buses': 5, 'sms_notifications': True}"
+    )
+
+    is_active = models.BooleanField(default=True, help_text="Indicates if the plan is currently available for subscription.")
+    default_billing_cycle = models.CharField(max_length=10, choices=BILLING_CYCLE_CHOICES, default='annually')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Subscription Plan"
+        verbose_name_plural = "Subscription Plans"
+        ordering = ['base_price']
+
+    def __str__(self):
+        return self.name
+
+class SchoolSubscription(models.Model):
+    """
+    Manages a school's subscription to a specific SubscriptionPlan.
+    This links a School (Tenant) to a SubscriptionPlan and payment details.
+    """
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('cancelled', 'Cancelled'),
+        ('pending', 'Payment Pending'), # For when payment is due but not yet confirmed
+        ('expired', 'Expired'),
+        ('trial', 'Trial'),
+        ('paused', 'Paused'),
+    )
+    BILLING_CYCLE_CHOICES = (
+        ('monthly', 'Monthly'),
+        ('annually', 'Annually'),
+        ('quarterly', 'Quarterly'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    school = models.OneToOneField(
+        'School', # Reference to the School model from the 'schools' app
+        on_delete=models.CASCADE,
+        related_name='platform_subscription',
+        help_text="The school (tenant) holding this subscription."
+    )
+    plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='school_subscriptions',
+        help_text="The subscription plan this school is subscribed to."
+    )
+
+    # Actual price charged for this specific subscription (can differ from plan's base_price due to discounts/prorations)
+    price_charged = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0.00)],
+        help_text="The actual price charged for this subscription."
+    )
+    
+    billing_cycle = models.CharField(max_length=10, choices=BILLING_CYCLE_CHOICES, default='annually')
+
+    start_date = models.DateTimeField(default=timezone.now, help_text="Date and time when the subscription started.")
+    end_date = models.DateTimeField(blank=True, null=True, help_text="Date and time when the subscription is set to end or expired.")
+    next_billing_date = models.DateTimeField(blank=True, null=True, help_text="The next date on which the school will be billed.")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='trial', help_text="Current status of the school's subscription.")
+
+    payment_method_last4 = models.CharField(
+        max_length=4,
+        blank=True,
+        null=True,
+        help_text="Last 4 digits of the payment method (e.g., card number)."
+    )
+    
+    # Store dynamic quantities that affect pricing for this school's subscription
+    current_students_count = models.PositiveIntegerField(default=0, help_text="Current number of active students in the school.")
+    current_buses_count = models.PositiveIntegerField(default=0, help_text="Current number of active buses in the school.")
+    current_parents_count = models.PositiveIntegerField(default=0, help_text="Current number of active parents in the school.")
+    parents_to_pay = models.BooleanField(
+        default=False,
+        help_text="Indicates if parents are required to pay for the subscription."
+    )
+    school_to_pay = models.BooleanField(
+        default=True,
+        help_text="Indicates if the school itself is responsible for paying the subscription."
+    )
+
+    # User who manages this subscription (e.g., a school admin) - optional
+    managed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_school_subscriptions',
+        help_text="The global platform user who manages this school's subscription."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "School Subscription"
+        verbose_name_plural = "School Subscriptions"
+        ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['school', 'status']),
+            models.Index(fields=['end_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.school.name}'s {self.plan.name if self.plan else 'No Plan'} Subscription ({self.status})"
+
+    def calculate_current_cost(self):
+        """
+        Calculates the current cost of the subscription based on the plan and usage.
+        This would be used for invoicing.
+        """
+        if not self.plan:
+            return 0.00
+        
+        cost = self.plan.base_price
+        cost += self.current_students_count * self.plan.price_per_student
+        cost += self.current_buses_count * self.plan.price_per_bus
+        cost += self.current_parents_count * self.plan.price_per_parent
+        # Apply any discounts or adjustments based on the plan's features
+        # if self.plan.features_json:
+            # Example: If the plan has a discount for a certain number of students
+            # if 'student_discount' in self.plan.features_json:
+            #     discount = self.plan.features_json['student_discount']
+            #     cost -= discount * self.current_students_count
+        return cost
+
+    # Add methods like renew, cancel, mark_expired as in the previous example,
+    # adapting them for school-level subscription logic.
+
+
+class Invoice(models.Model):
+    """
+    Represents an invoice generated for a school's subscription payment.
+    """
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+        ('void', 'Void'),
+    )
+
+    invoice_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    school = models.ForeignKey(
+        'school', # Link to the School (Tenant)
+        on_delete=models.CASCADE,
+        related_name='invoices',
+        help_text="The school to whom this invoice belongs."
+    )
+    subscription = models.ForeignKey(
+        SchoolSubscription,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoices',
+        help_text="The subscription this invoice is associated with."
+    )
+
+    amount_due = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.00)])
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, validators=[MinValueValidator(0.00)])
+    currency = models.CharField(max_length=3, default='KES', help_text="Currency of the invoice (e.g., KES, USD).")
+    parent = models.ForeignKey(
+        'Parent', # Link to the Parent model if applicable
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoices_paid',
+        help_text="The parent responsible for this invoice, if applicable."
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    invoice_date = models.DateTimeField(default=timezone.now, help_text="Date when the invoice was generated.")
+    due_date = models.DateTimeField(blank=True, null=True, help_text="Date when the invoice payment is due.")
+    paid_at = models.DateTimeField(blank=True, null=True, help_text="Date and time when the invoice was successfully paid.")
+
+    # A link to the hosted invoice PDF from the billing platform
+    invoice_pdf_url = models.URLField(max_length=500, blank=True, null=True,
+                                      help_text="URL to the hosted invoice PDF.")
+
+    # Line items for dynamic invoicing (e.g., base plan, X students, Y buses)
+    line_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="JSON array of line items in the invoice. "
+                  "E.g., [{'description': 'Standard Plan', 'quantity': 1, 'unit_price': 5000, 'total': 5000}, "
+                  "{'description': 'Per student fee', 'quantity': 200, 'unit_price': 5, 'total': 1000}]"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Invoice"
+        verbose_name_plural = "Invoices"
+        ordering = ['-invoice_date']
+        indexes = [
+            models.Index(fields=['school', 'status']),
+            models.Index(fields=['invoice_date']),
+        ]
+
+    def __str__(self):
+        return f"Invoice {self.invoice_id} for {self.school.name} - KES {self.amount_due} ({self.status})"
+
+    # Add methods like mark_as_paid, mark_as_failed, is_overdue
+
+
+class ContactMessage(models.Model):
+    """
+    Model to store contact messages from individuals interested in Smart Shule.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    first_name = models.CharField(max_length=100, help_text="First name of the person contacting.")
+    last_name = models.CharField(max_length=100, help_text="Last name of the person contacting.")
+    email_address = models.EmailField(help_text="Email address for communication.")
+    
+    school_name = models.CharField(max_length=255, blank=True, null=True, 
+                                   help_text="Name of the school the person represents or is inquiring about.")
+    
+    message = models.TextField(help_text="The content of the inquiry or message.")
+    
+    # Metadata
+    created_at = models.DateTimeField(default=timezone.now, help_text="Timestamp when the message was received.")
+    is_read = models.BooleanField(default=False, help_text="Indicates if the message has been reviewed by an admin.")
+    
+    class Meta:
+        verbose_name = "Contact Message"
+        verbose_name_plural = "Contact Messages"
+        ordering = ['-created_at'] # Order newest messages first
+        indexes = [
+            models.Index(fields=['email_address']),
+            models.Index(fields=['school_name']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"Message from {self.first_name} {self.last_name} ({self.school_name or 'N/A'}) - {self.created_at.strftime('%Y-%m-%d')}"
+
+class MpesaStkPushRequestResponse(models.Model):
+    merchant_request_id = models.CharField(max_length=100)
+    checkout_request_id = models.CharField(max_length=100)
+    response_code = models.CharField(max_length=10)
+    response_description = models.CharField(max_length=255)
+    customer_message = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    invoice_number = models.CharField(max_length=100, blank=True)
+    is_paid = models.BooleanField(default=False)
+    reason_not_paid = models.TextField(blank=True)
+    amount = models.FloatField(blank=True, null=True)
+    order_number = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"STK Request For {self.wallet} Amount:{self.amount}"
+
+
+class MpesaPayment(models.Model):
+    merchant_request_id = models.CharField(max_length=255)
+    checkout_request_id = models.CharField(max_length=255)
+    result_code = models.IntegerField()
+    result_desc = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    mpesa_receipt_number = models.CharField(max_length=255, unique=True)
+    wallet_balance = models.CharField(max_length=255, null=True, blank=True)
+    transaction_date = models.BigIntegerField()
+    phone_number = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.phone_number} | {self.mpesa_receipt_number} | {self.amount}'
+    
+
+class AbstractBaseModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class MpesaResponseBody(AbstractBaseModel):
+    body = models.JSONField()
+

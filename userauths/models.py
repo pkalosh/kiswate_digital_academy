@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+
 import uuid
 from django.contrib.auth.base_user import BaseUserManager
 from django.db.models.signals import post_save
@@ -57,3 +59,32 @@ class User(AbstractUser):
     def __str__(self):
         return self.email
 
+
+class OTP(models.Model):
+    """Model to store OTP information"""
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='otps')
+    otp_code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=50)  # login_verification, password_reset, etc.
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'purpose', 'is_used']),
+            models.Index(fields=['otp_code', 'is_used']),
+        ]
+    
+    def __str__(self):
+        return f"OTP for {self.user.email if hasattr(self.user, 'email') else self.user} ({self.purpose})"
+        
+    def is_valid(self):
+        """Check if the OTP is still valid"""
+        return (
+            not self.is_used and 
+            self.expires_at > timezone.now() and
+            self.attempts < 3
+        )
