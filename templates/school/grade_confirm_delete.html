@@ -1,0 +1,37 @@
+<!-- templates/school/grade_confirm_delete.html -->
+{% extends 'school/base.html' %}
+{% block title %}Delete {{ grade.name }} | {{ school.name }}{% endblock %}
+{% block content %}
+  <header class="header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+      <div>
+        <h6 class="m-0 fw-bold">Delete Grade</h6>
+        <nav aria-label="breadcrumb" class="small">
+          <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'school:school-grades' %}">Grades</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete {{ grade.name }}</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <section class="content container-fluid py-4">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Deletion</h5>
+      </div>
+      <div class="card-body text-center">
+        <p class="lead">Are you sure you want to deactivate <strong>{{ grade.name }}</strong> ({{ grade.code }})?</p>
+        <p class="text-muted">This action cannot be undone. Students in this grade will need to be reassigned.</p>
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">Yes, Deactivate</button>
+        </form>
+        <a href="{% url 'school:school-grades' %}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}

@@ -1,300 +1,68 @@
 {% extends 'school/base.html' %}
 {% block title %}Dashboard | {{ school.name }}{% endblock %}
+
 {% block content %}
+<section class="bg-light">
+  <div class="container">
+    <div class="row g-4">
 
-<div class="app">
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="brand" data-aos="fade-right">
-      <i class="bi bi-shield-lock-fill"></i>
-      <span>School Admin Console</span>
-    </div>
-
-    <nav class="menu">
-      <!-- Dashboard -->
-      <a class="side-link active" href="{% url 'school:dashboard' %}">
-        <i class="bi bi-speedometer2"></i> Dashboard
-      </a>
-
-      <!-- Administration -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="administration">
-          <i class="bi bi-gear-wide-connected"></i> Administration
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="administration">
-          <li><a href="#"><i class="bi bi-building"></i> Schools</a></li>
-          <li><a href="#"><i class="bi bi-diagram-3"></i> Grades</a></li>
-          <li><a href="#"><i class="bi bi-key"></i> Smart IDs</a></li>
-        </ul>
+      <!-- Total Teachers -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-primary mb-2">
+              <i class="bi bi-person-badge-fill fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Total Teachers</h5>
+            <h3 class="fw-bold">{{ total_teachers|default:"1,245" }}</h3>
+            <p class="text-muted small mb-0">+5% since last week</p>
+          </div>
+        </div>
       </div>
 
-      <!-- Users -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="users">
-          <i class="bi bi-people"></i> Users
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="users">
-          <li><a href="#"><i class="bi bi-person-lines-fill"></i> Students</a></li>
-          <li><a href="#"><i class="bi bi-person-badge"></i> Staff</a></li>
-          <li><a href="#"><i class="bi bi-person-heart"></i> Parents</a></li>
-        </ul>
+      <!-- Total Students -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-success mb-2">
+              <i class="bi bi-person-lines-fill fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Total Students</h5>
+            <h3 class="fw-bold">{{ total_students|default:"24,580" }}</h3>
+            <p class="text-muted small mb-0">+8% this month</p>
+          </div>
+        </div>
       </div>
 
-      <!-- LMS -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="lms">
-          <i class="bi bi-easel"></i> LMS
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="lms">
-          <li><a href="#"><i class="bi bi-journal-text"></i> Subjects</a></li>
-          <li><a href="#"><i class="bi bi-clipboard-check"></i> Enrollments</a></li>
-          <li><a href="#"><i class="bi bi-camera-video"></i> Virtual Classes</a></li>
-          <li><a href="#"><i class="bi bi-check-circle"></i> Attendance</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-text"></i> Assignments</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-check"></i> Submissions</a></li>
-        </ul>
-      </div>
-
-      <!-- Library -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="library">
-          <i class="bi bi-book"></i> Library
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="library">
-          <li><a href="#"><i class="bi bi-book-half"></i> Books</a></li>
-          <li><a href="#"><i class="bi bi-journal"></i> Chapters</a></li>
-          <li><a href="#"><i class="bi bi-unlock"></i> Access</a></li>
-        </ul>
-      </div>
-
-      <!-- Finance -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="finance">
-          <i class="bi bi-cash-coin"></i> Finance
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="finance">
-          <li><a href="#"><i class="bi bi-credit-card"></i> Payments</a></li>
-        </ul>
-      </div>
-
-      <!-- Discipline -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="discipline">
-          <i class="bi bi-exclamation-triangle"></i> Discipline
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="discipline">
-          <li><a href="#"><i class="bi bi-clipboard-data"></i> Records</a></li>
-        </ul>
-      </div>
-
-      <!-- Certificates -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="certificates">
-          <i class="bi bi-award"></i> Certificates
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="certificates">
-          <li><a href="#"><i class="bi bi-file-earmark-pdf"></i> List</a></li>
-        </ul>
+      <!-- Total Parents -->
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-warning mb-2">
+              <i class="bi bi-person-heart fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Parents</h5>
+            <h3 class="fw-bold">{{ total_parents|default:"356" }}</h3>
+            <p class="text-muted small mb-0">+3% this week</p>
+          </div>
+        </div>
       </div>
 
       <!-- Scholarships -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="scholarships">
-          <i class="bi bi-gem"></i> Scholarships
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="scholarships">
-          <li><a href="#"><i class="bi bi-file-earmark-plus"></i> Applications</a></li>
-          <li><a href="#"><i class="bi bi-arrow-down-circle"></i> Disbursements</a></li>
-        </ul>
+      <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-danger mb-2">
+              <i class="bi bi-gem fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Scholarships</h5>
+            <h3 class="fw-bold">{{ total_scholarships|default:"78" }}</h3>
+            <p class="text-muted small mb-0">-2% vs last week</p>
+          </div>
+        </div>
       </div>
 
-      <!-- Settings -->
-      <a class="side-link" href="#">
-        <i class="bi bi-gear"></i> Settings
-      </a>
-    </nav>
-  </aside>
-
-  <!-- Main -->
-  <main class="main">
-    <header class="header d-flex align-items-center justify-content-between">
-      <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
-          <i class="bi bi-list"></i>
-        </button>
-        <h6 class="m-0 fw-bold">Dashboard</h6>
-      </div>
-
-      <div class="searchbar d-none d-md-block" style="max-width: 380px;">
-        <input class="form-control form-control-sm" type="search" placeholder="Search…" />
-      </div>
-
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge badge-dark rounded-pill px-2 py-1">
-          <i class="bi bi-calendar3 me-1"></i>
-          <span id="today">{{ current_date|date:"M d, Y" }}</span>
-        </span>
-        <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
-      </div>
-    </header>
-
-    <section class="content container-fluid">
-      {% include 'school/partials/dashboard_cards.html' %}
-    </section>
-  </main>
-</div>
-
-<!-- JS -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('toggleSidebar');
-
-  // Toggle sidebar visibility
-  toggleBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
-    document.body.classList.toggle('sidebar-open');
-  });
-
-  // Close when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
-      sidebar.classList.remove('open');
-      document.body.classList.remove('sidebar-open');
-    }
-  });
-
-  // Submenu toggle
-  document.querySelectorAll('.side-link.has-sub').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = document.getElementById(btn.dataset.target);
-      const icon = btn.querySelector('.bi-chevron-down');
-      const isOpen = target.classList.toggle('show');
-      icon.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-    });
-  });
-});
-</script>
-
-<!-- CSS -->
-<style>
-.app {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* Sidebar */
-.sidebar {
-  width: 250px;
-  background: #111;
-  color: #fff;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  overflow-y: auto;
-  z-index: 1050;
-  transform: translateX(0);
-  transition: transform 0.3s ease;
-}
-
-/* Hidden on mobile initially */
-@media (max-width: 992px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  body.sidebar-open::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 1040;
-  }
-}
-
-/* Sidebar items */
-.brand {
-  padding: 1rem;
-  font-weight: 600;
-  background: #000;
-  border-bottom: 1px solid #222;
-}
-
-.side-link, .side-link.has-sub {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  padding: .7rem 1rem;
-  color: #d9d9d9;
-  text-decoration: none;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-
-.side-link:hover, .side-link.active {
-  background: #0b7a2a;
-  color: #fff;
-}
-
-/* Submenu */
-.sub-menu {
-  list-style: none;
-  padding-left: 1.5rem;
-  margin: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease-in-out;
-}
-.sub-menu.show {
-  max-height: 500px;
-}
-.sub-menu li a {
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  padding: .4rem 0;
-  color: #bfbfbf;
-  text-decoration: none;
-  font-size: 0.88rem;
-}
-.sub-menu li a:hover {
-  color: #fff;
-}
-
-/* Main content */
-.main {
-  flex-grow: 1;
-  margin-left: 250px;
-  transition: margin-left 0.3s ease;
-}
-@media (max-width: 992px) {
-  .main {
-    margin-left: 0;
-  }
-}
-
-/* Header */
-.header {
-  background: #fff;
-  border-bottom: 1px solid #eee;
-  padding: .75rem 1rem;
-  position: sticky;
-  top: 0;
-  z-index: 1030;
-}
-</style>
+    </div>
+  </div>
+</section>
 {% endblock %}

@@ -1,0 +1,139 @@
+<!-- templates/school/grade.html -->
+{% extends 'school/base.html' %}
+{% block title %}Grades | {{ school.name }}{% endblock %}
+
+{% block content %}
+  <header class="header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+      <div>
+        <h6 class="m-0 fw-bold">Grades</h6>
+        <nav aria-label="breadcrumb" class="small">
+          <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Grades</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <form method="get" class="d-inline">
+        <div class="input-group input-group-sm" style="width: 250px;">
+          <input type="text" name="q" class="form-control" placeholder="Search grades..." value="{{ query }}">
+          <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+        </div>
+      </form>
+      <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
+    </div>
+  </header>
+
+  <section class="content container-fluid py-4">
+    <!-- Messages -->
+    {% if messages %}
+      <div class="row">
+        {% for message in messages %}
+          <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Create Form -->
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Add New Grade</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-md-6">{{ form.name }}</div>
+            <div class="col-md-6">{{ form.code }}</div>
+            <div class="col-md-12">{{ form.description }}</div>
+            <div class="col-md-6">{{ form.capacity }}</div>
+            <div class="col-md-6 d-flex align-items-center">
+              {{ form.is_active }}
+              <label class="ms-2 mb-0">{{ form.is_active.label }}</label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3">Create Grade</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Grades List -->
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Active Grades ({{ grades.count }})</h5>
+        <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th>Capacity</th>
+                <th>Students Enrolled</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for grade in grades %}
+              <tr>
+                <td><strong>{{ grade.name }}</strong></td>
+                <td><code>{{ grade.code }}</code></td>
+                <td>{{ grade.capacity }}</td>
+                <td>
+                  {% with grade.students.count as enrolled %}
+                    {{ enrolled }} / {{ grade.capacity }}
+                    {% if enrolled > grade.capacity %}<span class="badge bg-danger ms-1">Over Capacity</span>{% endif %}
+                  {% endwith %}
+                </td>
+                <td>{{ grade.description|truncatewords:10 }}</td>
+                <td>
+                  {% if grade.is_active %}
+                    <span class="badge bg-success">Active</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{% url 'school:edit-grade' grade.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                  <a href="{% url 'school:delete-grade' grade.id %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted py-4">No grades found. Create one above.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Modal (Optional) -->
+    <div class="modal fade" id="exportModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Export Grades</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p>Export as CSV or PDF?</p>
+            <a href="#" class="btn btn-outline-primary me-2">CSV</a>
+            <a href="#" class="btn btn-outline-secondary">PDF</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
