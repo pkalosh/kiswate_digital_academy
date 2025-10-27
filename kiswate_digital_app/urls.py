@@ -18,15 +18,24 @@ urlpatterns = [
 
 
     path("kiswate-settings/", views.kiswate_settings, name="kiswate_settings"),
-    path("subscription-plans/", views.subscription_plans, name="subscription_plans"),
+
+    # Subscription Plans
+    path('plans/', views.subscription_plan_list, name='subscription_plan_list'),
+    path('plans/create/', views.subscription_plan_create, name='create_subscription_plan'),
+    path('plans/<int:pk>/edit/', views.subscription_plan_update, name='edit_subscription_plan'),
+    path('plans/<int:pk>/delete/', views.subscription_plan_delete, name='delete_subscription_plan'),
+ 
+    
+    # School Subscriptions
+    
     path("invoice-list/", views.invoice_list, name="invoice_list"),
     path("create-invoice/", views.create_invoice, name="create_invoice"),
     path("payment-history/", views.payment_history, name="payment_history"),
     path("reports/", views.reports, name="reports"),
     path("support/", views.support, name="support"),
-    path("scholarships/", views.scholarships, name="scholarships"),
-    path("new-scholarship/", views.new_scholarship, name="new_scholarship"),
-    path("edit-scholarship/", views.edit_scholarship, name="edit_scholarship"),
-    path("delete-scholarship/", views.delete_scholarship, name="delete_scholarship"),
+    #scholarships
+    path('scholarship-list/', views.scholarship_list_create, name='scholarship_list_create'),
+    path('scholarship/<int:pk>/edit/', views.scholarship_edit, name='scholarship_edit'),
+    path('scholarship/<int:pk>/delete/', views.scholarship_delete, name='scholarship_delete'),
     
 ]

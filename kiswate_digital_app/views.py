@@ -1,13 +1,20 @@
 # views.py (CRUD for School)
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required,permission_required
 from django.contrib import messages
+from django.contrib.messages.views import SuccessMessageMixin
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.urls import reverse_lazy
+from django.http import JsonResponse
+from django.utils import timezone
 from django.db.models import Q
+from decimal import Decimal
+from django.urls import reverse
 from django.conf import settings
-from school.models import School
+from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription
 from userauths.models import User
-from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm
+from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 
 logger = logging.getLogger(__name__)
 
@@ -243,8 +250,7 @@ def delete_school_admin(request, school_pk):
 def kiswate_settings(request):
     return render(request, "Dashboard/kiswate_settings.html", {})
 
-def subscription_plans(request):
-    return render(request, "Dashboard/subscription_plans.html", {})
+
 def invoice_list(request):
     return render(request, "Dashboard/invoice_list.html", {})
 def create_invoice(request):
@@ -258,17 +264,168 @@ def support(request):
     return render(request, "Dashboard/support.html", {})
 
 
-def scholarships(request):
-    return render(request, "Dashboard/scholarships.html", {})
+@login_required
+def scholarship_list_create(request):
+    """
+    List scholarships with search/filter.
+    Handles creation via POST from modal.
+    """
+    if request.method == 'POST':
+        form = ScholarshipForm(request.POST, user=request.user)
+        if form.is_valid():
+            scholarship = form.save()
+            messages.success(request, f'Scholarship "{scholarship.title}" created successfully.')
+            logger.info(f"Created scholarship '{scholarship.title}' by {request.user.email}.")
+            return redirect('kiswate_digital_app:scholarship_list_create')
+        else:
+            messages.error(request, 'Please correct the form errors below.')
+    else:
+        form = ScholarshipForm(user=request.user)
 
-def new_scholarship(request):
-    return render(request, "Dashboard/new_scholarship.html", {})
+    # List with search
+    query = request.GET.get('q', '')
+    scholarships = Scholarship.objects.filter(created_by=request.user, is_active=True).order_by('-created_at')
+    if query:
+        scholarships = scholarships.filter(
+            Q(title__icontains=query) | Q(description__icontains=query) | Q(eligibility_criteria__icontains=query)
+        )
 
-def edit_scholarship(request):
-    return render(request, "Dashboard/edit_scholarship.html", {})
+    context = {
+        'scholarships': scholarships,
+        'form': form,  # For create modal
+        'query': query,
+    }
+    return render(request, 'Dashboard/scholarship_list.html', context)
 
-def delete_scholarship(request):
-    return render(request, "Dashboard/delete_scholarship.html", {})
+
+@login_required
+def scholarship_edit(request, pk):
+    """
+    Edit scholarship via modal POST.
+    On error, redirect to list with params to re-open modal.
+    """
+    scholarship = get_object_or_404(Scholarship, pk=pk, created_by=request.user)
+
+    if request.method == 'POST':
+        form = ScholarshipForm(request.POST, instance=scholarship, user=request.user)
+        if form.is_valid():
+            scholarship = form.save()
+            messages.success(request, f'Scholarship "{scholarship.title}" updated successfully.')
+            logger.info(f"Updated scholarship '{scholarship.title}' by {request.user.email}.")
+            return redirect('kiswate_digital_app:scholarship_list_create')
+        else:
+            messages.error(request, 'Please correct the form errors below.')
+            # Redirect with params to re-open modal
+            return redirect(f'{reverse("kiswate_digital_app:scholarship_list_create")}?edit_pk={pk}&error=1')
+    # For GET: Redirect (modal-driven)
+    messages.info(request, "Use the edit button in the list.")
+    return redirect('kiswate_digital_app:scholarship_list_create')
+
+
+@login_required
+def scholarship_delete(request, pk):
+    """
+    Soft-delete scholarship via modal POST.
+    """
+    scholarship = get_object_or_404(Scholarship, pk=pk, created_by=request.user)
+
+    if request.method == 'POST':
+        scholarship.is_active = False
+        scholarship.save()
+        messages.success(request, f'Scholarship "{scholarship.title}" deactivated successfully.')
+        logger.info(f"Deactivated scholarship '{scholarship.title}' by {request.user.email}.")
+        return redirect('kiswate_digital_app:scholarship_list_create')
+
+    # For GET: Redirect (modal-driven)
+    messages.warning(request, "Use the delete button in the list to confirm.")
+    return redirect('kiswate_digital_app:scholarship_list_create')
+
+
+@login_required
+def subscription_plan_list(request):
+    """
+    List all subscription plans.
+    """
+    plans = SubscriptionPlan.objects.all().order_by('name')
+    can_edit = request.user.is_superuser
+    return render(request, 'Dashboard/subscription_plan_list.html', {
+        'plans': plans,
+        'can_edit': can_edit,
+    })
+
+
+@login_required
+def subscription_plan_create(request):
+    """
+    Create a new subscription plan (superuser only).
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:subscription_plan_list')
+
+    if request.method == 'POST':
+        form = SubscriptionPlanForm(request.POST)
+        if form.is_valid():
+            plan = form.save()
+            messages.success(request, f'Subscription plan "{plan.name}" created successfully.')
+            logger.info(f"Created subscription plan {plan.name} by {request.user.email}.")
+            return redirect('kiswate_digital_app:subscription_plan_list')
+    else:
+        form = SubscriptionPlanForm()
+    return render(request, 'subscription_plan_form.html', {
+        'form': form,
+        'title': 'Create Subscription Plan',
+    })
+
+
+@login_required
+def subscription_plan_update(request, pk):
+    """
+    Update an existing subscription plan (superuser only).
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:subscription_plan_list')
+
+    plan = get_object_or_404(SubscriptionPlan, pk=pk)
+    if request.method == 'POST':
+        form = SubscriptionPlanForm(request.POST, instance=plan)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Subscription plan "{plan.name}" updated successfully.')
+            logger.info(f"Updated subscription plan {plan.name} by {request.user.email}.")
+            return redirect('kiswate_digital_app:subscription_plan_list')
+    else:
+        form = SubscriptionPlanForm(instance=plan)
+    return render(request, 'subscription_plan_form.html', {
+        'form': form,
+        'title': f'Update Subscription Plan: {plan.name}',
+    })
+
+
+@login_required
+def subscription_plan_delete(request, pk):
+    """
+    Deactivate subscription plan via modal POST (superuser only).
+    """
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:subscription_plan_list')
+
+    plan = get_object_or_404(SubscriptionPlan, pk=pk)
+
+    if request.method == 'POST':
+        plan.is_active = False
+        plan.save()
+        messages.success(request, f'Subscription plan "{plan.name}" has been deactivated.')
+        logger.info(f"Deactivated subscription plan {plan.name} by {request.user.email}.")
+        return redirect('kiswate_digital_app:subscription_plan_list')
+    
+    # For GET: Redirect
+    messages.warning(request, "Use the delete button in the list to confirm.")
+    return redirect('kiswate_digital_app:subscription_plan_list')
+
+
 
 def announcements(request):
     return render(request, "Dashboard/announcements.html", {})

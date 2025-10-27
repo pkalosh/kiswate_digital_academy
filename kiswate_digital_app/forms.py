@@ -4,8 +4,11 @@ import string
 from django import forms
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.conf import settings
-from school.models import School
+from decimal import Decimal
+from django.utils.translation import gettext_lazy as _
+from school.models import School,Scholarship,SchoolSubscription,SubscriptionPlan
 from userauths.models import User
 
 
@@ -334,3 +337,125 @@ class AdminEditForm(forms.ModelForm):
             )
 
         return user
+    
+
+class ScholarshipForm(forms.ModelForm):
+    class Meta:
+        model = Scholarship
+        fields = ['title', 'description', 'amount', 'start_date', 'end_date', 'eligibility_criteria', 'is_active']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Scholarship title (e.g., Merit Award 2025)'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Detailed description of the scholarship'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01', 'placeholder': 'e.g., 500.00'}),
+            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'eligibility_criteria': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Eligibility (e.g., Grade 8+ students with GPA > 3.0)'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'title': 'Title',
+            'description': 'Description',
+            'amount': 'Amount (Currency)',
+            'start_date': 'Start Date',
+            'end_date': 'End Date',
+            'eligibility_criteria': 'Eligibility Criteria',
+            'is_active': 'Active',
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if user:
+            self.instance.created_by = user
+        # Add validation for end_date > start_date
+        self.fields['end_date'].required = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        if start_date and end_date and end_date < start_date:
+            raise forms.ValidationError("End date must be after start date.")
+        return cleaned_data
+
+class SubscriptionPlanForm(forms.ModelForm):
+    class Meta:
+        model = SubscriptionPlan
+        fields = ['name', 'description', 'base_price', 'price_per_student', 'price_per_bus', 'price_per_parent', 'features_json', 'is_active', 'default_billing_cycle']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 4}),
+            'features_json': forms.Textarea(attrs={'rows': 6, 'placeholder': '{"max_students": 500, "max_buses": 5, "sms_notifications": true}'}),
+            'default_billing_cycle': forms.Select(choices=SubscriptionPlan.BILLING_CYCLE_CHOICES),
+        }
+        labels = {
+            'name': 'Plan Name',
+            'description': 'Description',
+            'base_price': 'Base Price',
+            'price_per_student': 'Price per Student',
+            'price_per_bus': 'Price per Bus',
+            'price_per_parent': 'Price per Parent',
+            'features_json': 'Features (JSON)',
+            'is_active': 'Active',
+            'default_billing_cycle': 'Default Billing Cycle',
+        }
+
+    def clean_features_json(self):
+        data = self.cleaned_data['features_json']
+        if data:
+            try:
+                import json
+                json.loads(str(data))  # Validate JSON
+            except json.JSONDecodeError:
+                raise ValidationError(_("Invalid JSON format. Please check the features field."))
+        return data
+
+class SchoolSubscriptionForm(forms.ModelForm):
+    class Meta:
+        model = SchoolSubscription
+        fields = ['plan', 'billing_cycle', 'price_charged', 'start_date', 'end_date', 'next_billing_date', 'status', 'payment_method_last4', 'current_students_count', 'current_buses_count', 'current_parents_count', 'parents_to_pay', 'school_to_pay', 'managed_by']
+        widgets = {
+            'start_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'end_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'next_billing_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'billing_cycle': forms.Select(choices=SchoolSubscription.BILLING_CYCLE_CHOICES),
+            'status': forms.Select(choices=SchoolSubscription.STATUS_CHOICES),
+        }
+        labels = {
+            'plan': 'Subscription Plan',
+            'billing_cycle': 'Billing Cycle',
+            'price_charged': 'Price Charged',
+            'start_date': 'Start Date',
+            'end_date': 'End Date',
+            'next_billing_date': 'Next Billing Date',
+            'status': 'Status',
+            'payment_method_last4': 'Payment Method Last 4',
+            'current_students_count': 'Current Students Count',
+            'current_buses_count': 'Current Buses Count',
+            'current_parents_count': 'Current Parents Count',
+            'parents_to_pay': 'Parents to Pay',
+            'school_to_pay': 'School to Pay',
+            'managed_by': 'Managed By',
+        }
+
+    def __init__(self, *args, **kwargs):
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['school'].initial = school
+            self.fields['school'].widget = forms.HiddenInput()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        plan = cleaned_data.get('plan')
+        current_students_count = cleaned_data.get('current_students_count', 0)
+        current_buses_count = cleaned_data.get('current_buses_count', 0)
+        current_parents_count = cleaned_data.get('current_parents_count', 0)
+        if plan:
+            features = plan.features_json or {}
+            max_students = features.get('max_students', float('inf'))
+            max_buses = features.get('max_buses', float('inf'))
+            if current_students_count > max_students:
+                raise ValidationError(_("Student count exceeds plan limit."))
+            if current_buses_count > max_buses:
+                raise ValidationError(_("Bus count exceeds plan limit."))
+        return cleaned_data

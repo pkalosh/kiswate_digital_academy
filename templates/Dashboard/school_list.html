@@ -57,6 +57,7 @@
                 <th scope="col"><i class="bi bi-envelope"></i> Contact Email</th>
                 <th scope="col"><i class="bi bi-telephone"></i> Contact Phone</th>
                 <th scope="col"><i class="bi bi-toggle-on"></i> Status</th>
+                <th scope="col"><i class="bi bi-credit-card"></i> Subscription</th>
                 <th scope="col" class="text-center"><i class="bi bi-gear"></i> Actions</th>
               </tr>
             </thead>
@@ -91,6 +92,15 @@
                     <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Inactive</span>
                   {% endif %}
                 </td>
+                <td>
+                  {% with sub=school.platform_subscription %}
+                    {% if sub %}
+                      <span class="badge bg-info">{{ sub.plan.name|default:"No Plan" }} ({{ sub.get_status_display }})</span>
+                    {% else %}
+                      <span class="badge bg-secondary">None</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
                 <td class="text-center">
                   <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
@@ -108,11 +118,42 @@
                           <i class="bi bi-trash me-2"></i>Deactivate School
                         </button>
                       </li>
+                      <li>
+                        <a href="" class="dropdown-item">
+                          <i class="bi bi-plus-circle me-2 text-success"></i>Assign Subscription
+                        </a>
+                      </li>
                     </ul>
                   </div>
                 </td>
               </tr>
-
+                <!-- Add modal for assigning subscription (simple version, or link to full form) -->
+                <div class="modal fade" id="assignSubModal{{ school.pk }}" tabindex="-1">
+                  <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                      <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title">Assign Subscription to {{ school.name }}</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                      </div>
+                      <form method="post" action="">
+                        {% csrf_token %}
+                        <!-- Render form fields similar to above -->
+                        <div class="modal-body">
+                          <!-- Form fields for quick assign: plan, billing_cycle, etc. -->
+                          <div class="row g-3">
+                            <div class="col-md-6">{{ form.plan }}</div>
+                            <div class="col-md-6">{{ form.billing_cycle }}</div>
+                            <!-- Other quick fields -->
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="submit" class="btn btn-info">Assign</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
               <!-- Edit Modal for {{ school.pk }} -->
               <div class="modal fade" id="editModal{{ school.pk }}" tabindex="-1" aria-labelledby="editModalLabel{{ school.pk }}" aria-hidden="true">
                 <div class="modal-dialog modal-lg">

@@ -1,0 +1,295 @@
+<!-- templates/Dashboard/subscription_plan_list.html -->
+{% extends 'Dashboard/base.html' %}
+{% block title %}Subscription Plans | Dashboard{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Subscription Plans</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}">Plans</a></li>
+          <li class="breadcrumb-item active" aria-current="page">All Plans</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPlanModal">
+      <i class="bi bi-plus-circle me-2"></i>Add New Plan
+    </button>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  <div class="container">
+    <!-- Messages -->
+    {% if messages %}
+      <div class="row mb-3">
+        {% for message in messages %}
+          <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-{{ message.tags|lower }}-circle-fill me-2"></i>
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col"><i class="bi bi-tag"></i> Name</th>
+                <th scope="col"><i class="bi bi-card-text"></i> Description</th>
+                <th scope="col"><i class="bi bi-currency-dollar"></i> Base Price</th>
+                <th scope="col"><i class="bi bi-people"></i> Per Student</th>
+                <th scope="col"><i class="bi bi-bus"></i> Per Bus</th>
+                <th scope="col"><i class="bi bi-person-heart"></i> Per Parent</th>
+                <th scope="col"><i class="bi bi-toggle-on"></i> Active</th>
+                <th scope="col" class="text-center"><i class="bi bi-gear"></i> Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for plan in plans %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><strong>{{ plan.name }}</strong></td>
+                <td>{{ plan.description|truncatewords:10|default:"N/A" }}</td>
+                <td>${{ plan.base_price|floatformat:2 }}</td>
+                <td>${{ plan.price_per_student|floatformat:2 }}</td>
+                <td>${{ plan.price_per_bus|floatformat:2 }}</td>
+                <td>${{ plan.price_per_parent|floatformat:2 }}</td>
+                <td>
+                  {% if plan.is_active %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                  {% else %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ plan.pk }}">
+                          <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Plan
+                        </button>
+                      </li>
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ plan.pk }}">
+                          <i class="bi bi-trash me-2"></i>Delete Plan
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Edit Modal for {{ plan.pk }} -->
+              <div class="modal fade" id="editModal{{ plan.pk }}" tabindex="-1" aria-labelledby="editModalLabel{{ plan.pk }}" aria-hidden="true">
+                <div class="modal-dialog modal-xl">
+                  <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                      <h5 class="modal-title" id="editModalLabel{{ plan.pk }}">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Plan: {{ plan.name }}
+                      </h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="post" action="{% url 'kiswate_digital_app:edit_subscription_plan' plan.pk %}">
+                      {% csrf_token %}
+                      <div class="modal-body">
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label">Plan Name <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Default Billing Cycle</label>
+                            {{ form.default_billing_cycle }}
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">Description</label>
+                            {{ form.description }}
+                          </div>
+                          <div class="col-md-4">
+                            <label class="form-label">Base Price <span class="text-danger">*</span></label>
+                            {{ form.base_price }}
+                          </div>
+                          <div class="col-md-4">
+                            <label class="form-label">Price per Student</label>
+                            {{ form.price_per_student }}
+                          </div>
+                          <div class="col-md-4">
+                            <label class="form-label">Price per Bus</label>
+                            {{ form.price_per_bus }}
+                          </div>
+                          <div class="col-md-4">
+                            <label class="form-label">Price per Parent</label>
+                            {{ form.price_per_parent }}
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">Features (JSON)</label>
+                            {{ form.features_json }}
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Active</label>
+                            <div class="form-check form-switch">
+                              {{ form.is_active }}
+                              <label class="form-check-label">Active</label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                          <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-warning">
+                          <i class="bi bi-check-circle me-1"></i>Update Plan
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Delete Modal for {{ plan.pk }} -->
+              <div class="modal fade" id="deleteModal{{ plan.pk }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ plan.pk }}" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                      <h5 class="modal-title" id="deleteModalLabel{{ plan.pk }}">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete
+                      </h5>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <p>Are you sure you want to delete <strong>{{ plan.name }}</strong>?</p>
+                      <p class="text-muted small">This action cannot be undone and may affect active subscriptions.</p>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>Cancel
+                      </button>
+                      <form method="post" action="{% url 'kiswate_digital_app:delete_subscription_plan' plan.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">
+                          <i class="bi bi-trash me-1"></i>Delete Plan
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+              <tr><td colspan="9" class="text-center text-muted py-4">
+                <i class="bi bi-tag fs-1 text-muted mb-3 d-block"></i>
+                No subscription plans yet. <a href="#" data-bs-toggle="modal" data-bs-target="#addPlanModal" class="text-primary">Create one now</a>.
+              </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Plan Modal -->
+    <div class="modal fade" id="addPlanModal" tabindex="-1" aria-labelledby="addPlanModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="addPlanModalLabel">
+              <i class="bi bi-tag-plus me-2"></i>Add New Subscription Plan
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post" action="{% url 'kiswate_digital_app:create_subscription_plan' %}">
+            {% csrf_token %}
+            <div class="modal-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Plan Name <span class="text-danger">*</span></label>
+                  {{ form.name }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Default Billing Cycle</label>
+                  {{ form.default_billing_cycle }}
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Description</label>
+                  {{ form.description }}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Base Price <span class="text-danger">*</span></label>
+                  {{ form.base_price }}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Price per Student</label>
+                  {{ form.price_per_student }}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Price per Bus</label>
+                  {{ form.price_per_bus }}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Price per Parent</label>
+                  {{ form.price_per_parent }}
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Features (JSON)</label>
+                  {{ form.features_json }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Active</label>
+                  <div class="form-check form-switch">
+                    {{ form.is_active }}
+                    <label class="form-check-label">Active</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <i class="bi bi-x-circle me-1"></i>Cancel
+              </button>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle me-1"></i>Create Plan
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Auto-hide alerts
+  document.querySelectorAll('.alert').forEach(alert => {
+    setTimeout(() => {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    }, 5000);
+  });
+
+  // Modal error focus
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('shown.bs.modal', function () {
+      this.querySelectorAll('.is-invalid').forEach(field => field.focus());
+    });
+  });
+});
+</script>
+{% endblock %}
