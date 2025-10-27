@@ -104,6 +104,7 @@ class SchoolCreationForm(forms.ModelForm):
     def save(self, commit=True):
         # Auto-generate password for admin
         password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        print(password)
 
         # Create Admin User
         admin_user = User.objects.create_user(
@@ -227,6 +228,7 @@ class SchoolEditForm(forms.ModelForm):
         password = None
         if self.cleaned_data['reset_password']:
             password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+            print(password)
             admin.set_password(password)
 
         admin.save()

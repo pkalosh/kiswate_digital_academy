@@ -348,9 +348,24 @@ def subscription_plan_list(request):
     """
     plans = SubscriptionPlan.objects.all().order_by('name')
     can_edit = request.user.is_superuser
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:subscription_plan_list')
+
+    if request.method == 'POST':
+        form = SubscriptionPlanForm(request.POST)
+        if form.is_valid():
+            plan = form.save()
+            messages.success(request, f'Subscription plan "{plan.name}" created successfully.')
+            logger.info(f"Created subscription plan {plan.name} by {request.user.email}.")
+            return redirect('kiswate_digital_app:subscription_plan_list')
+    else:
+        form = SubscriptionPlanForm()
     return render(request, 'Dashboard/subscription_plan_list.html', {
         'plans': plans,
         'can_edit': can_edit,
+        'form': form,
+        'title': 'Create Subscription Plan',
     })
 
 
@@ -372,10 +387,7 @@ def subscription_plan_create(request):
             return redirect('kiswate_digital_app:subscription_plan_list')
     else:
         form = SubscriptionPlanForm()
-    return render(request, 'subscription_plan_form.html', {
-        'form': form,
-        'title': 'Create Subscription Plan',
-    })
+    return redirect('kiswate_digital_app:subscription_plan_list')
 
 
 @login_required

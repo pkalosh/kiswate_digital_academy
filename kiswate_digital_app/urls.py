@@ -22,12 +22,12 @@ urlpatterns = [
     # Subscription Plans
     path('plans/', views.subscription_plan_list, name='subscription_plan_list'),
     path('plans/create/', views.subscription_plan_create, name='create_subscription_plan'),
-    path('plans/<int:pk>/edit/', views.subscription_plan_update, name='edit_subscription_plan'),
-    path('plans/<int:pk>/delete/', views.subscription_plan_delete, name='delete_subscription_plan'),
+    path('plans/<uuid:pk>/edit/', views.subscription_plan_update, name='edit_subscription_plan'),
+    path('plans/<uuid:pk>/delete/', views.subscription_plan_delete, name='delete_subscription_plan'),
  
     
     # School Subscriptions
-    
+
     path("invoice-list/", views.invoice_list, name="invoice_list"),
     path("create-invoice/", views.create_invoice, name="create_invoice"),
     path("payment-history/", views.payment_history, name="payment_history"),
