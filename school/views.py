@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 def dashboard(request):
     return render(request, "school/dashboard.html", {})
 
+
+
+
 @login_required
 def school_grades(request):
     # Ensure user is a school admin

@@ -1,0 +1,170 @@
+<!-- templates/Dashboard/new_school.html -->
+{% extends 'Dashboard/base.html' %}
+{% load static %}
+{% block title %}New School | Dashboard{% endblock %}
+
+{% block content %}
+  <header class="header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+      <div>
+        <h6 class="m-0 fw-bold">New School Registration</h6>
+        <nav aria-label="breadcrumb" class="small">
+          <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'kiswate_digital_app:school_list' %}">Schools</a></li>
+            <li class="breadcrumb-item active" aria-current="page">New School</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{% url 'kiswate_digital_app:school_list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to List
+      </a>
+    </div>
+  </header>
+
+  <section class="content container-fluid py-4">
+    <!-- Messages -->
+    {% if messages %}
+      <div class="row mb-4">
+        {% for message in messages %}
+          <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-{{ message.tags|lower }}-circle-fill me-2"></i>
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+        <div class="card shadow-sm border-0 rounded-4">
+          <div class="card-header bg-primary text-white text-center py-4">
+            <h4 class="mb-1"><i class="bi bi-building-gear me-2"></i>Register New School</h4>
+            <p class="mb-0 opacity-75">Create a new school and admin account. Password will be auto-generated.</p>
+          </div>
+          <div class="card-body p-4">
+            <form method="post">
+              {% csrf_token %}
+              <div class="row g-3">
+                <!-- Admin User Fields -->
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Admin Email <span class="text-danger">*</span></label>
+                  {{ form.admin_email }}
+                  {% if form.admin_email.errors %}
+                    <div class="text-danger small">{{ form.admin_email.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Admin First Name <span class="text-danger">*</span></label>
+                  {{ form.admin_first_name }}
+                  {% if form.admin_first_name.errors %}
+                    <div class="text-danger small">{{ form.admin_first_name.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Admin Last Name <span class="text-danger">*</span></label>
+                  {{ form.admin_last_name }}
+                  {% if form.admin_last_name.errors %}
+                    <div class="text-danger small">{{ form.admin_last_name.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Admin Phone Number <span class="text-danger">*</span></label>
+                  {{ form.admin_phone_number }}
+                  {% if form.admin_phone_number.errors %}
+                    <div class="text-danger small">{{ form.admin_phone_number.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Admin Country</label>
+                  {{ form.admin_country }}
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check mt-3">
+                    {{ form.send_email }}
+                    <label class="form-check-label fw-bold">
+                      <i class="bi bi-envelope me-1"></i>Send Credentials via Email
+                    </label>
+                    <div class="form-text">Auto-generated password will be emailed to admin.</div>
+                  </div>
+                </div>
+
+                <!-- School Fields -->
+                <div class="col-12">
+                  <hr class="my-4">
+                  <h6 class="text-center mb-3"><i class="bi bi-building me-2 text-primary"></i>School Details</h6>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">School Name <span class="text-danger">*</span></label>
+                  {{ form.name }}
+                  {% if form.name.errors %}
+                    <div class="text-danger small">{{ form.name.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">School Code <span class="text-danger">*</span></label>
+                  {{ form.code }}
+                  {% if form.code.errors %}
+                    <div class="text-danger small">{{ form.code.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-bold">Address</label>
+                  {{ form.address }}
+                  {% if form.address.errors %}
+                    <div class="text-danger small">{{ form.address.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Contact Email <span class="text-danger">*</span></label>
+                  {{ form.contact_email }}
+                  {% if form.contact_email.errors %}
+                    <div class="text-danger small">{{ form.contact_email.errors.0 }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Contact Phone <span class="text-danger">*</span></label>
+                  {{ form.contact_phone }}
+                  {% if form.contact_phone.errors %}
+                    <div class="text-danger small">{{ form.contact_phone.errors.0 }}</div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="text-center mt-4">
+                <button type="submit" class="btn btn-primary btn-lg px-5">
+                  <i class="bi bi-check-circle me-2"></i>Create School & Admin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Form validation highlighting
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      // Add is-invalid class to error fields (if using Bootstrap validation)
+      this.querySelectorAll('.is-invalid').forEach(field => field.classList.remove('is-invalid'));
+    });
+  }
+
+  // Auto-hide alerts
+  document.querySelectorAll('.alert').forEach(alert => {
+    setTimeout(() => {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    }, 5000);
+  });
+});
+</script>
+{% endblock %}

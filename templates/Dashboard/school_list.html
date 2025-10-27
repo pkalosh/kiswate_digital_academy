@@ -1,0 +1,377 @@
+<!-- templates/Dashboard/school_list.html (updated with modals) -->
+{% extends 'Dashboard/base.html' %}
+{% block title %}Registered Schools | Dashboard{% endblock %}
+
+{% block content %}
+
+  <header class="header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+      <div>
+        <h6 class="m-0 fw-bold">Registered Schools</h6>
+        <nav aria-label="breadcrumb" class="small">
+          <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'kiswate_digital_app:school_list' %}">Schools</a></li>
+            <li class="breadcrumb-item active" aria-current="page">All School</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSchoolModal">
+        <i class="bi bi-plus-circle me-2"></i>Add New School
+      </button>
+    </div>
+  </header>
+
+<section class="content container-fluid py-4">
+  <div class="container">
+
+
+    <!-- Messages -->
+    {% if messages %}
+      <div class="row mb-3">
+        {% for message in messages %}
+          <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-{{ message.tags|lower }}-circle-fill me-2"></i>
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col"><i class="bi bi-building"></i> Name</th>
+                <th scope="col"><i class="bi bi-person-badge"></i> School Admin</th>
+                <th scope="col"><i class="bi bi-qr-code"></i> Code</th>
+                <th scope="col"><i class="bi bi-geo-alt"></i> Address</th>
+                <th scope="col"><i class="bi bi-envelope"></i> Contact Email</th>
+                <th scope="col"><i class="bi bi-telephone"></i> Contact Phone</th>
+                <th scope="col"><i class="bi bi-toggle-on"></i> Status</th>
+                <th scope="col" class="text-center"><i class="bi bi-gear"></i> Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for school in schools %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><strong>{{ school.name }}</strong></td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    {% if school.school_admin.profile_picture %}
+                      <img src="{{ school.school_admin.profile_picture.url }}" class="rounded-circle me-2" width="30" height="30" alt="Admin">
+                    {% else %}
+                      <span class="avatar-placeholder bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold" style="width: 30px; height: 30px; font-size: 0.7em;">
+                        {{ school.school_admin.get_full_name.0|upper }}
+                      </span>
+                    {% endif %}
+                    <div>
+                      <small class="fw-bold d-block">{{ school.school_admin.get_full_name }}</small>
+                      <small class="text-muted">{{ school.school_admin.email }}</small>
+                    </div>
+                  </div>
+                </td>
+                <td><code class="badge bg-secondary">{{ school.code }}</code></td>
+                <td>{{ school.address|truncatewords:5|default:"N/A" }}</td>
+                <td><a href="mailto:{{ school.contact_email }}" class="text-decoration-none">{{ school.contact_email }}</a></td>
+                <td><a href="tel:{{ school.contact_phone }}" class="text-decoration-none">{{ school.contact_phone }}</a></td>
+                <td>
+                  {% if school.is_active %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                  {% else %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Inactive</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                      <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ school.pk }}">
+                          <i class="bi bi-pencil-square me-2 text-primary"></i>Edit School
+                        </button>
+                      </li>
+                      <li><hr class="dropdown-divider"></li>
+                      <li>
+                        <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ school.pk }}">
+                          <i class="bi bi-trash me-2"></i>Deactivate School
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Edit Modal for {{ school.pk }} -->
+              <div class="modal fade" id="editModal{{ school.pk }}" tabindex="-1" aria-labelledby="editModalLabel{{ school.pk }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                  <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                      <h5 class="modal-title" id="editModalLabel{{ school.pk }}">
+                        <i class="bi bi-pencil-square me-2"></i>Edit School: {{ school.name }}
+                      </h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form method="post" action="{% url 'kiswate_digital_app:edit_school' school.pk %}">
+                      {% csrf_token %}
+                      <div class="modal-body">
+                        <div class="row g-3">
+                          <!-- Admin User Fields -->
+                          <div class="col-md-6">
+                            <label class="form-label">Admin Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="admin_email" value="{{ school.school_admin.email }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Admin First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="admin_first_name" value="{{ school.school_admin.first_name }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Admin Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="admin_last_name" value="{{ school.school_admin.last_name }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Admin Phone <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="admin_phone_number" value="{{ school.school_admin.phone_number }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Admin Country</label>
+                            <input type="text" class="form-control" name="admin_country" value="{{ school.school_admin.country|default:'KENYA' }}">
+                          </div>
+                          <!-- Options -->
+                          <div class="col-12">
+                            <div class="row">
+                              <div class="col-md-6">
+                                <div class="form-check">
+                                  <input class="form-check-input" type="checkbox" name="reset_password">
+                                  <label class="form-check-label">
+                                    <i class="bi bi-key me-1"></i>Reset Admin Password
+                                  </label>
+                                </div>
+                              </div>
+                              <div class="col-md-6">
+                                <div class="form-check">
+                                  <input class="form-check-input" type="checkbox" name="send_email">
+                                  <label class="form-check-label">
+                                    <i class="bi bi-envelope me-1"></i>Send Email to Admin
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <!-- School Fields -->
+                          <div class="col-md-6">
+                            <label class="form-label">School Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" value="{{ school.name }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">School Code <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="code" value="{{ school.code }}" required>
+                          </div>
+                          <div class="col-12">
+                            <label class="form-label">Address</label>
+                            <textarea class="form-control" name="address" rows="3">{{ school.address }}</textarea>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Contact Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="contact_email" value="{{ school.contact_email }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Contact Phone <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="contact_phone" value="{{ school.contact_phone }}" required>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Status</label>
+                            <div class="form-check form-switch">
+                              <input class="form-check-input" type="checkbox" name="is_active" {% if school.is_active %}checked{% endif %}>
+                              <label class="form-check-label">Active</label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                          <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-warning">
+                          <i class="bi bi-check-circle me-1"></i>Update School
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Delete Modal for {{ school.pk }} -->
+              <div class="modal fade" id="deleteModal{{ school.pk }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ school.pk }}" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                      <h5 class="modal-title" id="deleteModalLabel{{ school.pk }}">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Deactivation
+                      </h5>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                      <p>Are you sure you want to deactivate <strong>{{ school.name }}</strong> ({{ school.code }})?</p>
+                      <p class="text-muted small">Admin: {{ school.school_admin.get_full_name }}. This will disable the school but keep data intact. Reactivate if needed.</p>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>Cancel
+                      </button>
+                      <form method="post" action="{% url 'kiswate_digital_app:delete_school' school.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">
+                          <i class="bi bi-toggle-off me-1"></i>Deactivate School
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+              <tr><td colspan="9" class="text-center text-muted py-4">
+                <i class="bi bi-building fs-1 text-muted mb-3 d-block"></i>
+                No schools registered yet. <a href="#" data-bs-toggle="modal" data-bs-target="#addSchoolModal" class="text-primary">Create one now</a>.
+              </td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New School Modal -->
+    <div class="modal fade" id="addSchoolModal" tabindex="-1" aria-labelledby="addSchoolModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="addSchoolModalLabel">
+              <i class="bi bi-building-add me-2"></i>Add New School
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="post">
+            {% csrf_token %}
+            <div class="modal-body">
+              <p class="text-muted small mb-3">
+                <i class="bi bi-info-circle me-1"></i>A new admin user account will be created. Password auto-generated and emailed if selected.
+              </p>
+              <div class="row g-3">
+                <!-- Admin User Fields -->
+                <div class="col-md-6">
+                  <label class="form-label">Admin Email <span class="text-danger">*</span></label>
+                  {{ form.admin_email }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Admin First Name <span class="text-danger">*</span></label>
+                  {{ form.admin_first_name }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Admin Last Name <span class="text-danger">*</span></label>
+                  {{ form.admin_last_name }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Admin Phone <span class="text-danger">*</span></label>
+                  {{ form.admin_phone_number }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Admin Country</label>
+                  {{ form.admin_country }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Send Credentials to Admin</label>
+                  <div class="form-check">
+                    {{ form.send_email }}
+                    <label class="form-check-label">
+                      <i class="bi bi-envelope me-1"></i>Email Password
+                    </label>
+                  </div>
+                </div>
+
+                <!-- School Fields -->
+                <div class="col-md-6">
+                  <label class="form-label">School Name <span class="text-danger">*</span></label>
+                  {{ form.name }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">School Code <span class="text-danger">*</span></label>
+                  {{ form.code }}
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Address</label>
+                  {{ form.address }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Contact Email <span class="text-danger">*</span></label>
+                  {{ form.contact_email }}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Contact Phone <span class="text-danger">*</span></label>
+                  {{ form.contact_phone }}
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <i class="bi bi-x-circle me-1"></i>Cancel
+              </button>
+              <button type="submit" class="btn btn-success">
+                <i class="bi bi-building-add me-1"></i>Create School
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Modal (placeholder) -->
+    <div class="modal fade" id="exportModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-download me-2"></i>Export Schools</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p>Select format:</p>
+            <a href="#" class="btn btn-outline-primary me-2">CSV</a>
+            <a href="#" class="btn btn-outline-secondary">PDF</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Auto-hide alerts
+  document.querySelectorAll('.alert').forEach(alert => {
+    setTimeout(() => {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    }, 5000);
+  });
+
+  // Modal error focus
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('shown.bs.modal', function () {
+      this.querySelectorAll('.is-invalid').forEach(field => field.focus());
+    });
+  });
+});
+</script>
+{% endblock %}

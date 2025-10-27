@@ -22,6 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('userauths.urls')),
     path('', include('school.urls')),
+    path('', include('kiswate_digital_app.urls')),
 
 ]
 if settings.DEBUG:
