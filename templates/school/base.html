@@ -38,7 +38,6 @@
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu" id="administration">
-          <li><a href="#"><i class="bi bi-building"></i> Schools</a></li>
           <li><a href="{% url 'school:school-grades' %}"><i class="bi bi-diagram-3"></i> Grades</a></li>
           <li><a href="#"><i class="bi bi-key"></i> Smart IDs</a></li>
         </ul>
@@ -132,8 +131,8 @@
       </div>
 
       <!-- Settings -->
-      <a class="side-link" href="#">
-        <i class="bi bi-gear"></i> Settings
+      <a class="side-link" href="{% url 'userauths:sign-out' %}">
+        <i class="bi bi-gear"></i> Sign Out
       </a>
     </nav>
   </aside>

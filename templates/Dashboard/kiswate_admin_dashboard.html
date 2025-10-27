@@ -14,7 +14,7 @@
               <i class="bi bi-person-badge-fill fs-1"></i>
             </div>
             <h5 class="fw-semibold">Total Schools</h5>
-            <h3 class="fw-bold">{{ total_teachers|default:"1,245" }}</h3>
+            <h3 class="fw-bold">{{ schools|default:"0" }}</h3>
             <p class="text-muted small mb-0">+5% since last week</p>
           </div>
         </div>
@@ -28,7 +28,7 @@
               <i class="bi bi-person-lines-fill fs-1"></i>
             </div>
             <h5 class="fw-semibold">Total Students</h5>
-            <h3 class="fw-bold">{{ total_students|default:"24,580" }}</h3>
+            <h3 class="fw-bold">{{ students|default:"0" }}</h3>
             <p class="text-muted small mb-0">+8% this month</p>
           </div>
         </div>
@@ -42,7 +42,7 @@
               <i class="bi bi-person-heart fs-1"></i>
             </div>
             <h5 class="fw-semibold">Parents</h5>
-            <h3 class="fw-bold">{{ total_parents|default:"356" }}</h3>
+            <h3 class="fw-bold">{{ parents|default:"0" }}</h3>
             <p class="text-muted small mb-0">+3% this week</p>
           </div>
         </div>
@@ -56,12 +56,58 @@
               <i class="bi bi-gem fs-1"></i>
             </div>
             <h5 class="fw-semibold">Scholarships</h5>
-            <h3 class="fw-bold">{{ total_scholarships|default:"78" }}</h3>
+            <h3 class="fw-bold">{{ scholarships|default:"0" }}</h3>
             <p class="text-muted small mb-0">-2% vs last week</p>
           </div>
         </div>
       </div>
 
+    </div>
+  </div>
+</section>
+
+<section class="py-5">
+  <div class="container">
+    <h2 class="fw-bold mb-4 text-center">Recent Payments</h2>
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">School</th>
+                <th scope="col">Invoice</th>
+                <th scope="col">Subscription</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Payment Date</th>
+                <th scope="col" class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for payment in recent_payment %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>
+                 
+                </td>
+                <td>{{ activity.user.email }}</td>
+                <td><span class="badge bg-{{ activity.status|lower }}">{{ activity.get_status_display }}</span></td>
+                <td>${{ activity.amount|default:"0" }}</td>
+                <td>{{ activity.date|date:"M d, Y" }}</td>
+                <td class="text-center">
+                  <a href="" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteActivity({{ activity.id }})"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted">No recent Payments.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </section>

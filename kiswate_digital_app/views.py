@@ -12,7 +12,7 @@ from django.db.models import Q
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
-from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription
+from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription, StaffProfile, Student, Parent, Scholarship
 from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 
@@ -145,7 +145,21 @@ def new_school(request):
     context = {'form': form}
     return render(request, "Dashboard/new_school.html", context)
 def kiswate_dashboard(request):
-    return render(request, "Dashboard/kiswate_admin_dashboard.html", {})
+    schools = School.objects.all().count()
+    teachers = StaffProfile.objects.filter(position='teacher').count()
+    students = Student.objects.all().count()
+    parents = Parent.objects.all().count()
+    scholarships = Scholarship.objects.all().count()
+    
+    return render(request, "Dashboard/kiswate_admin_dashboard.html", 
+                  {
+                      "schools":schools,
+                      "teachers":teachers,
+                      "students":students,
+                      "parents":parents,
+                      "scholarships":scholarships
+                   }
+                  )
 
 
 @login_required

@@ -7,6 +7,7 @@ urlpatterns = [
     path("school-dashboard/", views.dashboard, name="dashboard"),
     #grades
     path("school-grade/", views.school_grades, name="school-grades"),
+    path("create-grade/", views.grade_create, name="grade-create"),
     path("edit-grade/<int:pk>/", views.grade_edit, name="edit-grade"),
     path("delete-grade/<int:pk>/", views.grade_delete, name="delete-grade"),
     #parents

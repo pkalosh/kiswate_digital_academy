@@ -13,8 +13,16 @@ import string
 logger = logging.getLogger(__name__)
 # Create your views here.
 def dashboard(request):
-    return render(request, "school/dashboard.html", {})
+    school =  request.user.school_admin_profile
+    total_teachers = StaffProfile.objects.filter(school=school, position='teacher')
+    total_students = Student.objects.filter(school=school)
+    total_parents = Parent.objects.filter(school=school)
 
+    return render(request, "school/dashboard.html", {
+        "total_teachers":total_teachers,
+        "total_students":total_students,
+        "total_parents":total_parents
+    })
 
 
 
@@ -24,7 +32,7 @@ def school_grades(request):
     print("Accessing grades view as user:", request.user)  # Keep for console
     logger.info(f"Accessing grades view as user: {request.user.email} (ID: {request.user.id})")
     try:
-        school = request.user.school_admin_profile  # <-- FIXED: Remove .school
+        school = request.user.school_admin_profile
         logger.info(f"User's school: {school.name} (ID: {school.id})")
         print("User's school:", school.name)  # Keep for console
     except AttributeError as e:
@@ -32,16 +40,7 @@ def school_grades(request):
         messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
         return redirect('school:dashboard')
 
-    if request.method == 'POST':
-        form = GradeForm(request.POST, school=school)
-        if form.is_valid():
-            grade = form.save(commit=False)
-            grade.school = school
-            grade.save()
-            messages.success(request, f'Grade "{grade.name}" created successfully.')
-            return redirect('school:school-grades')  # Note: Ensure URL name matches urls.py
-    else:
-        form = GradeForm(school=school)
+    form = GradeForm(school=school)
 
     # Fetch grades for the school, with search/filter
     query = request.GET.get('q', '')
@@ -56,38 +55,94 @@ def school_grades(request):
         'query': query,
     }
     return render(request, "school/grade.html", context)
+
+
+@login_required
+def grade_create(request):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+
+    if request.method != 'POST':
+        return redirect('school:school-grades')
+
+    form = GradeForm(request.POST, school=school)
+    if form.is_valid():
+        grade = form.save(commit=False)
+        grade.school = school
+        grade.save()
+        messages.success(request, f'Grade "{grade.name}" created successfully.')
+        logger.info(f"Created grade {grade.name} for school {school.name} by {request.user.email}.")
+        return redirect('school:school-grades')
+    else:
+        # Add form errors to messages
+        for field, error_list in form.errors.items():
+            if field == '__all__':
+                for error in error_list:
+                    messages.error(request, error)
+            else:
+                label = form.fields[field].label
+                for error in error_list:
+                    messages.error(request, f"{label}: {error}")
+        return redirect('school:school-grades')
+
+
 @login_required
 def grade_edit(request, pk):
-    school = request.user.school_admin_profile
-    grade = get_object_or_404(Grade, pk=pk, school=school)
-    
-    if request.method == 'POST':
-        form = GradeForm(request.POST, instance=grade, school=school)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Grade "{grade.name}" updated successfully.')
-            return redirect('school:school-grades')
-    else:
-        form = GradeForm(instance=grade, school=school)
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
 
-    context = {
-        'form': form,
-        'grade': grade,
-        'school': school,
-    }
-    return render(request, "school/grade_edit.html", context)  # Separate template for edit, or inline in grade.html
+    if request.method != 'POST':
+        return redirect('school:school-grades')
+
+    grade = get_object_or_404(Grade, pk=pk, school=school)
+    form = GradeForm(request.POST, instance=grade, school=school)
+    if form.is_valid():
+        form.save()
+        messages.success(request, f'Grade "{grade.name}" updated successfully.')
+        logger.info(f"Updated grade {grade.name} for school {school.name} by {request.user.email}.")
+        return redirect('school:school-grades')
+    else:
+        # Add form errors to messages
+        for field, error_list in form.errors.items():
+            if field == '__all__':
+                for error in error_list:
+                    messages.error(request, error)
+            else:
+                label = form.fields[field].label
+                for error in error_list:
+                    messages.error(request, f"{label}: {error}")
+        return redirect('school:school-grades')
+
 
 @login_required
 def grade_delete(request, pk):
-    school = request.user.school_admin_profile
-    grade = get_object_or_404(Grade, pk=pk, school=school)
-    if request.method == 'POST':
-        grade.is_active = False  # Soft delete
-        grade.save()
-        messages.success(request, f'Grade "{grade.name}" deactivated.')
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+
+    if request.method != 'POST':
+        messages.warning(request, "Use the delete button in the list to confirm.")
         return redirect('school:school-grades')
-    context = {'grade': grade}
-    return render(request, "school/grade_confirm_delete.html", context)
+
+    grade = get_object_or_404(Grade, pk=pk, school=school)
+    grade.is_active = False  # Soft delete
+    grade.save()
+    messages.success(request, f'Grade "{grade.name}" deactivated.')
+    logger.info(f"Deactivated grade {grade.name} for school {school.name} by {request.user.email}.")
+    return redirect('school:school-grades')
+
+
 
 @login_required
 def parent_list_create(request):

@@ -125,7 +125,7 @@
                     <ul class="dropdown-menu">
                       <li>
                         <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ staff.pk }}">
-                          <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Profile
+                          <i class="bi bi-pencil-square me-2 text-success"></i>Edit Profile
                         </button>
                       </li>
                       <li><hr class="dropdown-divider"></li>
@@ -299,7 +299,7 @@
               {% empty %}
               <tr><td colspan="8" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-1 text-muted mb-3 d-block"></i>
-                No staff found. <a href="#" data-bs-toggle="modal" data-bs-target="#addStaffModal" class="text-primary">Add one now</a>.
+                No staff found. <a href="#" data-bs-toggle="modal" data-bs-target="#addStaffModal" class="text-success">Add one now</a>.
               </td></tr>
               {% endfor %}
             </tbody>

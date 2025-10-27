@@ -39,7 +39,11 @@ def LoginView(request):
                 login(request, user)
                 messages.success(request, "Welcome Back!")
                 print("User authenticated successfully")
-                return redirect("school:dashboard")
+                if user.is_superuser:
+                    return redirect("kiswate_digital_app:kiswate_admin_dashboard")
+                else:
+
+                    return redirect("school:dashboard")
             else:
                 messages.warning(request, "Username or password does not exist")
                 return redirect("userauths:sign-in")
