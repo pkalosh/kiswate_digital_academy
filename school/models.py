@@ -338,13 +338,27 @@ class LibraryAccess(models.Model):
     def __str__(self):
         return f"Access to {self.chapter or self.book} by {self.student}"
 
+# Scholarship model
+class Scholarship(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    start_date = models.DateField()
+    end_date = models.DateField()
+    eligibility_criteria = models.TextField(blank=True)  # e.g., "Must be a student in Grade 8 or above"
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_scholarships')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.title
+    
 # Scholarship Application model
 class ScholarshipApplication(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='scholarship_applications')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='scholarship_applications')
-    title = models.CharField(max_length=255)  # e.g., "Merit Scholarship 2025"
-    amount_requested = models.DecimalField(max_digits=10, decimal_places=2)
-    description = models.TextField()
+    scholarship = models.ForeignKey(Scholarship, on_delete=models.CASCADE, related_name='applications', blank=True, null=True)
     documents = models.FileField(upload_to='scholarship_docs/', blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=SCHOLARSHIP_STATUS_CHOICES, default='submitted')
@@ -358,7 +372,7 @@ class ScholarshipApplication(models.Model):
 
 # Scholarship Disbursement (removed redundant student FK)
 class ScholarshipDisbursement(models.Model):
-    application = models.OneToOneField(ScholarshipApplication, on_delete=models.CASCADE, related_name='disbursement')
+    application = models.ForeignKey(ScholarshipApplication, on_delete=models.CASCADE, related_name='disbursement')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='scholarship_disbursements')
     amount_disbursed = models.DecimalField(max_digits=10, decimal_places=2)
     disbursed_at = models.DateTimeField()
