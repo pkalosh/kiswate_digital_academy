@@ -1,6 +1,7 @@
 # forms.py (add School forms)
 import random
 import string
+import json
 from django import forms
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
@@ -388,6 +389,7 @@ class SubscriptionPlanForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4}),
             'features_json': forms.Textarea(attrs={'rows': 6, 'placeholder': '{"max_students": 500, "max_buses": 5, "sms_notifications": true}'}),
             'default_billing_cycle': forms.Select(choices=SubscriptionPlan.BILLING_CYCLE_CHOICES),
+            'name': forms.Select(choices=SubscriptionPlan.PLAN_TYPE_CHOICES),
         }
         labels = {
             'name': 'Plan Name',
@@ -401,15 +403,24 @@ class SubscriptionPlanForm(forms.ModelForm):
             'default_billing_cycle': 'Default Billing Cycle',
         }
 
+    # def clean_features_json(self):
+    #     data = self.cleaned_data['features_json']
+    #     if data:
+    #         try:
+    #             import json
+    #             json.loads(str(data))  # Validate JSON
+    #         except json.JSONDecodeError:
+    #             raise ValidationError(_("Invalid JSON format. Please check the features field."))
+    #     return data
+
     def clean_features_json(self):
-        data = self.cleaned_data['features_json']
-        if data:
-            try:
-                import json
-                json.loads(str(data))  # Validate JSON
-            except json.JSONDecodeError:
-                raise ValidationError(_("Invalid JSON format. Please check the features field."))
-        return data
+            data = self.cleaned_data.get('features_json')
+            if data:
+                try:
+                    json.loads(data)  # Validate JSON
+                except json.JSONDecodeError:
+                    raise ValidationError("Enter a valid JSON.")
+            return data
 
 class SchoolSubscriptionForm(forms.ModelForm):
     class Meta:

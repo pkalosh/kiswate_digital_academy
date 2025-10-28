@@ -385,9 +385,6 @@ def subscription_plan_list(request):
 
 @login_required
 def subscription_plan_create(request):
-    """
-    Create a new subscription plan (superuser only).
-    """
     if not request.user.is_superuser:
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:subscription_plan_list')
@@ -399,10 +396,20 @@ def subscription_plan_create(request):
             messages.success(request, f'Subscription plan "{plan.name}" created successfully.')
             logger.info(f"Created subscription plan {plan.name} by {request.user.email}.")
             return redirect('kiswate_digital_app:subscription_plan_list')
+        else:
+            # Explicitly handle invalid form: log errors, add message
+            logger.warning(f"Invalid subscription plan form from {request.user.email}: {form.errors}")
+            messages.error(request, "Please correct the errors in the form.")
+            # Fall through to render with bound form
     else:
         form = SubscriptionPlanForm()
-    return redirect('kiswate_digital_app:subscription_plan_list')
 
+    # Re-render list template with form (for modal errors)
+    plans = SubscriptionPlan.objects.all().order_by('name')
+    return render(request, 'Dashboard/subscription_plan_list.html', {
+        'plans': plans,
+        'form': form,
+    })
 
 @login_required
 def subscription_plan_update(request, pk):
@@ -423,7 +430,7 @@ def subscription_plan_update(request, pk):
             return redirect('kiswate_digital_app:subscription_plan_list')
     else:
         form = SubscriptionPlanForm(instance=plan)
-    return render(request, 'subscription_plan_form.html', {
+    return render(request, 'Dashboard/subscription_plan_list.html', {
         'form': form,
         'title': f'Update Subscription Plan: {plan.name}',
     })
