@@ -1,0 +1,235 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Admin Dashboard {% endblock %}</title>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <!-- AOS -->
+  <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet" />
+  <style>
+    :root {
+      --kenya-green: #0b7a2a;  /* deep green */
+      --kenya-red:   #bb0a21;  /* flag red */
+      --kenya-black: #111111;  /* near black */
+      --kenya-white: #ffffff;  /* white */
+      --kenya-grey:  #f5f7f8;  /* soft bg */
+      --radius-xl: 1.25rem;
+      --shadow-soft: 0 6px 18px rgba(0,0,0,.08);
+      --space-compact: .5rem;   /* global compact spacing */
+    }
+
+    html, body { height: 100%; }
+    body { background: linear-gradient(180deg, var(--kenya-grey), #fff); }
+
+    /* Layout */
+    .app {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: var(--kenya-black);
+      color: var(--kenya-white);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: var(--space-compact);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .6rem .75rem;
+      border-radius: .8rem;
+      background: linear-gradient(135deg, var(--kenya-green), #0aa84a);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+      margin: .35rem .25rem 1rem;
+    }
+    .brand i { font-size: 1.25rem; color: var(--kenya-white); }
+    .brand span { font-weight: 700; letter-spacing: .3px; }
+
+    .side-link { color: #d9d9d9; text-decoration: none; display: flex; align-items: center; gap: .6rem; padding: .55rem .75rem; border-radius: .6rem; }
+    .side-link:hover, .side-link.active { background: rgba(255,255,255,.08); color: #fff; }
+
+    .header {
+      background: #fff;
+      box-shadow: var(--shadow-soft);
+      border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+      padding: .45rem .85rem;
+      position: sticky; top: 0; z-index: 10;
+    }
+
+    .searchbar input { border-radius: 999px; padding: .55rem .9rem; }
+
+    .content { padding: .85rem; }
+
+    .card.k-card {
+      border: 0; border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .k-pill {
+      display: inline-flex; align-items: center; gap: .35rem;
+      border-radius: 999px; padding: .2rem .55rem; font-size: .75rem;
+      background: #eef7f0; color: var(--kenya-green); font-weight: 600;
+    }
+
+    .k-accent {
+      height: 4px; background: linear-gradient(90deg, var(--kenya-green), var(--kenya-red));
+    }
+
+    .k-progress {
+      height: .5rem; border-radius: 999px; background: #edf1f2; overflow: hidden;
+    }
+    .k-progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--kenya-green), var(--kenya-red)); }
+
+    /* Compact table */
+    .table.k-tight > :not(caption) > * > * { padding: .45rem .55rem; }
+
+    /* Badges */
+    .badge-green { background: rgba(11,122,42,.12); color: var(--kenya-green); }
+    .badge-red   { background: rgba(187,10,33,.12); color: var(--kenya-red); }
+    .badge-dark  { background: rgba(17,17,17,.12); color: var(--kenya-black); }
+
+    /* Responsive sidebar */
+    @media (max-width: 992px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; left: -100%; width: 260px; transition: left .25s ease; z-index: 1050; }
+      .sidebar.open { left: 0; }
+      .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
+      .scrim.show { display: block; backdrop-filter: blur(1px); }
+    }
+  
+/* Apply to all tables with .table, or target specific table with an ID */
+.table {
+  font-size: 0.85rem;              /* Reduce font size */
+}
+
+.table td, .table th {
+  padding: 0.3rem 0.4rem;          /* Reduce vertical and horizontal padding */
+  vertical-align: middle;          /* Keep content centered vertically */
+}
+
+/* Optional: Make header bold and compact */
+.table thead th {
+  font-weight: 500;
+  background-color: #f8f9fa;       /* Light grey */
+}
+
+/* Optional: Narrow row height further */
+.table-sm td, .table-sm th {
+  padding: 0.25rem 0.5rem;
+}
+
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" data-aos="fade-right">
+        <i class="bi bi-shield-lock-fill"></i>
+         <span>Admin Console</span></a>
+      </div>
+      <nav class="d-flex flex-column gap-1">
+
+      <a class="side-link active" href="#">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+
+      
+      <!-- Dropdown (Collapsible) -->
+      <a class="side-link d-flex justify-content-between align-items-center" 
+        data-bs-toggle="collapse" href="#agencyMenu" role="button" aria-expanded="false" aria-controls="agencyMenu">
+        <span><i class="bi bi-diagram-3"></i> Schools Management</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-4" id="agencyMenu">
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_list' %}">All Schools</a>
+        <!-- <a class="side-link" href="{% url 'kiswate_digital_app:new_school' %}">Add New School</a> -->
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">School Admins</a>
+      </div>
+      <a class="side-link d-flex justify-content-between align-items-center" 
+        data-bs-toggle="collapse" href="#agencyMenu2" role="button" aria-expanded="false" aria-controls="agencyMenu">
+        <span><i class="bi bi-diagram-3"></i> Scholarships</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-4" id="agencyMenu2">
+        <a class="side-link" href="">Applications</a>
+        <a class="side-link" href="">Disbursments</a>
+      </div>
+      <a class="side-link" href="#"><i class="bi bi-people"></i> Users</a>
+      <a class="side-link" href="#"><i class="bi bi-gear"></i> Settings</a>
+      <a class="side-link" href="{% url 'userauths:sign-out' %}">
+        <i class="bi bi-gear"></i> Sign Out
+      </a>
+    </nav>
+
+      <div class="mt-3 p-2 small text-secondary">
+        <div class="k-accent mb-2"></div>
+        <div><span class="k-pill"><i class="bi bi-flag"></i> Kiswate</span></div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Header -->
+      <header class="header d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+          <h6 class="m-0 fw-bold">Dashboard</h6>
+        </div>
+    
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge badge-dark rounded-pill px-2 py-1"><i class="bi bi-calendar3 me-1"></i> <span id="today"></span></span>
+          <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
+          
+        </div>
+      </header>
+
+      <!-- Content -->
+      <section class="content container-fluid" style="min-height: 600px;">
+        
+        {% block content %} {% endblock %}
+        
+      </section>
+      <div class="text-center small text-secondary my-3">Made with <span style="color:var(--kenya-red)">❤</span> in Kenya</div>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+  <script>
+    AOS.init({ duration: 600, once: true, easing: 'ease-out' });
+
+    // Sidebar toggle (mobile)
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('scrim');
+    document.getElementById('toggleSidebar').addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      scrim.classList.toggle('show');
+    });
+    scrim.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      scrim.classList.remove('show');
+    });
+
+    // Today chip
+    const today = new Date();
+    const options = { weekday:'short', year:'numeric', month:'short', day:'numeric' };
+    document.getElementById('today').textContent = today.toLocaleDateString(undefined, options);
+  </script>
+</body>
+</html>

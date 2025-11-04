@@ -1,0 +1,112 @@
+{% extends 'Dashboard/admindash-base.html' %}
+{% block title %}Dashboard | {{ school.name }}{% endblock %}
+
+{% block content %}
+
+<div class="row g-2" data-aos="fade-up">
+          <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Total Schools</div>
+                    <div class="h4 m-0 fw-bold">{{ schools|default:"0" }}</div>
+                  </div>
+                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                </div>
+                <div class="k-progress mt-2"><span style="width:70%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Total Students</div>
+                    <div class="h4 m-0 fw-bold">{{ students|default:"0" }}</div>
+                  </div>
+                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                </div>
+                <div class="k-progress mt-2"><span style="width:55%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Parents</div>
+                    <div class="h4 m-0 fw-bold">{{ parents|default:"0" }}</div>
+                  </div>
+                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                </div>
+                <div class="k-progress mt-2"><span style="width:62%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Scholarships</div>
+                    <div class="h4 m-0 fw-bold">{{ scholarships|default:"0" }}</div>
+                  </div>
+                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                </div>
+                <div class="k-progress mt-2"><span style="width:82%"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+
+<section class="py-5" data-aos="fade-up" data-aos-delay="50">
+  <div class="container">
+    <h2 class="fw-bold mb-4 text-center">Recent Payments</h2>
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">School</th>
+                <th scope="col">Invoice</th>
+                <th scope="col">Subscription</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Payment Date</th>
+                <th scope="col" class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for payment in recent_payment %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>
+                 
+                </td>
+                <td>{{ activity.user.email }}</td>
+                <td><span class="badge bg-{{ activity.status|lower }}">{{ activity.get_status_display }}</span></td>
+                <td>${{ activity.amount|default:"0" }}</td>
+                <td>{{ activity.date|date:"M d, Y" }}</td>
+                <td class="text-center">
+                  <a href="" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteActivity({{ activity.id }})"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="7" class="text-center text-muted">No recent Payments.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

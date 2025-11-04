@@ -3,10 +3,11 @@
 {% block title %}Modules | Kiswate Digital Academy{% endblock %}
 
 {% block content %}
+
 <section class="py-6" id="modules" style="padding:100px 0; background-color:#0d1117;">
   <div class="container">
     <div class="text-center mb-5" data-aos="fade-up">
-      <h2 class="section-title text-light">Everything Your Campus Needs</h2>
+      <h2 class="section-title text-light">Our <span class="text-kenya">Core Modules</span></h2>
       <p class="section-sub text-secondary">Modular, cloud-based features that work beautifully together.</p>
     </div>
 
@@ -39,77 +40,127 @@
         }
       </style>
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in">
-        <div class="module-card">
-          <h5 class="mb-3">Smart Access Control</h5>
-          <p class="mb-4">Fingerprint · Face · Card · PIN with cloud policies, zones & schedules.</p>
-          <ul class="mb-0 small">
-            <li>Door & gate rules, visitor passes</li>
-            <li>Offline buffering & auto sync</li>
-            <li>Alerts on unauthorized attempts</li>
-          </ul>
-        </div>
-      </div>
+     <div class="row g-4">
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
-        <div class="module-card">
-          <h5 class="mb-3">Attendance & Class Check-ins</h5>
-          <p class="mb-4">Realtime in/out logs mapped to classes, dorms, and labs.</p>
-          <ul class="mb-0 small">
-            <li>Auto-attendance from access events</li>
-            <li>Homeroom and session tracking</li>
-            <li>Exports to CSV/PDF</li>
-          </ul>
-        </div>
-      </div>
+  <!-- 1. Learning Management System (LMS) -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+    <div class="module-card">
+      <h5 class="mb-3">Learning Management System (LMS)</h5>
+      <p class="mb-4">Live/recorded classes, assignments, quizzes, exams & analytics.</p>
+      <ul class="mb-0 small">
+        <li>Class schedules & attendance</li>
+        <li>Auto grading & feedback</li>
+        <li>Student progress dashboards</li>
+      </ul>
+    </div>
+  </div>
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
-        <div class="module-card">
-          <h5 class="mb-3">Analytics & Insights</h5>
-          <p class="mb-4">Trends, heatmaps, and risk flags that inform decisions.</p>
-          <ul class="mb-0 small">
-            <li>Absenteeism predictors</li>
-            <li>Peak hour congestion</li>
-            <li>Device health dashboards</li>
-          </ul>
-        </div>
-      </div>
+  <!-- 2. Dynamic Digital Library -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
+    <div class="module-card">
+      <h5 class="mb-3">Dynamic Digital Library</h5>
+      <p class="mb-4">Curriculum textbooks available per chapter via smart access or micro-payment.</p>
+      <ul class="mb-0 small">
+        <li>TSC-reviewed content</li>
+        <li>Download or view online</li>
+        <li>Usage tracking & restrictions</li>
+      </ul>
+    </div>
+  </div>
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in">
-        <div class="module-card">
-          <h5 class="mb-3">Parent Notifications</h5>
-          <p class="mb-4">SMS/Email alerts for entry/exit, late departures, and incidents.</p>
-          <ul class="mb-0 small">
-            <li>Configurable templates</li>
-            <li>Quiet hours & throttling</li>
-            <li>Delivery reports</li>
-          </ul>
-        </div>
-      </div>
+  <!-- 3. Smart ID & Access Control -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+    <div class="module-card">
+      <h5 class="mb-3">Smart ID & Access Control</h5>
+      <p class="mb-4">RFID / NFC cards for attendance, canteen, library & secured entry points.</p>
+      <ul class="mb-0 small">
+        <li>Gate, classes, hostel access</li>
+        <li>Cashless payments (MPesa, cards)</li>
+        <li>Lost card deactivation & replacement</li>
+      </ul>
+    </div>
+  </div>
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
-        <div class="module-card">
-          <h5 class="mb-3">Billing & Subscriptions</h5>
-          <p class="mb-4">Tenant plans, device limits, and automated invoicing (M-Pesa/Stripe).</p>
-          <ul class="mb-0 small">
-            <li>Usage-based or per-device</li>
-            <li>Invoice PDFs & receipts</li>
-            <li>Webhooks for finance systems</li>
-          </ul>
-        </div>
-      </div>
+  <!-- 4. Discipline & Behavior Tracking -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+    <div class="module-card">
+      <h5 class="mb-3">Discipline & Behavior Tracking</h5>
+      <p class="mb-4">Record, monitor and analyze student behaviour and corrective actions.</p>
+      <ul class="mb-0 small">
+        <li>Incident logging & approvals</li>
+        <li>Merit/demerit system</li>
+        <li>Parent & teacher alerts</li>
+      </ul>
+    </div>
+  </div>
 
-      <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
-        <div class="module-card">
-          <h5 class="mb-3">Developer APIs</h5>
-          <p class="mb-4">REST & Webhooks to integrate with SIS, HRMIS, and ERPs.</p>
-          <ul class="mb-0 small">
-            <li>OpenAPI/Swagger docs</li>
-            <li>API keys per tenant</li>
-            <li>Events: access-granted/denied</li>
-          </ul>
-        </div>
-      </div>
+  <!-- 5. Scholarship & Sponsorship Management -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
+    <div class="module-card">
+      <h5 class="mb-3">Scholarship Management</h5>
+      <p class="mb-4">Transparent bursary applications, approvals, and disbursements.</p>
+      <ul class="mb-0 small">
+        <li>Application & vetting workflows</li>
+        <li>Disbursement via Smart ID or bank</li>
+        <li>Financial & impact reporting</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 6. Fees, Billing & Finance -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+    <div class="module-card">
+      <h5 class="mb-3">Billing & School Finances</h5>
+      <p class="mb-4">Automated invoicing, fee tracking & digital payment receipts.</p>
+      <ul class="mb-0 small">
+        <li>MPesa, bank & card integrations</li>
+        <li>Fee reminders & receipts</li>
+        <li>Pending balance analytics</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 7. Parent & Guardian Portal -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in">
+    <div class="module-card">
+      <h5 class="mb-3">Parent & Guardian Portal</h5>
+      <p class="mb-4">Real-time updates on attendance, discipline, fees & performance.</p>
+      <ul class="mb-0 small">
+        <li>SMS / Email / App notifications</li>
+        <li>Secure login for each parent</li>
+        <li>Track meals, exams & fees</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 8. Analytics & Reports -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="50">
+    <div class="module-card">
+      <h5 class="mb-3">Analytics & Insights</h5>
+      <p class="mb-4">AI-driven dashboards for academics, discipline, and finance.</p>
+      <ul class="mb-0 small">
+        <li>Academic trends & heatmaps</li>
+        <li>Fee collection metrics</li>
+        <li>Export PDF / CSV / Excel</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 9. Developer APIs (optional) -->
+  <div class="col-md-6 col-lg-4" data-aos="zoom-in" data-aos-delay="100">
+    <div class="module-card">
+      <h5 class="mb-3">Developer APIs</h5>
+      <p class="mb-4">RESTful APIs for integration with SIS, ERPs & Government systems.</p>
+      <ul class="mb-0 small">
+        <li>Student & finance endpoints</li>
+        <li>Secure token-based access</li>
+        <li>Webhook event triggers</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
     </div>
   </div>
 </section>

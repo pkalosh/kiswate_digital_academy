@@ -10,6 +10,8 @@ from userauths.models import User
 def index(request):
     return render(request, "landing/index.html",{})
 
+def about(request):
+    return render(request, "landing/about.html",{})
 
 def modules(request):
     return render(request, "landing/modules.html",{})

@@ -1,0 +1,87 @@
+<!-- MODULES -->
+{% extends 'landing/base.html' %}
+{% block title %}Modules | Kiswate Digital Academy{% endblock %}
+
+{% block content %}
+<style>
+  p{
+    color: #ffffff;
+  }
+  /* Breadcrumb Page Title */
+    .breadcrumb-section{background:#0d0d0d;padding:35px 0;border-bottom:1px solid rgba(255,255,255,.09);}
+    .breadcrumb a{color:var(--kenya-green);text-decoration:none;}
+    .breadcrumb a:hover{text-decoration:underline;}
+
+    /* Section Headers */
+    .section-title{font-weight:800;color:#fff;}
+    .text-kenya{background:linear-gradient(90deg,#fff,var(--kenya-green),var(--kenya-red));-webkit-background-clip:text;color:transparent;}
+
+    /* Glass Card */
+    .glass-card{background:var(--glass-bg);border:1px solid var(--glass-stroke);border-radius:16px;padding:24px;box-shadow:var(--shadow-sm);}
+
+    /* Values Cards */
+    .value-card{background:#0f1112;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;color:#dfe7ec;}
+  </style>
+<section class="py-6" id="modules" style="padding:100px 0; background-color:#0d1117;">
+  <div class="container">
+    <div class="text-center mb-5" data-aos="fade-up">
+      <h2 class="section-title text-light">About <span class="text-kenya">Kiswate Digital Academy</span></h2>
+      <p class="section-sub text-secondary">Modular, cloud-based features that work beautifully together.</p>
+    </div>
+
+  
+    <div class="glass-card">
+    <section class="py-5">
+  
+    <h2 class="section-title mb-4" data-aos="fade-up">Who We Are</h2>
+    <p data-aos="fade-up">
+      Kiswate Digital Academy is a technology-driven education ecosystem developed by Eujim Solutions Limited to modernize how learning institutions in Africa operate. 
+      We provide schools with a seamless platform that connects teaching, student discipline, fee payments, parental engagement, digital identity, and academic records — all in one place.
+    </p>
+    <p data-aos="fade-up">
+      Our focus is not just digital learning, but also accountability, behavior tracking, transparency, and inclusivity. Kiswate ensures every stakeholder — administrator, teacher, student, parent, or sponsor — is empowered with accurate data, easy access, and real-time communication.
+    </p>
+
+</section>
+
+<section class="py-5">
+    <h3 class="fw-bold text-kenya mb-3" data-aos="fade-up">Our Story</h3>
+    <p data-aos="fade-up">
+      African schools face challenges like lost student files, poor recordkeeping, delayed fee tracking, discipline cases with no data, and parents being left uninformed. 
+      Many institutions still rely on handwritten registers, paper files, verbal communication, and manual financial systems.
+    </p>
+    <p data-aos="fade-up">
+      Kiswate was born from a simple observation: technology should not only teach — it should also organize. We envisioned a platform that brings structure, discipline, and transparency into every classroom and office. 
+      Not to replace teachers, but to support them. Not to complicate schools, but to make them easier to manage.
+    </p>
+    <p data-aos="fade-up">
+      Today, Kiswate is more than software — it is a commitment to smarter, safer, more disciplined learning environments across Kenya and Africa.
+    </p>
+</section>
+</div>
+
+<!-- Vision & Mission -->
+<section class="py-5">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-lg-6" data-aos="zoom-in">
+        <div class="glass-card">
+          <h5 class="text-kenya fw-bold">Our Vision</h5>
+          <p>To be Africa’s leading digital education ecosystem, nurturing disciplined, empowered, and future-ready learners through smart technology.</p>
+        </div>
+      </div>
+      <div class="col-lg-6" data-aos="zoom-in" data-aos-delay="100">
+        <div class="glass-card">
+          <h5 class="text-kenya fw-bold">Our Mission</h5>
+          <p>To simplify school management and enhance learning using secure, efficient, and affordable digital solutions that connect schools, teachers, students, parents, and sponsors.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+ </div>
+</section>
+
+
+{% endblock %}
+<!-- Compare this snippet from templates/landing/base.html: -->

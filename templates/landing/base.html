@@ -13,6 +13,16 @@
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
 
   {% block extra_head %}{% endblock %}
+  <style>
+    .breadcrumb-section {
+  background: #0d0d0d;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.breadcrumb-item + .breadcrumb-item::before {
+  color: rgba(255,255,255,.4);
+}
+
+  </style>
 </head>
 <body>
 
@@ -21,17 +31,18 @@
     <div class="container">
       <a class="navbar-brand brand-badge" href="{% url 'userauths:index' %}">
         <span class="brand-logo"></span>
-        Kiswate Digital Academy
+        Kiswate DA
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
         <span class="navbar-toggler-icon" style="filter: invert(1)"></span>
       </button>
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+          <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'userauths:about' %}">About Us</a></li>
           <li class="nav-item"><a class="nav-link" href="{% url 'userauths:modules' %}">Modules</a></li>
           <li class="nav-item"><a class="nav-link" href="{% url 'userauths:how_it_works' %}">How it Works</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'userauths:pricing' %}">Pricing</a></li>
-          <li class="nav-item"><a class="nav-link" href="{% url 'userauths:faqs' %}">FAQ</a></li>
+          
           <li class="nav-item ms-lg-2"><a class="btn cta-btn btn-outline-white" href="{% url 'userauths:demo' %}">Request Demo</a></li>
           {% if user.is_authenticated %}<li class="nav-item"><a class="btn cta-btn btn-green ms-lg-2" href="{% url 'school:dashboard' %}">Dashboard</a></li>{% else  %}<li class="nav-item"><a class="btn cta-btn btn-green ms-lg-2" href="{% url 'userauths:sign-in' %}">Login</a></li>{% endif %}
         </ul>

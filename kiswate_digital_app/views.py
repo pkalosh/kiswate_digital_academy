@@ -145,13 +145,13 @@ def new_school(request):
     context = {'form': form}
     return render(request, "Dashboard/new_school.html", context)
 def kiswate_dashboard(request):
-    schools = School.objects.all().count()
+    schools = School.objects.count()
     teachers = StaffProfile.objects.filter(position='teacher').count()
-    students = Student.objects.all().count()
-    parents = Parent.objects.all().count()
+    students = Student.objects.count()
+    parents = Parent.objects.count()
     scholarships = Scholarship.objects.all().count()
     
-    return render(request, "Dashboard/kiswate_admin_dashboard.html", 
+    return render(request, "Dashboard/index.html", 
                   {
                       "schools":schools,
                       "teachers":teachers,

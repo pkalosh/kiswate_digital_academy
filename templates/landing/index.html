@@ -1,4 +1,5 @@
 {% extends 'landing/base.html' %}
+{% load static %}
 {% block title %}Home | Kiswate Digital Academy{% endblock %}
 
 {% block content %}
@@ -9,16 +10,16 @@
     <div class="row align-items-center g-4">
       <div class="col-lg-7" data-aos="fade-right">
         <span class="badge-kenya mb-3">Kenyan-Built · Cloud Native · Multi-Tenant</span>
-        <h1 class="mb-3">A <span class="text-kenya">Smart, Secure & Connected</span> SaaS for Schools</h1>
-        <p class="lead mb-4">Unify biometric access, attendance, analytics, notifications, and billing in one elegant cloud platform. Designed for real-time visibility and safer learning environments.</p>
+        <h1 class="mb-3">A <span class="text-kenya">Smart Learning. Smart Discipline. </span>Smart Schools.</h1>
+        <p class="lead mb-4">Kiswate Digital Academy App is a modern school management platform that brings together learning, payments, digital textbooks, smart ID systems, and student discipline — all in one simple and powerful platform..</p>
         <div class="d-flex flex-wrap gap-2">
-          <a href="#pricing" class="btn cta-btn btn-green">Start Free Trial</a>
-          <a href="#modules" class="btn cta-btn btn-outline-white">Explore Modules</a>
+          <a href="{% url 'userauths:about' %}" class="btn cta-btn btn-green">Learn More</a>
+          <a href="{% url 'userauths:modules' %}" class="btn cta-btn btn-outline-white">Explore Modules</a>
         </div>
       </div>
       <div class="col-lg-5" data-aos="fade-left">
         <div class="p-4 hero-card">
-          <img class="img-fluid rounded-4 shadow" alt="Dashboard preview" src="https://images.unsplash.com/photo-1551281044-8d8d6aa21061?q=80&w=1200&auto=format&fit=crop" />
+          <img class="img-fluid rounded-4 shadow" alt="Dashboard preview" src="{% static 'unlocking-car-door-with-smart-card.jpg' %}" />
           <div class="mt-3">
             <div class="spark"></div>
             <small class="d-block mt-2 text-secondary">Live dashboard · Real-time events · Multi-school view</small>
@@ -29,8 +30,44 @@
   </div>
 </header>
 
-
-{% include 'landing/partials/analytics.html' %}
-{% include 'landing/partials/testimonials.html' %}
+ <section id="features" class="py-5" style="background:#0a0a0a;">
+    <div class="container">
+      <div class="text-center mb-5">
+        <h2 class="section-title" data-aos="fade-up" style="color:var(--kenya-white);">Core Modules</h2>
+        <p class="section-sub" data-aos="fade-up" data-aos-delay="50">Everything your school needs — integrated, secure and smart.</p>
+      </div>
+      <div class="row g-4">
+        <div class="col-md-6 col-lg-3" data-aos="fade-up">
+          <div class="module-card">
+            <span class="badge-kenya mb-3">LMS</span>
+            <h5 class="fw-bold">Kiswate LMS</h5>
+            <p class="small">Live & recorded classes, assignments, quizzes, attendance tracking, grading, and performance analytics.</p>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="50">
+          <div class="module-card">
+            <span class="badge-kenya mb-3">Library</span>
+            <h5 class="fw-bold">Dynamic Digital Library</h5>
+            <p class="small">Access textbooks chapter-by-chapter with micro-payments, linked to TSC-certified teachers and curriculum standards.</p>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="100">
+          <div class="module-card">
+            <span class="badge-kenya mb-3">Scholarship</span>
+            <h5 class="fw-bold">Scholarship Management</h5>
+            <p class="small">Online scholarship applications, review process, approvals, disbursement via smart IDs or bank accounts, and reporting.</p>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="150">
+          <div class="module-card">
+            <span class="badge-kenya mb-3">Smart ID</span>
+            <h5 class="fw-bold">Smart ID System</h5>
+            <p class="small">RFID/NFC-enabled student smart IDs for attendance, cashless payments, gate access, dining hall, library, and discipline tracking.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+<!--  -->
 
 {% endblock %}
