@@ -3,6 +3,7 @@ import sys
 import django
 import uuid
 import time
+import threading
 import requests
 from datetime import datetime
 from zk import ZK
@@ -193,18 +194,23 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
             pass
         print(f"🔌 Disconnected from {device_id}")
 
-def poll_all_devices():
-    while True:
-        for device in DEVICES:
-            print(f"\n🔍 Checking device {device['id']} ({device['ip']}) at {device['location']}")
-            poll_device_and_send_sms_for_device(
-                ip=device["ip"],
-                device_id=device["id"],
-                location=device["location"],
-            )
-            time.sleep(2)  # short delay between devices
+
+def poll_all_devices_parallel():
+    threads = []
+    for device in DEVICES:
+        t = threading.Thread(
+            target=poll_device_and_send_sms_for_device,
+            args=(device["ip"], device["id"], device["location"]),
+            daemon=True
+        )
+        t.start()
+        threads.append(t)
+
+    # Keep main thread alive
+    for t in threads:
+        t.join()
 # -------------------------------
 # Run Script
 # -------------------------------
 if __name__ == "__main__":
-    poll_all_devices()
+    poll_all_devices_parallel()
