@@ -316,7 +316,7 @@ def scholarship_list_create(request):
 def scholarship_edit(request, pk):
     """
     Edit scholarship via modal POST.
-    On error, redirect to list with params to re-open modal.
+    On error, re-render list with bound form to show errors.
     """
     scholarship = get_object_or_404(Scholarship, pk=pk, created_by=request.user)
 
@@ -329,9 +329,14 @@ def scholarship_edit(request, pk):
             return redirect('kiswate_digital_app:scholarship_list_create')
         else:
             messages.error(request, 'Please correct the form errors below.')
-            # Redirect with params to re-open modal
-            return redirect(f'{reverse("kiswate_digital_app:scholarship_list_create")}?edit_pk={pk}&error=1')
-    # For GET: Redirect (modal-driven)
+            logger.warning(f"Invalid scholarship edit form for {pk} by {request.user.email}: {form.errors}")
+            # Re-render list with bound form
+            scholarships = Scholarship.objects.filter(created_by=request.user).order_by('-created_at')  # Match list view query
+            return render(request, 'scholarship_list.html', {
+                'scholarships': scholarships,
+                'form': form,  # Bound form for error display
+            })
+    # For direct GET: Redirect to list
     messages.info(request, "Use the edit button in the list.")
     return redirect('kiswate_digital_app:scholarship_list_create')
 

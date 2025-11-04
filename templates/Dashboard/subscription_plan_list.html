@@ -76,13 +76,13 @@
                 </td>
                 <td class="text-center">
                   <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                    <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
                       <i class="bi bi-three-dots-vertical"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                       <li>
                         <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ plan.pk }}">
-                          <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Plan
+                          <i class="bi bi-pencil-square me-2 text-success"></i>Edit Plan
                         </button>
                       </li>
                       <li><hr class="dropdown-divider"></li>
@@ -164,7 +164,7 @@
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                           <i class="bi bi-x-circle me-1"></i>Cancel
                         </button>
-                        <button type="submit" class="btn btn-warning">
+                        <button type="submit" class="btn btn-success">
                           <i class="bi bi-check-circle me-1"></i>Update Plan
                         </button>
                       </div>
@@ -204,7 +204,7 @@
               {% empty %}
               <tr><td colspan="9" class="text-center text-muted py-4">
                 <i class="bi bi-tag fs-1 text-muted mb-3 d-block"></i>
-                No subscription plans yet. <a href="#" data-bs-toggle="modal" data-bs-target="#addPlanModal" class="text-primary">Create one now</a>.
+                No subscription plans yet. <a href="#" data-bs-toggle="modal" data-bs-target="#addPlanModal" class="text-success">Create one now</a>.
               </td></tr>
               {% endfor %}
             </tbody>
@@ -375,7 +375,7 @@
           </div>
           <div class="modal-body">
             <p>Select format:</p>
-            <a href="#" class="btn btn-outline-primary me-2">CSV</a>
+            <a href="#" class="btn btn-outline-success me-2">CSV</a>
             <a href="#" class="btn btn-outline-secondary">PDF</a>
           </div>
         </div>
