@@ -2,8 +2,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
+from django.core.paginator import Paginator
 from userauths.models import User
-from .models import Grade, School, Parent,StaffProfile,Student
+from .models import Grade, School, Parent,StaffProfile,Student, ScanLog
 from .forms import GradeForm,ParentCreationForm, ParentEditForm,StaffCreationForm, StaffEditForm,StudentCreationForm, StudentEditForm
 import logging
 from django.conf import settings
@@ -56,6 +57,34 @@ def school_grades(request):
     }
     return render(request, "school/grade.html", context)
 
+
+# -------------------------------SCAN LOGS VIEW-------------------------------
+@login_required
+def scan_logs_view(request):
+    """
+    Display all scan logs with pagination and simple search filters.
+    """
+    search = request.GET.get('q', '')
+    school = getattr(request.user, 'school', None)
+
+    logs = ScanLog.objects.all()
+    print((logs))
+    # Optional: limit logs by user's school
+    if school:
+        logs = logs.filter(school=school)
+
+    if search:
+        logs = logs.filter(school=school)
+
+    paginator = Paginator(logs, 25)  # Show 25 logs per page
+    page = request.GET.get('page')
+    logs_page = paginator.get_page(page)
+
+    context = {
+        'logs': logs_page,
+        'search': search,
+    }
+    return render(request, 'school/scan_logs.html', context)
 
 @login_required
 def grade_create(request):

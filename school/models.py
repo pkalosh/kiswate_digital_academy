@@ -165,8 +165,10 @@ class Student(models.Model):
 
 # Smart ID model (linked to student for access and payments)
 class SmartID(models.Model):
-    student = models.OneToOneField(Student, on_delete=models.CASCADE)
+    profile = models.OneToOneField(User, on_delete=models.CASCADE)
     id_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    card_id = models.CharField(max_length=100, unique=True, db_index=True)  # Physical card ID
+    user_f18_id = models.CharField(max_length=100, unique=True, db_index=True)
     qr_code = models.ImageField(upload_to='smart_ids/', blank=True)  # Generated QR
     is_active = models.BooleanField(default=True)
     biometric_data = models.JSONField(blank=True, null=True)  # Optional biometric hash
@@ -175,8 +177,18 @@ class SmartID(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='smart_ids')
 
     def __str__(self):
-        return f"Smart ID for {self.student}"
+        return f"Smart ID for {self.id_uuid}"
+#School ScanLog model
+class ScanLog(models.Model):
+    smart_id = models.ForeignKey(SmartID, on_delete=models.CASCADE, related_name='scan_logs')
+    scan_id =  models.CharField(max_length=100, unique=True, db_index=True)
+    scanned_at = models.DateTimeField(auto_now_add=True)
+    location = models.CharField(max_length=255, blank=True)  # e.g., "Main Gate", "Library"
+    device_id = models.CharField(max_length=100, blank=True)  # ID of the scanning device
+    action = models.CharField(max_length=50, blank=True)  # e.g., "Entry", "Exit"
 
+    def __str__(self):
+        return f"ScanLog: {self.smart_id} at {self.scanned_at}"
 # Payment model (for fees, micro-payments, scholarships)
 class Payment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)  # Nullable for general payments

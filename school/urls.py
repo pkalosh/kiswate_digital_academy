@@ -23,4 +23,7 @@ urlpatterns = [
     path('students/<int:pk>/edit/', views.student_edit, name='student_edit'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
+
+    #Scan logs
+    path('scan-logs/', views.scan_logs_view, name='scan_logs'),
 ]
