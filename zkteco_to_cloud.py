@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'src.settings')  # replace with 
 
 django.setup()
 from userauths.models import User  # adjust path to your app
-from school.models import ScanLog, School, SmartID  # adjust path to your app
+from school.models import ScanLog, School, SmartID, Student  # adjust path to your app
 from django.utils import timezone
 from django.db import IntegrityError
 
@@ -143,7 +143,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
     zk = ZK(ip, port=4370, timeout=5)
     try:
         conn = zk.connect()
-        print(f"✅ Connected to ZKTeco device {device_id} at {ip}")
+        print(f" Connected to ZKTeco device {device_id} at {ip}")
 
         last_scan_time = None
 
@@ -172,10 +172,46 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
 
                 if scan_record:
                     profile = scan_record.smart_id.profile
-                    full_name = f"{profile.first_name} {profile.last_name}"
-                    message = f"New Scan: {full_name} at {location} ({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
-                    _send_sms_via_eujim(profile.phone_number, message)
+
+                    #  If the scanned user is a student
+                    if profile.is_student:
+                        print(f"📚 Student scan detected: {profile}")
+
+                        # Find the corresponding Student object
+                        student = Student.objects.filter(
+                            profile=profile,
+                            school=scan_record.smart_id.school
+                        ).first()
+
+                        if student:
+                            # Get all parents linked to this student
+                            parents = student.parent.all()
+                            full_name = f"{profile.first_name} {profile.last_name}"
+                            message = (
+                                f"New Scan: {full_name} at {location} "
+                                f"({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                            )
+
+                            # Send SMS to each parent
+                            for parent in parents:
+                                if parent.profile.phone_number:
+                                    _send_sms_via_eujim(parent.profile.phone_number, message)
+                                    print(f"📩 SMS sent to parent: {parent.profile.phone_number}")
+                                else:
+                                    print(f"⚠️ Parent {parent} has no phone number.")
+
+                        else:
+                            print(f"⚠️ No student record found for {profile}")
+
+                    else:
+                        # For non-students, send SMS directly to the user's own phone
+                        full_name = f"{profile.first_name} {profile.last_name}"
+                        message = f"New Scan: {full_name} at {location} ({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                        _send_sms_via_eujim(profile.phone_number, message)
+                        print(f"📩 SMS sent to user: {profile.phone_number}")
+
                     last_scan_time = log_time
+
                 else:
                     print(f"⚠️ No scan saved for {device_id} this round.")
 
