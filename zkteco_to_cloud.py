@@ -174,7 +174,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
                     profile = scan_record.smart_id.profile
                     full_name = f"{profile.first_name} {profile.last_name}"
                     message = f"New Scan: {full_name} at {location} ({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
-                    _send_sms_via_eujim(ALERT_PHONE, message)
+                    _send_sms_via_eujim(profile.phone_number, message)
                     last_scan_time = log_time
                 else:
                     print(f"⚠️ No scan saved for {device_id} this round.")
