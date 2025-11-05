@@ -70,12 +70,15 @@ def smartid_list(request):
         return redirect('school:dashboard')
     
     query = request.GET.get('q', '')
-    smartids = SmartID.objects.filter(school=school, is_active=True)
+    smartids = SmartID.objects.filter(school=school, is_active=True).select_related('profile', 'profile__student', 'profile__staffprofile')
     if query:
         smartids = smartids.filter(
-            Q(card_id__icontains=query) | Q(profile__name__icontains=query)  # Assume profile has 'name' field for search
+            Q(profile__first_name__icontains=query) |
+            Q(profile__last_name__icontains=query) |
+            Q(card_id__icontains=query) |
+            Q(user_f18_id__icontains=query)
         )
-    form = SmartIDForm()
+    form = SmartIDForm(school=school)
     return render(request, 'school/smartid_list.html', {
         'smartids': smartids,
         'form': form,
@@ -95,7 +98,7 @@ def smartid_create(request):
     if request.method != 'POST':
         return redirect('school:smartid-list')
     
-    form = SmartIDForm(request.POST)
+    form = SmartIDForm(request.POST, school=school)
     if form.is_valid():
         smartid = form.save(commit=False)
         smartid.school = school
@@ -128,7 +131,7 @@ def smartid_edit(request, pk):
         return redirect('school:smartid-list')
     
     smartid = get_object_or_404(SmartID, pk=pk, school=school)
-    form = SmartIDForm(request.POST, instance=smartid)
+    form = SmartIDForm(request.POST, instance=smartid, school=school)
     if form.is_valid():
         form.save()
         messages.success(request, f'Smart ID "{smartid.card_id}" updated successfully.')

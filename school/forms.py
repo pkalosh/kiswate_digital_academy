@@ -2,6 +2,7 @@
 import random
 import string
 from django import forms
+from django.db.models import Q
 from userauths.models import User
 from .models import Grade, Parent,StaffProfile,Student, SmartID
 from django.core.mail import send_mail
@@ -1015,6 +1016,23 @@ class StudentEditForm(forms.ModelForm):
 
 
 class SmartIDForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if school:
+            queryset = User.objects.filter(
+                Q(student__school=school) | Q(staffprofile__school=school)
+            ).select_related('student', 'staffprofile').distinct().order_by('last_name', 'first_name')
+            self.fields['profile'].queryset = queryset
+            # Custom label for choices to distinguish Student vs Staff
+            self.fields['profile'].label_from_instance = self.label_from_instance
+
+    def label_from_instance(self, obj):
+        if hasattr(obj, 'student') and obj.student:
+            return f"Student: {obj.get_full_name()} ({obj.student.student_id})"
+        elif hasattr(obj, 'staffprofile') and obj.staffprofile:
+            return f"Staff: {obj.get_full_name()} ({obj.staffprofile.staff_id})"
+        return str(obj)
 
     class Meta:
         model = SmartID
