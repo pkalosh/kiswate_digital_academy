@@ -3,7 +3,7 @@ import random
 import string
 from django import forms
 from userauths.models import User
-from .models import Grade, Parent,StaffProfile,Student
+from .models import Grade, Parent,StaffProfile,Student, SmartID
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
 from django.conf import settings
@@ -1012,3 +1012,16 @@ class StudentEditForm(forms.ModelForm):
         #     )
 
         return student
+
+
+class SmartIDForm(forms.ModelForm):
+
+    class Meta:
+        model = SmartID
+        fields = ['profile', 'card_id', 'user_f18_id', 'is_active']
+        widgets = {
+            'profile': forms.Select(attrs={'class': 'form-select'}),
+            'card_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'user_f18_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }

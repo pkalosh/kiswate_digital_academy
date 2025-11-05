@@ -1,0 +1,15 @@
+<tr id="smartid-{{ smartid.id }}">
+  <td>{{ smartid.id }}</td>
+  <td>{{ smartid.profile.get_full_name }}</td>
+  <td>{{ smartid.card_id }}</td>
+  <td>{{ smartid.school.name }}</td>
+  <td>
+    <button type="button" class="btn btn-sm btn-warning btn-edit" data-id="{{ smartid.id }}">
+      <i class="bi bi-pencil"></i>
+    </button>
+
+    <button type="button" class="btn btn-sm btn-danger btn-delete" data-id="{{ smartid.id }}">
+      <i class="bi bi-trash"></i>
+    </button>
+  </td>
+</tr>

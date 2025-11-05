@@ -4,10 +4,13 @@ from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
 from userauths.models import User
-from .models import Grade, School, Parent,StaffProfile,Student, ScanLog
-from .forms import GradeForm,ParentCreationForm, ParentEditForm,StaffCreationForm, StaffEditForm,StudentCreationForm, StudentEditForm
+from .models import Grade, School, Parent,StaffProfile,Student, ScanLog, SmartID,Scholarship
+from .forms import GradeForm,ParentCreationForm, ParentEditForm,StaffCreationForm, StaffEditForm,StudentCreationForm, StudentEditForm,SmartIDForm
 import logging
+from django.http import JsonResponse
 from django.conf import settings
+from django.template.loader import render_to_string
+from django.utils.safestring import mark_safe
 from django.core.mail import send_mail
 import random
 import string
@@ -15,9 +18,9 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 def dashboard(request):
     school =  request.user.school_admin_profile
-    total_teachers = StaffProfile.objects.filter(school=school, position='teacher')
-    total_students = Student.objects.filter(school=school)
-    total_parents = Parent.objects.filter(school=school)
+    total_teachers = StaffProfile.objects.filter(school=school, position='teacher').count()
+    total_students = Student.objects.filter(school=school).count()
+    total_parents = Parent.objects.filter(school=school).count()
 
     return render(request, "school/dashboard.html", {
         "total_teachers":total_teachers,
@@ -57,6 +60,111 @@ def school_grades(request):
     }
     return render(request, "school/grade.html", context)
 
+@login_required
+def smartid_list(request):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    
+    query = request.GET.get('q', '')
+    smartids = SmartID.objects.filter(school=school, is_active=True)
+    if query:
+        smartids = smartids.filter(
+            Q(card_id__icontains=query) | Q(profile__name__icontains=query)  # Assume profile has 'name' field for search
+        )
+    form = SmartIDForm()
+    return render(request, 'school/smartid_list.html', {
+        'smartids': smartids,
+        'form': form,
+        'school': school,
+        'query': query,
+    })
+
+@login_required
+def smartid_create(request):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    
+    if request.method != 'POST':
+        return redirect('school:smartid-list')
+    
+    form = SmartIDForm(request.POST)
+    if form.is_valid():
+        smartid = form.save(commit=False)
+        smartid.school = school
+        smartid.save()
+        messages.success(request, f'Smart ID "{smartid.card_id}" created successfully.')
+        logger.info(f"Created Smart ID {smartid.card_id} for school {school.name} by {request.user.email}.")
+        return redirect('school:smartid-list')
+    else:
+        # Add form errors to messages
+        for field, error_list in form.errors.items():
+            if field == '__all__':
+                for error in error_list:
+                    messages.error(request, error)
+            else:
+                label = form.fields[field].label
+                for error in error_list:
+                    messages.error(request, f"{label}: {error}")
+        return redirect('school:smartid-list')
+
+@login_required
+def smartid_edit(request, pk):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    
+    if request.method != 'POST':
+        return redirect('school:smartid-list')
+    
+    smartid = get_object_or_404(SmartID, pk=pk, school=school)
+    form = SmartIDForm(request.POST, instance=smartid)
+    if form.is_valid():
+        form.save()
+        messages.success(request, f'Smart ID "{smartid.card_id}" updated successfully.')
+        logger.info(f"Updated Smart ID {smartid.card_id} for school {school.name} by {request.user.email}.")
+        return redirect('school:smartid-list')
+    else:
+        # Add form errors to messages
+        for field, error_list in form.errors.items():
+            if field == '__all__':
+                for error in error_list:
+                    messages.error(request, error)
+            else:
+                label = form.fields[field].label
+                for error in error_list:
+                    messages.error(request, f"{label}: {error}")
+        return redirect('school:smartid-list')
+
+@login_required
+def smartid_delete(request, pk):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    
+    if request.method != 'POST':
+        messages.warning(request, "Use the delete button in the list to confirm.")
+        return redirect('school:smartid-list')
+    
+    smartid = get_object_or_404(SmartID, pk=pk, school=school)
+    smartid.is_active = False  # Soft delete
+    smartid.save()
+    messages.success(request, f'Smart ID "{smartid.card_id}" deactivated.')
+    logger.info(f"Deactivated Smart ID {smartid.card_id} for school {school.name} by {request.user.email}.")
+    return redirect('school:smartid-list')
 
 # -------------------------------SCAN LOGS VIEW-------------------------------
 @login_required

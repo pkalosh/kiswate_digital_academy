@@ -23,6 +23,11 @@ urlpatterns = [
     path('students/<int:pk>/edit/', views.student_edit, name='student_edit'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
+    #smart ID
+    path('smartids/', views.smartid_list, name='smartid-list'),
+    path('smartids/create/', views.smartid_create, name='smartid-create'),
+    path('smartids/<int:pk>/edit/', views.smartid_edit, name='smartid-edit'),
+    path('smartids/<int:pk>/delete/', views.smartid_delete, name='smartid-delete'),
 
     #Scan logs
     path('scan-logs/', views.scan_logs_view, name='scan_logs'),

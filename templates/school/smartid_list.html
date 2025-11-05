@@ -1,0 +1,218 @@
+<!-- templates/school/smartid_list.html -->
+{% extends 'school/base.html' %}
+{% block title %}Smart IDs | {{ school.name }}{% endblock %}
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+<div class="d-flex align-items-center gap-2">
+<button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+<div>
+<h6 class="m-0 fw-bold">Smart IDs</h6>
+<nav aria-label="breadcrumb" class="small">
+<ol class="breadcrumb mb-0">
+<li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item active" aria-current="page">Smart IDs</li>
+</ol>
+</nav>
+</div>
+</div>
+
+</header>
+<section class="content container-fluid py-4">
+<!-- Messages -->
+    {% if messages %}
+<div class="row">
+        {% for message in messages %}
+<div class="col-12">
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+              {{ message }}
+<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+</div>
+        {% endfor %}
+</div>
+    {% endif %}
+<!-- Smart IDs List -->
+<div class="card shadow-sm border-0 rounded-4">
+<div class="card-header d-flex justify-content-between align-items-center">
+<h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Active Smart IDs ({{ smartids.count }})</h5>
+<div class="d-flex gap-2">
+<button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#smartIDModal" data-mode="create">
+<i class="bi bi-plus"></i> Add Smart ID
+</button>
+<a href="#" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
+</div>
+</div>
+<div class="card-body">
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+<thead class="table-light">
+<tr>
+<th>ID</th>
+<th>Profile</th>
+<th>Card ID</th>
+<th>User F18 ID</th>
+<th>Status</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+              {% for smartid in smartids %}
+<tr>
+<td><strong>{{ smartid.id }}</strong></td>
+<td>{{ smartid.profile }}</td>
+<td><code>{{ smartid.card_id }}</code></td>
+<td>{{ smartid.user_f18_id }}</td>
+<td>
+                  {% if smartid.is_active %}
+<span class="badge bg-success">Active</span>
+                  {% else %}
+<span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
+</td>
+<td>
+<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#smartIDModal" data-mode="edit"
+data-id="{{ smartid.id }}" data-profile_id="{{ smartid.profile.id }}" data-card_id="{{ smartid.card_id|escapejs }}"
+data-user_f18_id="{{ smartid.user_f18_id|escapejs }}" data-is_active="{% if smartid.is_active %}true{% else %}false{% endif %}">
+<i class="bi bi-pencil"></i>
+</button>
+<button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal"
+data-id="{{ smartid.id }}" data-card_id="{{ smartid.card_id|escapejs }}">
+<i class="bi bi-trash"></i>
+</button>
+</td>
+</tr>
+              {% empty %}
+<tr><td colspan="6" class="text-center text-muted py-4">No Smart IDs found. Create one above.</td></tr>
+              {% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Smart ID Modal (Create/Edit) -->
+<div class="modal fade" id="smartIDModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title" id="smartIDModalTitle">Add New Smart ID</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form method="post" id="smartIDForm" action="{% url 'school:smartid-create' %}">
+            {% csrf_token %}
+<input type="hidden" name="mode" id="mode" value="create">
+<div class="modal-body">
+              {% if form.non_field_errors %}
+<div class="alert alert-danger">
+                  {{ form.non_field_errors }}
+</div>
+              {% endif %}
+<div class="mb-3">
+                {{ form.profile.label_tag }}
+                {{ form.profile }}
+                {% if form.profile.errors %}{{ form.profile.errors }}{% endif %}
+</div>
+<div class="mb-3">
+                {{ form.card_id.label_tag }}
+                {{ form.card_id }}
+                {% if form.card_id.errors %}{{ form.card_id.errors }}{% endif %}
+</div>
+<div class="mb-3">
+                {{ form.user_f18_id.label_tag }}
+                {{ form.user_f18_id }}
+                {% if form.user_f18_id.errors %}{{ form.user_f18_id.errors }}{% endif %}
+</div>
+<div class="mb-3 form-check">
+                {{ form.is_active }}
+                {{ form.is_active.label_tag }}
+                {% if form.is_active.errors %}{{ form.is_active.errors }}{% endif %}
+</div>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-success">Save Changes</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Delete Smart ID</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form method="post" id="deleteForm">
+            {% csrf_token %}
+<div class="modal-body">
+<p>Are you sure you want to deactivate <strong id="deleteCardID"></strong>? This action cannot be undone.</p>
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-danger">Deactivate</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+<!-- Export Modal (Optional) -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Export Smart IDs</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<p>Export as CSV or PDF?</p>
+<a href="#" class="btn btn-outline-primary me-2">CSV</a>
+<a href="#" class="btn btn-outline-secondary">PDF</a>
+</div>
+</div>
+</div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+const smartIDModal = document.getElementById('smartIDModal');
+const smartIDForm = document.getElementById('smartIDForm');
+const smartIDModalTitle = document.getElementById('smartIDModalTitle');
+const modeInput = document.getElementById('mode');
+if (smartIDModal) {
+smartIDModal.addEventListener('show.bs.modal', function (event) {
+const button = event.relatedTarget;
+const mode = button.dataset.mode;
+modeInput.value = mode;
+if (mode === 'create') {
+smartIDModalTitle.textContent = 'Add New Smart ID';
+smartIDForm.action = "{% url 'school:smartid-create' %}";
+smartIDForm.reset();
+            } else if (mode === 'edit') {
+const id = button.dataset.id;
+smartIDModalTitle.textContent = 'Edit Smart ID';
+const updateUrl = "{% url 'school:smartid-edit' 0 %}".replace('0', id);
+smartIDForm.action = updateUrl;
+// Populate fields
+document.querySelector('#id_profile').value = button.dataset.profile_id || '';
+document.querySelector('#id_card_id').value = button.dataset.card_id || '';
+document.querySelector('#id_user_f18_id').value = button.dataset.user_f18_id || '';
+document.querySelector('input[name="is_active"]').checked = button.dataset.is_active === 'true';
+            }
+          });
+        }
+const deleteModal = document.getElementById('deleteModal');
+const deleteForm = document.getElementById('deleteForm');
+if (deleteModal) {
+deleteModal.addEventListener('show.bs.modal', function (event) {
+const button = event.relatedTarget;
+const id = button.dataset.id;
+const card_id = button.dataset.card_id;
+document.getElementById('deleteCardID').textContent = card_id;
+const deleteUrl = "{% url 'school:smartid-delete' 0 %}".replace('0', id);
+deleteForm.action = deleteUrl;
+          });
+        }
+      });
+</script>
+</section>
+{% endblock %}
