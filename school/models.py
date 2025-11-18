@@ -6,20 +6,62 @@ import uuid
 from django.utils import timezone
 from userauths.models import User
 
-# Choice constants (isolated for reuse)
+# KDADTR-Specific Choice Constants 
 GENDER_CHOICES = [
     ('m', 'Male'),
     ('f', 'Female'),
 ]
 
+# Expanded POSITION_CHOICES to cover all stakeholders
 POSITION_CHOICES = [
     ('teacher', 'Teacher'),
+    ('hod', 'Head of Department'),  # New: For HODs
+    ('deputy_principal', 'Deputy Principal'),  # New: Can mark suspensions
+    ('principal', 'Principal'),  # New: Can mark expulsions
     ('administrator', 'Administrator'),
     ('security', 'Security Staff'),
-    ('cook', 'Cook'),
+    ('cook', 'Cook'),  # Kitchen
+    ('dorm_supervisor', 'Dormitory Supervisor'),  # New: For dorms
+    ('gate_keeper', 'School Gate Keeper'),  # New: For gate
+    ('trip_coordinator', 'Trip Coordinator'),  # New: For school trips/games
+    ('moe_policy_maker', 'MoE Policy Maker'),  # New: External stakeholders
     ('cleaner', 'Cleaner'),
     ('driver', 'Driver'),
     ('other', 'Other'),
+]
+
+# New: ATTENDANCE_STATUS_CHOICES matching concept exactly
+ATTENDANCE_STATUS_CHOICES = [
+    ('P', 'Present'),
+    ('ET', 'Excused Tardy'),
+    ('UT', 'Unexcused Tardy'),
+    ('EA', 'Excused Absence'),
+    ('UA', 'Unexcused Absence'),
+    ('IB', 'Inappropriate Behavior'),  # Links to DisciplineRecord
+    ('18', 'Suspension'),  # Marked by Deputy/Principal
+    ('20', 'Expulsion'),  # Marked only by Principal
+]
+
+# Expanded INCIDENT_TYPE_CHOICES for discipline
+INCIDENT_TYPE_CHOICES = [
+    ('late', 'Late Arrival'),
+    ('misconduct', 'Misconduct'),  # Covers IB
+    ('absence', 'Unauthorized Absence'),  # Covers UA
+    ('suspension', 'Suspension'),  # New: Aligns with '18'
+    ('expulsion', 'Expulsion'),  # New: Aligns with '20'
+    ('other', 'Other'),
+]
+
+SEVERITY_CHOICES = [
+    ('minor', 'Minor'),
+    ('major', 'Major'),
+    ('critical', 'Critical'),
+]
+
+ENROLLMENT_STATUS_CHOICES = [
+    ('active', 'Active'),
+    ('completed', 'Completed'),
+    ('dropped', 'Dropped'),
 ]
 
 PAYMENT_TYPE_CHOICES = [
@@ -85,7 +127,6 @@ DISBURSEMENT_METHOD_CHOICES = [
     ('bank', 'Bank Account'),
 ]
 
-# School model for multi-tenancy
 class School(models.Model):
     name = models.CharField(max_length=255)
     school_admin = models.OneToOneField(User, on_delete=models.CASCADE, related_name='school_admin_profile')
@@ -99,12 +140,13 @@ class School(models.Model):
     def __str__(self):
         return self.name
 
+# Grade model
 class Grade(models.Model):
     name = models.CharField(max_length=50)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='grades')
     description = models.TextField(blank=True)
     code = models.CharField(max_length=50, db_index=True)
-    capacity = models.PositiveIntegerField(default=30)  # Default capacity
+    capacity = models.PositiveIntegerField(default=30)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 
@@ -114,56 +156,231 @@ class Grade(models.Model):
     def __str__(self):
         return f"{self.name} - {self.school.name}"
 
-# Teacher/Staff profile
+#Role Model for granular permissions
+class Role(models.Model):
+    name = models.CharField(max_length=50, unique=True)  # e.g., 'mark_suspension', 'view_parental_dashboard'
+    description = models.TextField(blank=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='roles')
+
+    def __str__(self):
+        return self.name
+
+# StaffProfile
 class StaffProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    staff_id = models.CharField(max_length=50, unique=True, db_index=True)  # Unique staff ID
+    staff_id = models.CharField(max_length=50, unique=True, db_index=True)
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
     employment_date = models.DateField(blank=True, null=True)
     position = models.CharField(max_length=100, choices=POSITION_CHOICES)
-    tsc_number = models.CharField(max_length=50, unique=True, blank=True, null=True)  # TSC-certified
-    qualification = models.TextField(blank=True, null=True)  # e.g., B.Ed, M.Ed
-    subjects = models.CharField(max_length=255, blank=True, null=True)  # Comma-separated
-    bio = models.TextField(blank=True, null=True)  # Short biography
+    tsc_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    qualification = models.TextField(blank=True, null=True)
+    subjects = models.CharField(max_length=255, blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='teachers/', blank=True, null=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
+    # New: department for support services (e.g., 'kitchen', 'security')
+    department = models.CharField(max_length=50, blank=True)  # e.g., 'Dining Hall', 'School Gate'
+    # New: M2M for permissions
+    roles = models.ManyToManyField(Role, blank=True, related_name='staff_members')
 
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.school.name}"
 
-# Parent profile
+# Parent
 class Parent(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    parent_id = models.CharField(max_length=50, unique=True, db_index=True)  # Unique parent ID
+    parent_id = models.CharField(max_length=50, unique=True, db_index=True)
     date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
-    phone = models.CharField(max_length=15, unique=True)  # Unique phone number
+    phone = models.CharField(max_length=15, unique=True)
     address = models.TextField(blank=True, null=True)
-    bio = models.TextField(blank=True, null=True)  # Short biography
+    bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='parents/', blank=True, null=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
+    roles = models.ManyToManyField(Role, blank=True, related_name='parents')  # New: Optional for parental roles
 
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.school.name} ({self.parent_id})"
 
-# Student profile
+# Student
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    student_id = models.CharField(max_length=50, unique=True, db_index=True)  # Unique smart ID
+    student_id = models.CharField(max_length=50, unique=True, db_index=True)
     date_of_birth = models.DateField()
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
     enrollment_date = models.DateField()
     grade_level = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='students')
     bio = models.TextField(blank=True)
-    parent = models.ManyToManyField(Parent, blank=True, related_name='children')  # Removed null=True as M2M handles empty
+    parent = models.ManyToManyField(Parent, blank=True, related_name='children')
     profile_picture = models.ImageField(upload_to='students/', blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.student_id}) - {self.school.name}"
 
-# Smart ID model (linked to student for access and payments)
+# Subject
+class Subject(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    code = models.CharField(max_length=100, blank=True)
+    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='subjects_taught')
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
+    start_date = models.DateField()
+    end_date = models.DateField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.teacher}"
+
+# Enrollment
+class Enrollment(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='enrollments')
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=ENROLLMENT_STATUS_CHOICES, default='active')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='enrollments')
+
+    def __str__(self):
+        return f"{self.student} enrolled in {self.subject} - {self.get_status_display()}"
+
+# Timetable Model
+class Timetable(models.Model):
+    TERM_CHOICES = [('1', 'Term 1'), ('2', 'Term 2'), ('3', 'Term 3')]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='timetables')
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='timetables')
+    term = models.CharField(max_length=5, choices=TERM_CHOICES)
+    year = models.PositiveIntegerField()  # e.g., 2025
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['school', 'grade', 'term', 'year']
+
+    def __str__(self):
+        return f"{self.grade.name} - Term {self.term} {self.year}"
+
+# Lesson Model
+class Lesson(models.Model):
+    timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='lessons')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='lessons')
+    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='lessons_taught')
+    date = models.DateField(db_index=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    room = models.CharField(max_length=50, blank=True)  # e.g., "Classroom A"
+    is_canceled = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['timetable', 'subject', 'date', 'start_time']
+
+    def __str__(self):
+        return f"{self.subject.name} - {self.date} {self.start_time} ({self.timetable.grade.name})"
+
+# VirtualClass 
+class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='sessions')
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, null=True, blank=True, related_name='sessions')  # New: Link to physical lesson
+    title = models.CharField(max_length=255)
+    platform = models.CharField(max_length=50, choices=[('in_person', 'In-Person'), ('zoom', 'Zoom'), ('teams', 'Microsoft Teams'), ('meet', 'Google Meet'), ('other', 'Other')], default='in_person')  # Updated choices
+    meeting_link = models.URLField(blank=True, null=True)
+    scheduled_at = models.DateTimeField()
+    duration = models.DurationField(blank=True, null=True)
+    is_live = models.BooleanField(default=False)
+    recording_url = models.URLField(blank=True, null=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='sessions')
+    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='sessions')
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.title} - {self.scheduled_at}"
+
+# Attendance
+class Attendance(models.Model):
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='attendance')
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, null=True, blank=True, related_name='attendance')  # New: Per-lesson
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, null=True, blank=True, related_name='attendance')  # Optional hybrid
+    marked_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=2, choices=ATTENDANCE_STATUS_CHOICES, default='P')  # New: Core status field
+    notes = models.TextField(blank=True)  # e.g., reason for ET/EA
+    marked_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='marked_attendance')  # New: Who marked
+
+    class Meta:
+        unique_together = ['enrollment', 'lesson']  # One per student-lesson
+        indexes = [models.Index(fields=['status', 'marked_at'])]
+
+    def clean(self):
+        # Example validation: Only certain roles can mark '18'/'20'
+        if self.status in ['18', '20'] and self.marked_by.position not in ['deputy_principal', 'principal']:
+            raise ValidationError("Suspensions/Expulsions can only be marked by Deputy Principal or Principal.")
+        super().clean()
+
+    def __str__(self):
+        return f"{self.enrollment.student} - {self.get_status_display()} on {self.lesson.date if self.lesson else 'N/A'}"
+
+# DisciplineRecord
+class DisciplineRecord(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='discipline_records')
+    linked_attendance = models.ForeignKey(Attendance, on_delete=models.CASCADE, null=True, blank=True, related_name='discipline_links')  # New: For IB during lesson
+    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='discipline_records')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='discipline_records')
+    incident_type = models.CharField(max_length=20, choices=INCIDENT_TYPE_CHOICES, default='misconduct')
+    description = models.TextField()
+    date = models.DateField(db_index=True, default=timezone.now)
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='minor')
+    action_taken = models.TextField(blank=True)
+    reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discipline_reports')
+    frequency_count = models.PositiveIntegerField(default=1)  # New: Track repeats for patterns
+    resolved = models.BooleanField(default=False)  # New: For follow-up
+
+    class Meta:
+        indexes = [models.Index(fields=['student', 'date', 'severity'])]
+
+    def __str__(self):
+        return f"{self.get_incident_type_display()} - {self.student} ({self.severity})"
+
+# SummaryReport Model
+class SummaryReport(models.Model):
+    REPORT_TYPE_CHOICES = [('class', 'By Class'), ('grade', 'By Grade'), ('school', 'Whole School')]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='summary_reports')
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True, related_name='summary_reports')
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPE_CHOICES)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    # JSON for totals: e.g., {'P': 150, 'UA': 10, 'total_sessions': 20, 'present_pct': 95.0}
+    data = models.JSONField(default=dict)
+    generated_at = models.DateTimeField(auto_now_add=True)
+    generated_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        unique_together = ['school', 'grade', 'report_type', 'period_start', 'period_end']
+
+    def __str__(self):
+        return f"{self.get_report_type_display()} Summary {self.period_start} to {self.period_end} - {self.school.name}"
+
+#Notification Model
+class Notification(models.Model):
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')  # Parent/Admin/etc.
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    related_attendance = models.ForeignKey(Attendance, on_delete=models.SET_NULL, null=True, blank=True)
+    related_discipline = models.ForeignKey(DisciplineRecord, on_delete=models.SET_NULL, null=True, blank=True)
+    is_read = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(auto_now_add=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"{self.title} to {self.recipient.get_full_name()}"
+
+# Smart ID model 
 class SmartID(models.Model):
     profile = models.OneToOneField(User, on_delete=models.CASCADE)
     id_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -189,7 +406,7 @@ class ScanLog(models.Model):
 
     def __str__(self):
         return f"ScanLog: {self.smart_id} at {self.scanned_at}"
-# Payment model (for fees, micro-payments, scholarships)
+# Payment model 
 class Payment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)  # Nullable for general payments
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
@@ -203,63 +420,8 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.get_payment_type_display()} - {self.amount} for {self.student or 'General'}"
 
-class Subject(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)  # Moved description here, removed redundant 'subject'
-    code = models.CharField(max_length=100, blank=True)  # Renamed from 'subject' to 'code'
-    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='subjects_taught')
-    school = models.ForeignKey(School, on_delete=models.CASCADE)
-    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
-    start_date = models.DateField()
-    end_date = models.DateField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
 
-    def __str__(self):
-        return f"{self.name} - {self.teacher}"
-
-# Enrollment model
-class Enrollment(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='enrollments')
-    enrolled_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, choices=ENROLLMENT_STATUS_CHOICES, default='active')
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='enrollments')
-
-    def __str__(self):
-        return f"{self.student} enrolled in {self.subject} - {self.get_status_display()}"
-
-# Virtual Class/Session model
-class VirtualClass(models.Model):
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='virtual_classes')
-    title = models.CharField(max_length=255)
-    platform = models.CharField(max_length=50, choices=PLATFORM_CHOICES)
-    meeting_link = models.URLField()
-    scheduled_at = models.DateTimeField()  # Made required
-    duration = models.DurationField(blank=True, null=True)
-    is_live = models.BooleanField(default=False)
-    recording_url = models.URLField(blank=True, null=True)
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='virtual_classes')
-    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='virtual_classes')
-
-    def save(self, *args, **kwargs):
-        # Removed faulty is_live logic; set via signal or manual
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.title} - {self.scheduled_at}"
-
-# Attendance model (removed redundant FKs)
-class Attendance(models.Model):
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='attendance')
-    virtual_class = models.ForeignKey(VirtualClass, on_delete=models.CASCADE, null=True, blank=True, related_name='attendance')
-    session_date = models.DateField(db_index=True)
-    is_present = models.BooleanField(default=False)
-    participation_score = models.FloatField(default=0.0, blank=True, null=True)  # 0-100
-
-    def __str__(self):
-        return f"Attendance for {self.enrollment.student} on {self.session_date}"
-
-# Assignment/Quiz model (removed student FK, now per subject)
+# Assignment/Quiz model 
 class Assignment(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='assignments')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='assignments')
@@ -273,7 +435,7 @@ class Assignment(models.Model):
     def __str__(self):
         return f"{self.title} - {self.subject}"
 
-# Submission model (removed redundant student FK)
+# Submission model 
 class Submission(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='submissions')
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
@@ -286,22 +448,8 @@ class Submission(models.Model):
     def __str__(self):
         return f"Submission for {self.enrollment.student} - {self.assignment.title}"
 
-# Discipline Record model (removed duplicate school FK)
-class DisciplineRecord(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='discipline_records')
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='discipline_records')
-    incident_type = models.CharField(max_length=20, choices=INCIDENT_TYPE_CHOICES)
-    description = models.TextField()
-    date = models.DateField(db_index=True)
-    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='minor')
-    action_taken = models.TextField(blank=True)
-    reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discipline_reports')
 
-    def __str__(self):
-        return f"{self.get_incident_type_display()} - {self.student}"
-
-# Certificate model (removed duplicate school FK)
+# Certificate model
 class Certificate(models.Model):
     student = models.OneToOneField(Student, on_delete=models.CASCADE)
     certificate_number = models.CharField(max_length=50, unique=True, db_index=True)
@@ -339,7 +487,7 @@ class Chapter(models.Model):
     def __str__(self):
         return f"{self.title} - {self.book.title}"
 
-# Library Access model (removed duplicate chapter FKs)
+# Library Access model 
 class LibraryAccess(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     book = models.ForeignKey(Book, on_delete=models.CASCADE, null=True, blank=True)
