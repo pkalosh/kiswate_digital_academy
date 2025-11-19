@@ -41,6 +41,13 @@
           <li><a href="{% url 'school:school-grades' %}"><i class="bi bi-diagram-3"></i> Grades</a></li>
           <li><a href="{% url 'school:smartid-list' %}"><i class="bi bi-key"></i> Smart IDs</a></li>
           <li><a href="{% url 'school:scan_logs' %}"><i class="bi bi-key"></i> Smart IDs Scans</a></li>
+          <li><a href="#"><i class="bi bi-journal-text"></i> Subjects</a></li>
+          <li><a href="#"><i class="bi bi-clipboard-check"></i> Enrollments</a></li>
+          <li><a href="#"><i class="bi bi-camera-video"></i> Sessions</a></li>
+          <li><a href="#"><i class="bi bi-clipboard-check"></i> Timetables</a></li>
+          <li><a href="#"><i class="bi bi-check-circle"></i> Attendance</a></li>
+          <li><a href="#"><i class="bi bi-file-earmark-text"></i> Assignments</a></li>
+          <li><a href="#"><i class="bi bi-file-earmark-check"></i> Submissions</a></li>
         </ul>
       </div>
 
@@ -57,34 +64,6 @@
         </ul>
       </div>
 
-      <!-- LMS -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="lms">
-          <i class="bi bi-easel"></i> LMS
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="lms">
-          <li><a href="#"><i class="bi bi-journal-text"></i> Subjects</a></li>
-          <li><a href="#"><i class="bi bi-clipboard-check"></i> Enrollments</a></li>
-          <li><a href="#"><i class="bi bi-camera-video"></i> Virtual Classes</a></li>
-          <li><a href="#"><i class="bi bi-check-circle"></i> Attendance</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-text"></i> Assignments</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-check"></i> Submissions</a></li>
-        </ul>
-      </div>
-
-      <!-- Library -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="library">
-          <i class="bi bi-book"></i> Library
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="library">
-          <li><a href="#"><i class="bi bi-book-half"></i> Books</a></li>
-          <li><a href="#"><i class="bi bi-journal"></i> Chapters</a></li>
-          <li><a href="#"><i class="bi bi-unlock"></i> Access</a></li>
-        </ul>
-      </div>
 
       <!-- Finance -->
       <div class="menu-group">
@@ -108,28 +87,7 @@
         </ul>
       </div>
 
-      <!-- Certificates -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="certificates">
-          <i class="bi bi-award"></i> Certificates
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="certificates">
-          <li><a href="#"><i class="bi bi-file-earmark-pdf"></i> List</a></li>
-        </ul>
-      </div>
 
-      <!-- Scholarships -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="scholarships">
-          <i class="bi bi-gem"></i> Scholarships
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="scholarships">
-          <li><a href="#"><i class="bi bi-file-earmark-plus"></i> Applications</a></li>
-          <li><a href="#"><i class="bi bi-arrow-down-circle"></i> Disbursements</a></li>
-        </ul>
-      </div>
 
       <!-- Settings -->
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
