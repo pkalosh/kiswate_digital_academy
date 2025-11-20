@@ -1,0 +1,114 @@
+{% extends 'school/base.html' %}
+{% block title %}Parent Dashboard | {{ school.name }}{% endblock %}
+{% block content %}
+<section class="bg-light py-4">
+    <div class="container">
+        <!-- Child Selector -->
+        {% if children.count > 1 %}
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <form method="GET" class="d-flex">
+                    <select name="child_id" class="form-select me-2" onchange="this.form.submit()">
+                        {% for child in children %}
+                        <option value="{{ child.id }}" {% if child.id == child.id %}selected{% endif %}>{{ child.user.get_full_name }} ({{ child.grade_level.name }})</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-outline-primary d-none">Switch</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="row g-4">
+            <!-- Child Attendance Summary -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-success mb-2">
+                            <i class="bi bi-check-circle-fill fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Attendance This Term</h5>
+                        <h3 class="fw-bold text-success mb-3">
+                            {% if timetable %}
+                                {{ lessons.count|floatformat:0 }} / {{ lessons|length|add:1 }} ({{ lessons.count|floatformat:1 }}%)
+                            {% else %} N/A {% endif %}
+                        </h3>
+                        <a href="#" class="btn btn-outline-success btn-sm">Details</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Upcoming Sessions -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-info mb-2">
+                            <i class="bi bi-calendar-event fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Upcoming Sessions</h5>
+                        <h3 class="fw-bold text-info mb-3">{{ sessions|length|default:"0" }}</h3>
+                        <a href="#" class="btn btn-outline-info btn-sm">View Schedule</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Enrolled Subjects -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-warning mb-2">
+                            <i class="bi bi-book-half fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Enrolled Subjects</h5>
+                        <h3 class="fw-bold text-warning mb-3">{{ enrollments.count|default:"0" }}</h3>
+                        <a href="#" class="btn btn-outline-warning btn-sm">List</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Active Term -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-primary mb-2">
+                            <i class="bi bi-calendar3 fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Active Term</h5>
+                        <h3 class="fw-bold text-primary mb-3">{{ active_term|default:"None" }}</h3>
+                        <a href="{% url 'school:school-timetable' %}" class="btn btn-outline-primary btn-sm">Full Timetable</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Upcoming Lessons/Sessions Table -->
+        {% if sessions or lessons %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5 class="fw-semibold mb-3">Upcoming for {{ child.user.get_full_name }}</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead><tr><th>Date/Time</th><th>Subject</th><th>Platform</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for session in sessions|slice:":5" %}
+                            <tr>
+                                <td>{{ session.scheduled_at|date:"M d, Y h:i A" }}</td>
+                                <td>{{ session.subject.name }}</td>
+                                <td>
+                                    <span class="badge bg-info">{{ session.platform|title }}</span>
+                                    {% if session.meeting_link %}<a href="{{ session.meeting_link }}" class="ms-1">Join</a>{% endif %}
+                                </td>
+                                <td><span class="badge bg-success">Pending</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4">No upcoming sessions.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

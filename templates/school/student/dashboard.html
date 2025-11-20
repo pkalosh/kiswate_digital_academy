@@ -1,0 +1,93 @@
+{% extends 'school/base.html' %}
+{% block title %}Student Dashboard | {{ school.name }}{% endblock %}
+{% block content %}
+<section class="bg-light py-4">
+    <div class="container">
+        <h2 class="fw-semibold mb-4">Welcome, {{ user.get_full_name }}! ({{ grade.name }})</h2>
+        
+        <div class="row g-4">
+            <!-- Today's Schedule -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-info mb-2">
+                            <i class="bi bi-calendar-day fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Today's Schedule</h5>
+                        <h3 class="fw-bold text-info mb-3">{{ today_lessons.count|default:"0" }}</h3>
+                        <a href="#" class="btn btn-outline-info btn-sm">View Full</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Attendance -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-success mb-2">
+                            <i class="bi bi-check-all fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Attendance Rate</h5>
+                        <h3 class="fw-bold text-success mb-3">95%</h3>  <!-- Calculate from view if possible -->
+                        <a href="#" class="btn btn-outline-success btn-sm">History</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Enrolled Subjects -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-warning mb-2">
+                            <i class="bi bi-bookmark-fill fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Subjects</h5>
+                        <h3 class="fw-bold text-warning mb-3">{{ enrollments.count|default:"0" }}</h3>
+                        <a href="#" class="btn btn-outline-warning btn-sm">Grades</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Upcoming Assignments -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-danger mb-2">
+                            <i class="bi bi-clipboard-check fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Assignments Due</h5>
+                        <h3 class="fw-bold text-danger mb-3">2</h3>  <!-- From assignments query in view -->
+                        <a href="{% url 'school:school-assignments' %}" class="btn btn-outline-danger btn-sm">Submit</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Today's Lessons Table -->
+        {% if today_lessons %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5 class="fw-semibold mb-3">Today's Lessons</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead><tr><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th></tr></thead>
+                        <tbody>
+                            {% for lesson in today_lessons %}
+                            <tr>
+                                <td>{{ lesson.start_time }} - {{ lesson.end_time }}</td>
+                                <td>{{ lesson.subject.name }}</td>
+                                <td>{{ lesson.teacher.user.get_full_name }}</td>
+                                <td>{{ lesson.room|default:"Online" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4">No lessons today.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

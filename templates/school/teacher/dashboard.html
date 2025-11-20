@@ -1,0 +1,104 @@
+{% extends 'school/base.html' %}
+{% block title %}Teacher Dashboard | {{ school.name }}{% endblock %}
+{% block content %}
+<section class="bg-light py-4">
+    <div class="container">
+        <div class="row g-4">
+            <!-- Today's Lessons -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-info mb-2">
+                            <i class="bi bi-easel-fill fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Today's Lessons</h5>
+                        <h3 class="fw-bold text-info mb-3">{{ today_lessons.count|default:"0" }}</h3>
+                        <a href="{% url 'school:school-attendance' %}" class="btn btn-outline-info btn-sm">Mark Attendance</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Assigned Students -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-success mb-2">
+                            <i class="bi bi-people-fill fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Assigned Students</h5>
+                        <h3 class="fw-bold text-success mb-3">{{ lessons|length|default:"0" }}</h3>  <!-- Per lesson students -->
+                        <a href="{% url 'school:school-enrollment' %}" class="btn btn-outline-success btn-sm">Manage</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Upcoming Sessions -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-warning mb-2">
+                            <i class="bi bi-laptop fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Upcoming Sessions</h5>
+                        <h3 class="fw-bold text-warning mb-3">{{ sessions.count|default:"0" }}</h3>
+                        <a href="{% url 'school:school-sessions' %}" class="btn btn-outline-warning btn-sm">View</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Subjects Taught -->
+            <div class="col-md-6 col-lg-3">
+                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="text-primary mb-2">
+                            <i class="bi bi-book fs-1"></i>
+                        </div>
+                        <h5 class="fw-semibold mb-2">Subjects Taught</h5>
+                        <h3 class="fw-bold text-primary mb-3">{{ subjects|length|default:"0" }}</h3>
+                        <a href="{% url 'school:school-subjects' %}" class="btn btn-outline-primary btn-sm">Edit</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lessons by Grade Tabs -->
+        {% if lessons_by_grade %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <h5 class="fw-semibold mb-3">Lessons by Grade</h5>
+                <ul class="nav nav-tabs mb-3">
+                    {% for grade in grades %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if forloop.first %}active{% endif %}" href="#grade-{{ forloop.counter }}" data-bs-toggle="tab">{{ grade }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <div class="tab-content">
+                    {% for grade, grade_lessons in lessons_by_grade.items %}
+                    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="grade-{{ forloop.counter }}">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead><tr><th>Time</th><th>Subject</th><th>Room</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    {% for lesson in grade_lessons|slice:":5" %}
+                                    <tr>
+                                        <td>{{ lesson.date|date:"M d" }} {{ lesson.start_time }}</td>
+                                        <td>{{ lesson.subject.name }}</td>
+                                        <td>{{ lesson.room|default:"N/A" }}</td>
+                                        <td><a href="{% url 'school:attendance-mark' lesson.id %}" class="btn btn-sm btn-primary">Mark</a></td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="4">No lessons for this grade.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
