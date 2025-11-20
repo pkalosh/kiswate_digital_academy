@@ -4,308 +4,242 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Admin Dashboard{% endblock %}</title>
-
-  <!-- Bootstrap -->
+  <title>{% block title %}Admin Dashboard {% endblock %}</title>
+  <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
   <!-- AOS -->
   <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet" />
+  <style>
+    :root {
+      --kenya-green: #0b7a2a;  /* deep green */
+      --kenya-red:   #bb0a21;  /* flag red */
+      --kenya-black: #111111;  /* near black */
+      --kenya-white: #ffffff;  /* white */
+      --kenya-grey:  #f5f7f8;  /* soft bg */
+      --radius-xl: 1.25rem;
+      --shadow-soft: 0 6px 18px rgba(0,0,0,.08);
+      --space-compact: .5rem;   /* global compact spacing */
+    }
 
-  <!-- Custom CSS -->
-  <link href="{% static 'css/dashboard.css' %}" rel="stylesheet" />
+    html, body { height: 100%; }
+    body { background: linear-gradient(180deg, var(--kenya-grey), #fff); }
+
+    /* Layout */
+    .app {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: var(--kenya-black);
+      color: var(--kenya-white);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: var(--space-compact);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .6rem .75rem;
+      border-radius: .8rem;
+      background: linear-gradient(135deg, var(--kenya-green), #0aa84a);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+      margin: .35rem .25rem 1rem;
+    }
+    .brand i { font-size: 1.25rem; color: var(--kenya-white); }
+    .brand span { font-weight: 700; letter-spacing: .3px; }
+
+    .side-link { color: #d9d9d9; text-decoration: none; display: flex; align-items: center; gap: .6rem; padding: .55rem .75rem; border-radius: .6rem; }
+    .side-link:hover, .side-link.active { background: rgba(255,255,255,.08); color: #fff; }
+
+    .header {
+      background: #fff;
+      box-shadow: var(--shadow-soft);
+      border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+      padding: .45rem .85rem;
+      position: sticky; top: 0; z-index: 10;
+    }
+
+    .searchbar input { border-radius: 999px; padding: .55rem .9rem; }
+
+    .content { padding: .85rem; }
+
+    .card.k-card {
+      border: 0; border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .k-pill {
+      display: inline-flex; align-items: center; gap: .35rem;
+      border-radius: 999px; padding: .2rem .55rem; font-size: .75rem;
+      background: #eef7f0; color: var(--kenya-green); font-weight: 600;
+    }
+
+    .k-accent {
+      height: 4px; background: linear-gradient(90deg, var(--kenya-green), var(--kenya-red));
+    }
+
+    .k-progress {
+      height: .5rem; border-radius: 999px; background: #edf1f2; overflow: hidden;
+    }
+    .k-progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--kenya-green), var(--kenya-red)); }
+
+    /* Compact table */
+    .table.k-tight > :not(caption) > * > * { padding: .45rem .55rem; }
+
+    /* Badges */
+    .badge-green { background: rgba(11,122,42,.12); color: var(--kenya-green); }
+    .badge-red   { background: rgba(187,10,33,.12); color: var(--kenya-red); }
+    .badge-dark  { background: rgba(17,17,17,.12); color: var(--kenya-black); }
+
+    /* Responsive sidebar */
+    @media (max-width: 992px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; left: -100%; width: 260px; transition: left .25s ease; z-index: 1050; }
+      .sidebar.open { left: 0; }
+      .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
+      .scrim.show { display: block; backdrop-filter: blur(1px); }
+    }
+  
+/* Apply to all tables with .table, or target specific table with an ID */
+.table {
+  font-size: 0.85rem;              /* Reduce font size */
+}
+
+.table td, .table th {
+  padding: 0.3rem 0.4rem;          /* Reduce vertical and horizontal padding */
+  vertical-align: middle;          /* Keep content centered vertically */
+}
+
+/* Optional: Make header bold and compact */
+.table thead th {
+  font-weight: 500;
+  background-color: #f8f9fa;       /* Light grey */
+}
+
+/* Optional: Narrow row height further */
+.table-sm td, .table-sm th {
+  padding: 0.25rem 0.5rem;
+}
+
+
+  </style>
 </head>
 <body>
   <div class="app">
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <!-- <div class="brand" data-aos="fade-right">
-      <i class="bi bi-shield-lock-fill"></i>
-      <span>School Admin Console</span>
-    </div> -->
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" data-aos="fade-right">
+        <i class="bi bi-shield-lock-fill"></i>
+         <span>{% if request.user.is_superuser %}Admin Dashboard{% elif request.user.is_teacher %} Teacher Dashboard 
+          {% elif request.user.is_parent %} Parent Dashboard{% elif request.user.is_student %} Student Dashboard{% elif request.user.is_school_staff %} Staff Dashboard {% else %} Dashboard {% endif %}</span></a>
+      </div>
+      <nav class="d-flex flex-column gap-1">
 
-    <nav class="menu">
-      <!-- Dashboard -->
-      <a class="side-link active" href="{% url 'school:dashboard' %}">
+      <a class="side-link active" href="#">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
-      <!-- Administration -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="administration">
-          <i class="bi bi-gear-wide-connected"></i> Administration
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="administration">
-          <li><a href="{% url 'school:school-grades' %}"><i class="bi bi-diagram-3"></i> Grades</a></li>
-          <li><a href="{% url 'school:smartid-list' %}"><i class="bi bi-key"></i> Smart IDs</a></li>
-          <li><a href="{% url 'school:scan_logs' %}"><i class="bi bi-key"></i> Smart IDs Scans</a></li>
-          <li><a href="{% url 'school:school-subjects' %}"><i class="bi bi-journal-text"></i> Subjects</a></li>
-          <li><a href="{% url 'school:school-enrollment' %}"><i class="bi bi-clipboard-check"></i> Enrollments</a></li>
-          <li><a href="{% url 'school:school-sessions' %}"><i class="bi bi-camera-video"></i> Sessions</a></li>
-          <li><a href="{% url 'school:school-timetable' %}"><i class="bi bi-clipboard-check"></i> Timetables</a></li>
-          <li><a href="{% url 'school:school-attendance' %}"><i class="bi bi-check-circle"></i> Attendance</a></li>
-          <li><a href="{% url 'school:school-assignments' %}"><i class="bi bi-file-earmark-text"></i> Assignments</a></li>
-          <li><a href="{% url 'school:school-submissions' %}"><i class="bi bi-file-earmark-check"></i> Submissions</a></li>
-        </ul>
+      
+      <!-- Dropdown (Collapsible) -->
+      <a class="side-link d-flex justify-content-between align-items-center" 
+        data-bs-toggle="collapse" href="#agencyMenu" role="button" aria-expanded="false" aria-controls="agencyMenu">
+        <span><i class="bi bi-diagram-3"></i> Schools Management</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-4" id="agencyMenu">
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Grades</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Students</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Smart IDs</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Subjects</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Enrollments</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Sessions</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Timetables</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Attendance</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Assignments</a>
+        <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">Submissions</a>
       </div>
-
-      <!-- Users -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="users">
-          <i class="bi bi-people"></i> Users
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="users">
-          <li><a href="{% url 'school:student_list_create' %}"><i class="bi bi-person-lines-fill"></i> Students</a></li>
-          <li><a href="{% url 'school:staff_list_create' %}"><i class="bi bi-person-badge"></i> Staff</a></li>
-          <li><a href="{% url 'school:parent_list_create' %}"><i class="bi bi-person-heart"></i> Parents</a></li>
-        </ul>
+      <a class="side-link d-flex justify-content-between align-items-center" 
+        data-bs-toggle="collapse" href="#agencyMenu2" role="button" aria-expanded="false" aria-controls="agencyMenu">
+        <span><i class="bi bi-diagram-3"></i> Users</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-4" id="agencyMenu2">
+        <a class="side-link" href="{% url 'school:parent_list_create' %}">Parents</a>
+        <a class="side-link" href="{% url 'school:student_list_create' %}">Students</a>
+        <a class="side-link" href="{% url 'school:staff_list_create' %}">Staff</a>
       </div>
-
-
-      <!-- Finance -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="finance">
-          <i class="bi bi-cash-coin"></i> Finance
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="finance">
-          <li><a href="#"><i class="bi bi-credit-card"></i> Payments</a></li>
-        </ul>
-      </div>
-
-      <!-- Discipline -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="discipline">
-          <i class="bi bi-exclamation-triangle"></i> Discipline
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="discipline">
-          <li><a href="#"><i class="bi bi-clipboard-data"></i> Records</a></li>
-        </ul>
-      </div>
-
-
-
-      <!-- Settings -->
+      <a class="side-link" href=""><i class="bi bi-people"></i> Payments</a>
+      <a class="side-link" href=""><i class="bi bi-people"></i> Discipline</a>
+      <a class="side-link" href="#"><i class="bi bi-gear"></i> Settings</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out
       </a>
     </nav>
-  </aside>
 
-  <!-- Main -->
-  <main class="main">
-    <header class="header d-flex align-items-center justify-content-between">
-      <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
-          <i class="bi bi-list"></i>
-        </button>
-        <h6 class="m-0 fw-bold">Dashboard</h6>
+      <div class="mt-3 p-2 small text-secondary">
+        <div class="k-accent mb-2"></div>
+        <div><span class="k-pill"><i class="bi bi-flag"></i> Kiswate</span></div>
       </div>
+    </aside>
 
-      <div class="searchbar d-none d-md-block" style="max-width: 380px;">
-        <input class="form-control form-control-sm" type="search" placeholder="Search…" />
-      </div>
+    <!-- Main -->
+    <main class="main">
+      <!-- Header -->
+      <header class="header d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+          <h6 class="m-0 fw-bold">Dashboard</h6>
+        </div>
+    
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge badge-dark rounded-pill px-2 py-1"><i class="bi bi-calendar3 me-1"></i> <span id="today"></span></span>
+          <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
+          
+        </div>
+      </header>
 
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge badge-dark rounded-pill px-2 py-1">
-          <i class="bi bi-calendar3 me-1"></i>
-          <span id="today">{{ current_date|date:"M d, Y" }}</span>
-        </span>
-        <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
-      </div>
-    </header>
+      <!-- Content -->
+      <section class="content container-fluid" style="min-height: 600px;">
+        
+        {% block content %} {% endblock %}
+        
+      </section>
+      <div class="text-center small text-secondary my-3">Made with <span style="color:var(--kenya-red)">❤</span> in Kenya</div>
+    </main>
+  </div>
 
-    <section class="content container-fluid">
-        {% block content %}{% endblock %}
-
-    </section>
-  </main>
-</div>
-
-
-  <!-- Overlay for mobile sidebar -->
   <div class="scrim" id="scrim"></div>
 
-  <!-- Scripts -->
+  <!-- JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
-<script>
-(function() {
-  AOS.init({ duration: 600, once: true, easing: 'ease-out' });
-  
-  // Sidebar toggle
-  const sidebar = document.getElementById('sidebar');
-  const scrim = document.getElementById('scrim');
-  const toggle = document.getElementById('toggleSidebar');
-  
-  if (toggle) {
-    toggle.addEventListener('click', () => {
+  <script>
+    AOS.init({ duration: 600, once: true, easing: 'ease-out' });
+
+    // Sidebar toggle (mobile)
+    const sidebar = document.getElementById('sidebar');
+    const scrim = document.getElementById('scrim');
+    document.getElementById('toggleSidebar').addEventListener('click', () => {
       sidebar.classList.toggle('open');
       scrim.classList.toggle('show');
     });
-  }
-  
-  if (scrim) {
     scrim.addEventListener('click', () => {
       sidebar.classList.remove('open');
       scrim.classList.remove('show');
     });
-  }
-  
-  // Display today's date
-  const today = new Date();
-  const options = { weekday:'short', year:'numeric', month:'short', day:'numeric' };
-  const todayEl = document.getElementById('today');
-  if (todayEl) todayEl.textContent = today.toLocaleDateString(undefined, options);
-})();
-</script>
-<!-- JS -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('toggleSidebar');
 
-  // Toggle sidebar visibility
-  toggleBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
-    document.body.classList.toggle('sidebar-open');
-  });
-
-  // Close when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
-      sidebar.classList.remove('open');
-      document.body.classList.remove('sidebar-open');
-    }
-  });
-
-  // Submenu toggle
-  document.querySelectorAll('.side-link.has-sub').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = document.getElementById(btn.dataset.target);
-      const icon = btn.querySelector('.bi-chevron-down');
-      const isOpen = target.classList.toggle('show');
-      icon.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-    });
-  });
-});
-</script>
-<!-- CSS -->
-<style>
-.app {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* Sidebar */
-.sidebar {
-  width: 250px;
-  background: #111;
-  color: #fff;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  overflow-y: auto;
-  z-index: 1050;
-  transform: translateX(0);
-  transition: transform 0.3s ease;
-}
-
-/* Hidden on mobile initially */
-@media (max-width: 992px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  body.sidebar-open::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 1040;
-  }
-}
-
-/* Sidebar items */
-.brand {
-  padding: 1rem;
-  font-weight: 600;
-  background: #000;
-  border-bottom: 1px solid #222;
-}
-
-.side-link, .side-link.has-sub {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  padding: .7rem 1rem;
-  color: #d9d9d9;
-  text-decoration: none;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-
-.side-link:hover, .side-link.active {
-  background: #0b7a2a;
-  color: #fff;
-}
-
-/* Submenu */
-.sub-menu {
-  list-style: none;
-  padding-left: 1.5rem;
-  margin: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease-in-out;
-}
-.sub-menu.show {
-  max-height: 500px;
-}
-.sub-menu li a {
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  padding: .4rem 0;
-  color: #bfbfbf;
-  text-decoration: none;
-  font-size: 0.88rem;
-}
-.sub-menu li a:hover {
-  color: #fff;
-}
-
-/* Main content */
-.main {
-  flex-grow: 1;
-  margin-left: 250px;
-  transition: margin-left 0.3s ease;
-}
-@media (max-width: 992px) {
-  .main {
-    margin-left: 0;
-  }
-}
-
-/* Header */
-.header {
-  background: #fff;
-  border-bottom: 1px solid #eee;
-  padding: .75rem 1rem;
-  position: sticky;
-  top: 0;
-  z-index: 1030;
-}
-</style>
+    // Today chip
+    const today = new Date();
+    const options = { weekday:'short', year:'numeric', month:'short', day:'numeric' };
+    document.getElementById('today').textContent = today.toLocaleDateString(undefined, options);
+  </script>
 </body>
 </html>

@@ -14,4 +14,9 @@ urlpatterns = [
     path("sign-in/", views.LoginView, name="sign-in"),
     path("sign-out/", views.logoutView, name="sign-out"),
     path("change-password/", views.change_passwordView, name="change-password"),
+
+    # Role-Based Dashboards
+    path('parent-dashboard/', views.parent_dashboard, name='parent-dashboard'),
+    path('student-dashboard/', views.student_dashboard, name='student-dashboard'),
+    path('teacher-dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
 ]

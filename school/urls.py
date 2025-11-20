@@ -111,10 +111,7 @@ urlpatterns = [
     # Contact Messages
     path('contact/', views.contact_messages, name='contact-messages'),
     
-    # Role-Based Dashboards
-    path('parent/dashboard/', views.parent_dashboard, name='parent-dashboard'),
-    path('student/dashboard/', views.student_dashboard, name='student-dashboard'),
-    path('teacher/dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
+
     
     # M-Pesa Callbacks (Public webhooks)
     path('mpesa/stk-callback/', views.mpesa_stk_callback, name='mpesa-stk-callback'),

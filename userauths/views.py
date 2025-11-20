@@ -100,7 +100,7 @@ def parent_dashboard(request):
         parent = request.user.parent  # Access via OneToOneField
         children = parent.children.all()  # M2M to Student
         if not children.exists():
-            return render(request, 'parent/dashboard.html', {'message': 'No children enrolled.'})
+            return render(request, 'school/parent/dashboard.html', {'message': 'No children enrolled.'})
        
         # Auto-select first child or via GET
         child_id = request.GET.get('child_id')
@@ -141,7 +141,7 @@ def parent_dashboard(request):
             'children': children,  # Dropdown for multiple kids
             'active_term': f"Term {active_timetable.term} {active_timetable.year}" if active_timetable else None,
         }
-        return render(request, 'parent/dashboard.html', context)
+        return render(request, 'school/parent/dashboard.html', context)
    
     except Parent.DoesNotExist:
         messages.error(request, "Parent profile not found.")
@@ -183,7 +183,7 @@ def student_dashboard(request):
             'enrollments': enrollments,  # For filters
             'grade': student.grade_level,
         }
-        return render(request, 'student/dashboard.html', context)
+        return render(request, 'school/student/dashboard.html', context)
    
     except Student.DoesNotExist:
         messages.error(request, "Student profile not found.")
@@ -224,7 +224,7 @@ def teacher_dashboard(request):
             'grades': list(lessons_by_grade.keys()),  # For filter dropdown
             'subjects': teacher.subjects.split(',') if teacher.subjects else [],  # For filters
         }
-        return render(request, 'teacher/dashboard.html', context)
+        return render(request, 'school/teacher/dashboard.html', context)
    
     except StaffProfile.DoesNotExist:
         messages.error(request, "Staff profile not found.")
