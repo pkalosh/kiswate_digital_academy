@@ -57,34 +57,49 @@ from .forms import (
 
 logger = logging.getLogger(__name__)
 # Create your views here.
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.utils import timezone
+import logging
+
+logger = logging.getLogger(__name__)
+
 @login_required
 def dashboard(request):
-    school = request.user.school_admin_profile
+    # Determine the school based on user's profile
+    school = None
+    try:
+        # If user is school admin
+        school = request.user.school_admin_profile
+    except AttributeError:
+        try:
+            # If user is staff
+            school = request.user.staffprofile.school
+        except AttributeError as e:
+            logger.warning(f"Permission denied for user {request.user.email}: {e}")
+            messages.error(
+                request, 
+                f"You do not have permission to access this page. (User: {request.user.email})"
+            )
+            return redirect('school:login')  # redirect to login or some "no access" page
 
-    # -------------------------
-    # Summary counts
-    # -------------------------
+    # Aggregate data
     total_teachers = StaffProfile.objects.filter(school=school, position='teacher').count()
     total_students = Student.objects.filter(school=school).count()
     total_parents = Parent.objects.filter(school=school).count()
     total_discipline_cases = DisciplineRecord.objects.filter(school=school).count()
     total_timetable_slots = Timetable.objects.filter(school=school).count()
 
-    # -------------------------
-    # Recent discipline cases (last 5)
-    # -------------------------
     recent_discipline = DisciplineRecord.objects.filter(school=school).order_by('-date')[:5]
 
-    # -------------------------
-    # Timetables with lessons
-    # -------------------------
     timetables = Timetable.objects.filter(school=school).select_related('grade').order_by('-year', 'term')
 
     timetables_with_lessons = []
     for tt in timetables:
         lessons_qs = Lesson.objects.filter(timetable=tt)\
                                    .select_related('subject', 'teacher')\
-                                   .order_by('date', 'start_time')[:20]  # limit for performance
+                                   .order_by('date', 'start_time')[:20]
         lessons_count = Lesson.objects.filter(timetable=tt).count()
         timetables_with_lessons.append({
             'timetable': tt,
@@ -93,9 +108,6 @@ def dashboard(request):
             'active': timezone.now().date() >= tt.start_date and timezone.now().date() <= tt.end_date,
         })
 
-    # -------------------------
-    # Context for template
-    # -------------------------
     context = {
         "total_teachers": total_teachers,
         "total_students": total_students,
@@ -107,6 +119,7 @@ def dashboard(request):
     }
 
     return render(request, "school/dashboard.html", context)
+
 
 
 @login_required
@@ -390,6 +403,7 @@ def parent_list_create(request):
 
     if request.method == 'POST':
         form = ParentCreationForm(request.POST, request.FILES, school=school)
+        print(form.errors)
         if form.is_valid():
             parent, password = form.save()
             messages.success(
@@ -614,7 +628,9 @@ def student_list_create(request):
     if request.method == 'POST':
         form = StudentCreationForm(request.POST, request.FILES, school=school)
         if form.is_valid():
-            student, password = form.save()
+            student, password = form.save(commit=False)
+            student.school = school
+            student.save()
             messages.success(
                 request,
                 f'Successfully created student "{student.user.get_full_name()}" ({student.student_id}). '

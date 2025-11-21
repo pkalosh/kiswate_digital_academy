@@ -220,7 +220,7 @@ class Student(models.Model):
     enrollment_date = models.DateField()
     grade_level = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='students')
     bio = models.TextField(blank=True)
-    parent = models.ManyToManyField(Parent, blank=True, related_name='children')
+    parents = models.ManyToManyField(Parent, blank=True, related_name='children')
     profile_picture = models.ImageField(upload_to='students/', blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
 

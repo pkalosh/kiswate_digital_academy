@@ -46,12 +46,12 @@ def LoginView(request):
                 if user.is_superuser:
                     return redirect("kiswate_digital_app:kiswate_admin_dashboard")
                 elif user.is_parent:  # Parent role
-                    return redirect("school:parent-dashboard")
+                    return redirect("userauths:parent-dashboard")
                 elif user.is_student:  # Student role
-                    return redirect("school:student-dashboard")
+                    return redirect("userauths:student-dashboard")
                 elif user.is_teacher or user.school_staff:  # Teacher/Staff role
                     if user.is_teacher:  # Specific teacher check
-                        return redirect("school:teacher-dashboard")
+                        return redirect("userauths:teacher-dashboard")
                     else:
                         return redirect("school:dashboard")  # Other staff to general dashboard
                 elif user.is_admin:
@@ -71,12 +71,12 @@ def LoginView(request):
         if request.user.is_superuser:
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
         elif request.user.is_parent:
-            return redirect("school:parent-dashboard")
+            return redirect("userauths:parent-dashboard")
         elif request.user.is_student:
-            return redirect("school:student-dashboard")
+            return redirect("userauths:student-dashboard")
         elif request.user.is_teacher or request.user.school_staff:
             if request.user.is_teacher:
-                return redirect("school:teacher-dashboard")
+                return redirect("userauths:teacher-dashboard")
             else:
                 return redirect("school:dashboard")
         elif request.user.is_admin:
@@ -95,7 +95,7 @@ def parent_dashboard(request):
     try:
         if not request.user.is_parent:
             messages.error(request, "Access denied: Parent role required.")
-            return redirect('school:dashboard')
+            return redirect('userauths:sign-in')
         
         parent = request.user.parent  # Access via OneToOneField
         children = parent.children.all()  # M2M to Student
@@ -145,17 +145,17 @@ def parent_dashboard(request):
    
     except Parent.DoesNotExist:
         messages.error(request, "Parent profile not found.")
-        return redirect('school:dashboard')
+        return redirect('userauths:sign-in')
     except Student.DoesNotExist:
         messages.error(request, "Selected child not found.")
-        return redirect('school:parent-dashboard')
+        return redirect('userauths:parent-dashboard')
 
 @login_required
 def student_dashboard(request):
     try:
         if not request.user.is_student:
             messages.error(request, "Access denied: Student role required.")
-            return redirect('school:dashboard')
+            return redirect('userauths:sign-in')
         
         student = request.user.student  # Access via OneToOneField
         today = timezone.now().date()
@@ -187,14 +187,14 @@ def student_dashboard(request):
    
     except Student.DoesNotExist:
         messages.error(request, "Student profile not found.")
-        return redirect('school:dashboard')
+        return redirect('userauths:sign-in')
 
 @login_required
 def teacher_dashboard(request):
     try:
         if not (request.user.is_teacher or request.user.school_staff):
             messages.error(request, "Access denied: Teacher/Staff role required.")
-            return redirect('school:dashboard')
+            return redirect('userauths:sign-in')
         
         teacher = request.user.staffprofile  # Access via OneToOneField
         today = timezone.now().date()
@@ -228,7 +228,7 @@ def teacher_dashboard(request):
    
     except StaffProfile.DoesNotExist:
         messages.error(request, "Staff profile not found.")
-        return redirect('school:dashboard')
+        return redirect('userauths:teacher-dashboard')
 @login_required
 def logoutView(request):
     logout(request)

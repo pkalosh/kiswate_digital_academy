@@ -1,5 +1,7 @@
 # forms.py in the school app (or relevant app)
 from django import forms
+import random
+import string
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -144,15 +146,20 @@ class BaseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.school = school
 
-        if school:
-            for name, field in self.fields.items():
-                # Only filter fields that are QuerySets (FK or M2M)
-                if hasattr(field, "queryset"):
-                    model = field.queryset.model
-                    
-                    # Direct school relation
-                    if hasattr(model, "school"):
-                        field.queryset = field.queryset.filter(school=school)
+        for name, field in self.fields.items():
+            # Apply Bootstrap classes
+            css = field.widget.attrs.get('class', '')
+            if isinstance(field.widget, (forms.Select, forms.SelectMultiple)):
+                field.widget.attrs['class'] = f'{css} form-select'.strip()
+            else:
+                field.widget.attrs['class'] = f'{css} form-control'.strip()
+
+            # Filter by school if applicable
+            if school and hasattr(field, 'queryset'):
+                model = field.queryset.model
+                if hasattr(model, 'school'):
+                    field.queryset = field.queryset.filter(school=school)
+
 
 
 # ------------------------------- GRADE FORM -------------------------------
@@ -193,42 +200,84 @@ class SmartIDForm(BaseForm):
 
 # ------------------------------- PARENT FORMS -------------------------------
 class ParentCreationForm(BaseForm):
+    # Extra admin controls
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
 
+    email = forms.EmailField(required=True)
+    first_name = forms.CharField(max_length=100, required=True)
+    last_name = forms.CharField(max_length=100, required=True)
+    phone_number = forms.CharField(max_length=20, required=True)
+    country = forms.CharField(max_length=50, required=False)
+
     class Meta:
         model = Parent
-        fields = ['user', 'parent_id', 'date_of_birth', 'gender', 'phone', 'address', 'bio', 'profile_picture']
+        fields = [
+            # Parent fields
+            'parent_id',
+            'date_of_birth',
+            'gender',
+            'address',
+            'bio',
+            'profile_picture',
+        ]
         widgets = {
-            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
-            'address': forms.Textarea(attrs={'rows': 3}),
-            'bio': forms.Textarea(attrs={'rows': 2}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'bio': forms.Textarea(attrs={'rows': 2, 'class': 'form-control'}),
+            'parent_id': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for field_name, field in self.fields.items():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                if 'class' not in field.widget.attrs:
+                    field.widget.attrs['class'] = 'form-control'
+
+        # Additional styling
+        self.fields['send_email'].widget.attrs['class'] = 'form-check-input'
+        self.fields['reset_password'].widget.attrs['class'] = 'form-check-input'
+
+
     def save(self, commit=True):
+        # Create User object
+        password = self.generate_temp_password()
+        print(password)
+
+        user = User.objects.create_user(
+            email=self.cleaned_data['email'],
+            first_name=self.cleaned_data['first_name'],
+            last_name=self.cleaned_data['last_name'],
+            phone_number=self.cleaned_data['phone_number'],
+            country=self.cleaned_data.get('country', ''),
+            password=password,
+            is_parent=True,
+            is_verified=True,  # Assuming parents are verified by default
+        )
+
+        # Create Parent object
         parent = super().save(commit=False)
-        if not parent.user_id:
-            # Create user if not provided
-            user_data = {
-                'phone_number': self.cleaned_data['phone'],  # Or generate
-                'email': f"{self.cleaned_data['phone']}@example.com",  # Placeholder
-                'first_name': self.cleaned_data.get('user__first_name', ''),
-                'last_name': self.cleaned_data.get('user__last_name', ''),
-            }
-            user = User.objects.create_user(**user_data, password=self.generate_temp_password())
-            parent.user = user
+        parent.user = user
+        parent.phone = self.cleaned_data['phone_number']
+        parent.school = self.school  # Set school if provided
+
         if commit:
             parent.save()
-        # Send email if requested
+
+        # Send welcome email?
         if self.cleaned_data['send_email']:
-            self.send_welcome_email(parent)
-        return parent
+            self.send_welcome_email(parent, password)
+
+        return parent, password
 
     def generate_temp_password(self):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def send_welcome_email(self, parent):
-        # Implement email sending
+    def send_welcome_email(self, parent, password):
+        # TODO: integrate email system
         pass
 
 class ParentEditForm(ParentCreationForm):
@@ -237,41 +286,81 @@ class ParentEditForm(ParentCreationForm):
 
 # ------------------------------- STAFF FORMS -------------------------------
 class StaffCreationForm(BaseForm):
+    # Explicit user fields
+    first_name = forms.CharField(max_length=100, label="First Name")
+    last_name = forms.CharField(max_length=100, label="Last Name")
+    email = forms.EmailField(required=False, label="Email (optional)")
+    phone_number = forms.CharField(required=False, label="Phone (optional)")
+
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
 
     class Meta:
         model = StaffProfile
-        fields = ['user', 'staff_id', 'date_of_birth', 'gender', 'employment_date', 'position', 'tsc_number', 'qualification', 'subjects', 'bio', 'profile_picture', 'department']
+        fields = [
+            'first_name', 'last_name', 'email', 'phone_number',  # user fields
+            'staff_id', 'date_of_birth', 'gender', 'employment_date', 'position',
+            'tsc_number', 'qualification', 'subjects', 'bio', 'profile_picture', 'department', 'roles'
+        ]
         widgets = {
-            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
-            'employment_date': forms.DateInput(attrs={'type': 'date'}),
-            'subjects': forms.TextInput(attrs={'placeholder': 'e.g., Math, English'}),
-            'bio': forms.Textarea(attrs={'rows': 3}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'employment_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'subjects': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Math, English'}),
+            'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'department': forms.TextInput(attrs={'class': 'form-control'}),
+            'roles': forms.SelectMultiple(attrs={'class': 'form-select select2'}),
+            'position': forms.Select(attrs={'class': 'form-select'}),
+            'gender': forms.Select(attrs={'class': 'form-select'}),
         }
 
-    def save(self, commit=True):
-        staff = super().save(commit=False)
-        if not staff.user_id:
-            user_data = {
-                'username': self.cleaned_data['staff_id'],
-                'email': f"{self.cleaned_data['staff_id']}@example.com",
-                'first_name': self.cleaned_data.get('user__first_name', ''),
-                'last_name': self.cleaned_data.get('user__last_name', ''),
-            }
-            user = User.objects.create_user(**user_data, password=self.generate_temp_password())
-            staff.user = user
-        if commit:
-            staff.save()
-        if self.cleaned_data['send_email']:
-            self.send_welcome_email(staff)
-        return staff
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+
+        # Filter roles by school if provided
+        if school and 'roles' in self.fields:
+            self.fields['roles'].queryset = Role.objects.filter(school=school)
 
     def generate_temp_password(self):
+        """Generate a random temporary password."""
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def send_welcome_email(self, staff):
-        # Implement
+    def save(self, commit=True):
+        # Create user using explicit form fields
+        staff = super().save(commit=False)
+        temp_password = self.generate_temp_password()
+
+        user = User.objects.create_user(
+            phone_number=self.cleaned_data['phone_number'],
+            first_name=self.cleaned_data['first_name'],
+            last_name=self.cleaned_data['last_name'],
+            email=self.cleaned_data.get('email') or f"{self.cleaned_data['staff_id']}@example.com",
+            password=temp_password,
+        )
+
+        # Optional: save phone_number if your User model supports it
+        if hasattr(user, 'phone_number'):
+            user.phone_number = self.cleaned_data.get('phone_number', '')
+            user.save()
+
+        staff.user = user
+
+        # Attach school if provided
+        if self.school:
+            staff.school = self.school
+
+        if commit:
+            staff.save()
+            self.save_m2m()
+
+        # Send welcome email if requested
+        if self.cleaned_data.get('send_email'):
+            self.send_welcome_email(staff, temp_password)
+
+        return staff, temp_password
+
+    def send_welcome_email(self, staff, password):
+        # Implement your email logic here
         pass
 
 class StaffEditForm(StaffCreationForm):
@@ -280,40 +369,90 @@ class StaffEditForm(StaffCreationForm):
 
 # ------------------------------- STUDENT FORMS -------------------------------
 class StudentCreationForm(BaseForm):
+    # Extra fields (for creating User)
+    first_name = forms.CharField(max_length=100, label="First name")
+    last_name = forms.CharField(max_length=100, label="Last name")
+    email = forms.EmailField(required=False, label="Email (optional)")
+    phone_number = forms.CharField(required=False, label="Phone (optional)")
+
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
 
     class Meta:
         model = Student
-        fields = ['user', 'student_id', 'date_of_birth', 'gender', 'enrollment_date', 'grade_level', 'bio', 'profile_picture']
+        fields = [
+            'first_name', 'last_name', 'email', 'phone_number',
+            'student_id', 'date_of_birth', 'gender', 'enrollment_date',
+            'grade_level', 'bio', 'profile_picture', 'parents'
+        ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
             'enrollment_date': forms.DateInput(attrs={'type': 'date'}),
             'bio': forms.Textarea(attrs={'rows': 2}),
+            'parents': forms.SelectMultiple(),
         }
 
-    def save(self, commit=True):
-        student = super().save(commit=False)
-        if not student.user_id:
-            user_data = {
-                'username': self.cleaned_data['student_id'],
-                'email': f"{self.cleaned_data['student_id']}@example.com",
-                'first_name': self.cleaned_data.get('user__first_name', ''),
-                'last_name': self.cleaned_data.get('user__last_name', ''),
-            }
-            user = User.objects.create_user(**user_data, password=self.generate_temp_password())
-            student.user = user
-        if commit:
-            student.save()
-        if self.cleaned_data['send_email']:
-            self.send_welcome_email(student)
-        return student
+    def __init__(self, *args, **kwargs):
+        # Get school from view
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+
+        # ★ Add Bootstrap classes to all fields
+        for field in self.fields.values():
+            existing = field.widget.attrs.get('class', '')
+            field.widget.attrs['class'] = f"{existing} form-control".strip()
+
+        # Fix checkboxes (avoid applying form-control)
+        for name in ['send_email', 'reset_password']:
+            self.fields[name].widget.attrs['class'] = 'form-check-input'
+
+        # Filter queryset fields when school provided
+        if self.school:
+            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
+            self.fields['parents'].queryset = Parent.objects.filter(school=self.school)
+
+        # ★ Make parents multi-select work with select2
+        self.fields['parents'].widget.attrs.update({
+            'class': 'form-control select2',
+            'multiple': True,
+        })
 
     def generate_temp_password(self):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def send_welcome_email(self, student):
-        # Implement
+    def save(self, commit=True):
+        temp_password = self.generate_temp_password()
+        print(f"Generated temporary password: {temp_password}")
+
+        # Create user for student
+        user = User.objects.create_user(
+            email=self.cleaned_data.get('email') or f"{self.cleaned_data['student_id']}@example.com",
+            first_name=self.cleaned_data['first_name'],
+            last_name=self.cleaned_data['last_name'],
+            phone_number=self.cleaned_data.get('phone_number', ''),
+            password=temp_password,
+            is_student=True,
+            is_verified=True,  # Assuming students are verified by default
+        )
+
+        # Build Student instance
+        student = super().save(commit=False)
+        student.user = user
+        student.school = self.school
+        student.parents = self.cleaned_data.get('parents', [])
+
+        if commit:
+            student.save()
+            self.save_m2m()  # save parents many-to-many
+
+        # Send welcome email
+        if self.cleaned_data['send_email']:
+            self.send_welcome_email(student, temp_password)
+
+        return student, temp_password
+
+    def send_welcome_email(self, student, password):
+        # Implement email logic
         pass
 
 class StudentEditForm(StudentCreationForm):
