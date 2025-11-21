@@ -1,0 +1,164 @@
+{# templates/school/submission.html #}
+{% extends 'school/base.html' %}
+{% block title %}Submissions | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex gap-2 align-items-center">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Submissions</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Submissions</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    <form method="get" class="d-inline">
+      <div class="input-group input-group-sm" style="width:300px;">
+        <input type="text" name="q" class="form-control" placeholder="Search submissions..." value="{{ query }}">
+        <select name="assignment" class="form-select">
+          <option value="">All assignments</option>
+          {% for l in lessons_list|default:"" %}
+            <option value="{{ a.id }}" {% if request.GET.assignment == a.id|stringformat:"s" %}selected{% endif %}>{{ a.title }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+      </div>
+    </form>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-inboxes-fill me-2"></i> Submissions ({% if submissions.paginator %}
+                {{ submissions.paginator.count }}
+            {% else %}
+                {{ submissions|length }}
+            {% endif %})</h5>
+            
+      <a class="btn btn-sm btn-outline-success" href="#" data-bs-toggle="modal" data-bs-target="#newSubmissionModal">New Submission</a>
+      <a class="btn btn-sm btn-outline-success" href="#" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Assignment</th>
+              <th>Submitted At</th>
+              <th>Score</th>
+              <th>Feedback</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in submissions %}
+            <tr>
+              <td>{{ s.enrollment.student.user.get_full_name }}</td>
+              <td>{{ s.assignment.title }}</td>
+              <td>{{ s.submitted_at }}</td>
+              <td>{{ s.score|default:"-" }}</td>
+              <td>{{ s.feedback|default:"-" }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#gradeModal" data-id="{{ s.id }}"><i class="bi bi-pen"></i></button>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'school:submission-download' s.id %}"><i class="bi bi-download"></i></a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No submissions found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if submissions.has_other_pages %}
+      <nav>
+        <ul class="pagination pagination-sm">
+          {% if submissions.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ submissions.previous_page_number }}">Previous</a></li>{% endif %}
+          <li class="page-item disabled"><span class="page-link">Page {{ submissions.number }} of {{ submissions.paginator.num_pages }}</span></li>
+          {% if submissions.has_next %}<li class="page-item"><a class="page-link" href="?page={{ submissions.next_page_number }}">Next</a></li>{% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+
+
+<!-- New Submission Modal -->
+<div class="modal fade" id="newSubmissionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'school:submission-create' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Add New Submission</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="id_enrollment" class="form-label">Student</label>
+            <select name="enrollment" id="id_enrollment" class="form-select" required>
+              {% for e in enrollments %}
+                <option value="{{ e.id }}">{{ e.student.user.get_full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="id_assignment" class="form-label">Assignment</label>
+            <select name="assignment" id="id_assignment" class="form-select" required>
+              {% for a in assignments %}
+                <option value="{{ a.id }}">{{ a.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="id_file" class="form-label">File</label>
+            <input type="file" name="file" id="id_file" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Export Submissions</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body"><p>Export as CSV or PDF?</p><a class="btn btn-outline-primary me-2" href="#">CSV</a><a class="btn btn-outline-secondary" href="#">PDF</a></div>
+</div></div></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const gradeModal = document.getElementById('gradeModal');
+  if (gradeModal) {
+    gradeModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const id = btn.dataset.id;
+      document.getElementById('gradeForm').action = "{% url 'school:submission-grade' 0 %}".replace('0', id);
+      // optionally fetch existing score/feedback via AJAX and prefill
+    });
+  }
+});
+</script>
+{% endblock %}

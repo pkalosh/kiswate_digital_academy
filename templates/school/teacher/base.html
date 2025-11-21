@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Admin Dashboard {% endblock %}</title>
+  <title>{% block title %}Teacher Dashboard {% endblock %}</title>
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <!-- Bootstrap Icons -->
@@ -138,12 +138,11 @@
     <aside class="sidebar" id="sidebar">
       <div class="brand" data-aos="fade-right">
         <i class="bi bi-shield-lock-fill"></i>
-         <span>{% if request.user.is_superuser %}Admin Dashboard{% elif request.user.is_teacher %} Teacher Dashboard 
-          {% elif request.user.is_parent %} Parent Dashboard{% elif request.user.is_student %} Student Dashboard{% elif request.user.is_school_staff %} Staff Dashboard {% else %} Dashboard {% endif %}</span></a>
+         <span> Teacher Dashboard </span></a>
       </div>
       <nav class="d-flex flex-column gap-1">
 
-      <a class="side-link active" href="{% url 'school:dashboard' %}">
+      <a class="side-link active" href="{% url 'userauths:teacher-dashboard' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
@@ -155,33 +154,19 @@
         <i class="bi bi-chevron-down small"></i>
       </a>
       <div class="collapse ps-4" id="agencyMenu">
-        <a class="side-link" href="{% url 'school:school-grades' %}">Grades</a>
-        <a class="side-link" href="{% url 'school:smartid-list' %}">Smart IDs</a>
+
         <a class="side-link" href="{% url 'school:school-subjects' %}">Subjects</a>
         <a class="side-link" href="{% url 'school:school-sessions' %}">Sessions</a>
         <a class="side-link" href="{% url 'school:school-timetable' %}">Timetables</a>
         <a class="side-link" href="{% url 'school:school-enrollment' %}">Enrollments</a>
         <a class="side-link" href="{% url 'school:school-attendance' %}">Attendance</a>
         <a class="side-link" href="{% url 'school:school-assignments' %}">Assignments</a>
-        <a class="side-link" href="{% url 'school:school-submissions' %}">Submissions</a>
-
-      </div>
-      <a class="side-link d-flex justify-content-between align-items-center" 
-        data-bs-toggle="collapse" href="#agencyMenu2" role="button" aria-expanded="false" aria-controls="agencyMenu">
-        <span><i class="bi bi-diagram-3"></i> Users</span>
-        <i class="bi bi-chevron-down small"></i>
-      </a>
-      <div class="collapse ps-4" id="agencyMenu2">
-        <a class="side-link" href="{% url 'school:parent_list_create' %}">Parents</a>
-        <a class="side-link" href="{% url 'school:student_list_create' %}">Students</a>
-        <a class="side-link" href="{% url 'school:staff_list_create' %}">Staff</a>
-      </div>
-
       <a class="side-link" href="{% url 'school:school-discipline' %}"><i class="bi bi-people"></i> Discipline</a>
 
-      <a class="side-link" href=""><i class="bi bi-people"></i> Payments</a>
+      </div>
+     
 
-      <a class="side-link" href="{% url 'school:school-settings' %}"><i class="bi bi-gear"></i> Settings</a>
+      <a class="side-link" href="{% url 'school:school-settings' %}"><i class="bi bi-gear"></i> Profile</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out
       </a>

@@ -23,19 +23,22 @@ from django.db import IntegrityError
 
 DEVICES = [
     {"ip": "192.168.100.201", "id": "Device-A", "location": "Main Gate"},
-    {"ip": "192.168.100.202", "id": "Device-B", "location": "Back Gate"},
-    {"ip": "192.168.100.303", "id": "Device-C", "location": "Office Entrance"},
+    # {"ip": "192.168.100.202", "id": "Device-B", "location": "Back Gate"},
+    # {"ip": "192.168.100.303", "id": "Device-C", "location": "Office Entrance"},
 ]
 
 POLL_INTERVAL = 5   
 
 # EUJIM SMS setup
-SMS_API_KEY = ''
-SMS_PARTNERID =''
-SMS_SHORTCODE = ''
-SMS_API_URL = ''
+# SMS_API_KEY = ''
+# SMS_PARTNERID =''
+# SMS_SHORTCODE = ''
+# SMS_API_URL = ''
 ALERT_PHONE = ""
-
+SMS_API_KEY = '055937fa1c632de42568afe4ee5ec19b'
+SMS_PARTNERID ='7003'
+SMS_SHORTCODE = 'EUJIM LTD'
+SMS_API_URL = 'https://quicksms.advantasms.com/api/services/sendsms/'
 
 # -------------------------------
 # Django Setup
@@ -141,6 +144,7 @@ def save_scan_to_db(user_id, scan_time, device_id, location="Main Gate"):
 # -------------------------------
 def poll_device_and_send_sms_for_device(ip, device_id, location):
     zk = ZK(ip, port=4370, timeout=5)
+
     try:
         conn = zk.connect()
         print(f" Connected to ZKTeco device {device_id} at {ip}")
@@ -162,7 +166,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
                     time.sleep(POLL_INTERVAL)
                     continue
 
-                # Save scan to DB
+                # Save log to database
                 scan_record = save_scan_to_db(
                     user_id=latest_log.user_id,
                     scan_time=log_time,
@@ -171,22 +175,24 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
                 )
 
                 if scan_record:
-                    profile = scan_record.smart_id.profile
+                    smart_id = scan_record.smart_id
+                    profile = smart_id.profile  # SmartID → profile → User
 
-                    #  If the scanned user is a student
+                    # -------------------------------
+                    # If the scanned user is a student
+                    # -------------------------------
                     if profile.is_student:
-                        print(f"📚 Student scan detected: {profile}")
+                        print(f"📚 Student scan detected: {profile.email}")
 
-                        # Find the corresponding Student object
                         student = Student.objects.filter(
-                            profile=profile,
-                            school=scan_record.smart_id.school
+                            user=profile,
+                            school=smart_id.school
                         ).first()
 
                         if student:
-                            # Get all parents linked to this student
                             parents = student.parent.all()
                             full_name = f"{profile.first_name} {profile.last_name}"
+
                             message = (
                                 f"New Scan: {full_name} at {location} "
                                 f"({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
@@ -194,21 +200,34 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
 
                             # Send SMS to each parent
                             for parent in parents:
-                                if parent.profile.phone_number:
-                                    _send_sms_via_eujim(parent.profile.phone_number, message)
-                                    print(f"📩 SMS sent to parent: {parent.profile.phone_number}")
+                                phone = parent.phone  # Parent.phone is the correct field
+
+                                if phone:
+                                    _send_sms_via_eujim(phone, message)
+                                    print(f"📩 SMS sent to parent ({parent.user.email}): {phone}")
                                 else:
-                                    print(f"⚠️ Parent {parent} has no phone number.")
+                                    print(f"⚠️ Parent {parent.user.email} has no phone number.")
 
                         else:
-                            print(f"⚠️ No student record found for {profile}")
+                            print(f"⚠️ No student record found for {profile.email}")
 
+                    # -------------------------------
+                    # For non-students
+                    # -------------------------------
                     else:
-                        # For non-students, send SMS directly to the user's own phone
                         full_name = f"{profile.first_name} {profile.last_name}"
-                        message = f"New Scan: {full_name} at {location} ({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
-                        _send_sms_via_eujim(profile.phone_number, message)
-                        print(f"📩 SMS sent to user: {profile.phone_number}")
+                        message = (
+                            f"New Scan: {full_name} at {location} "
+                            f"({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                        )
+
+                        phone = profile.phone_number
+
+                        if phone:
+                            _send_sms_via_eujim(phone, message)
+                            print(f"📩 SMS sent to user ({profile.email}): {phone}")
+                        else:
+                            print(f"⚠️ User {profile.email} has no phone number.")
 
                     last_scan_time = log_time
 
@@ -223,6 +242,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
 
     except Exception as e:
         print(f"❌ Could not connect to device {device_id} ({ip}): {e}")
+
     finally:
         try:
             conn.disconnect()

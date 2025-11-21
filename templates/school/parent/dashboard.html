@@ -1,4 +1,4 @@
-{% extends 'school/base.html' %}
+{% extends 'school/parent/base.html' %}
 {% block title %}Parent Dashboard | {{ school.name }}{% endblock %}
 {% block content %}
 <section class="bg-light py-4">
@@ -21,64 +21,72 @@
         
         <div class="row g-4">
             <!-- Child Attendance Summary -->
-            <div class="col-md-6 col-lg-3">
-                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
-                    <div class="card-body d-flex flex-column align-items-center">
-                        <div class="text-success mb-2">
-                            <i class="bi bi-check-circle-fill fs-1"></i>
-                        </div>
-                        <h5 class="fw-semibold mb-2">Attendance This Term</h5>
-                        <h3 class="fw-bold text-success mb-3">
-                            {% if timetable %}
+
+            <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Attendance This Term</div>
+                    <div class="h4 m-0 fw-bold"> {% if timetable %}
                                 {{ lessons.count|floatformat:0 }} / {{ lessons|length|add:1 }} ({{ lessons.count|floatformat:1 }}%)
                             {% else %} N/A {% endif %}
-                        </h3>
-                        <a href="#" class="btn btn-outline-success btn-sm">Details</a>
-                    </div>
+                        </div>
+                  </div>
+                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Details</span></a>
                 </div>
+              </div>
             </div>
+          </div>           
             
             <!-- Upcoming Sessions -->
-            <div class="col-md-6 col-lg-3">
-                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
-                    <div class="card-body d-flex flex-column align-items-center">
-                        <div class="text-info mb-2">
-                            <i class="bi bi-calendar-event fs-1"></i>
+            <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Upcoming Sessions</div>
+                    <div class="h4 m-0 fw-bold"> {{ sessions|length|default:"0" }}
                         </div>
-                        <h5 class="fw-semibold mb-2">Upcoming Sessions</h5>
-                        <h3 class="fw-bold text-info mb-3">{{ sessions|length|default:"0" }}</h3>
-                        <a href="#" class="btn btn-outline-info btn-sm">View Schedule</a>
-                    </div>
+                  </div>
+                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> View Schedule</span></a>
                 </div>
+              </div>
             </div>
+          </div>           
             
+
             <!-- Enrolled Subjects -->
-            <div class="col-md-6 col-lg-3">
-                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
-                    <div class="card-body d-flex flex-column align-items-center">
-                        <div class="text-warning mb-2">
-                            <i class="bi bi-book-half fs-1"></i>
+            <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Enrolled Subjects</div>
+                    <div class="h4 m-0 fw-bold"> {{ enrollments.count|default:"0" }}
                         </div>
-                        <h5 class="fw-semibold mb-2">Enrolled Subjects</h5>
-                        <h3 class="fw-bold text-warning mb-3">{{ enrollments.count|default:"0" }}</h3>
-                        <a href="#" class="btn btn-outline-warning btn-sm">List</a>
-                    </div>
+                  </div>
+                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> List</span></a>
                 </div>
+              </div>
             </div>
+          </div>   
             
             <!-- Active Term -->
-            <div class="col-md-6 col-lg-3">
-                <div class="card shadow-sm border-0 rounded-4 text-center p-3 h-100">
-                    <div class="card-body d-flex flex-column align-items-center">
-                        <div class="text-primary mb-2">
-                            <i class="bi bi-calendar3 fs-1"></i>
+            <div class="col-6 col-md-3">
+            <div class="card k-card">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <div class="text-secondary small">Active Term</div>
+                    <div class="h4 m-0 fw-bold"> {{ active_term|default:"None" }}
                         </div>
-                        <h5 class="fw-semibold mb-2">Active Term</h5>
-                        <h3 class="fw-bold text-primary mb-3">{{ active_term|default:"None" }}</h3>
-                        <a href="{% url 'school:school-timetable' %}" class="btn btn-outline-primary btn-sm">Full Timetable</a>
-                    </div>
+                  </div>
+                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Full Timetable</span></a>
                 </div>
+              </div>
             </div>
+          </div>
         </div>
         
         <!-- Upcoming Lessons/Sessions Table -->

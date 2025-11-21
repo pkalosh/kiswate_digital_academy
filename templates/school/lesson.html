@@ -1,0 +1,176 @@
+{% extends 'school/base.html' %}
+{% block title %}Lessons | {{ timetable.grade.name }} - Term {{ timetable.term }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between mb-3">
+  <h6 class="m-0 fw-bold">Lessons for {{ timetable.grade.name }} - Term {{ timetable.term }} ({{ timetable.year }})</h6>
+  <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#lessonModal" data-mode="create">
+    <i class="bi bi-plus"></i> Add Lesson
+  </button>
+</header>
+
+<section class="content container-fluid py-2">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Subject</th>
+            <th>Teacher</th>
+            <th>Time</th>
+            <th>Room</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lesson in lessons %}
+          <tr>
+            <td>{{ lesson.date }}</td>
+            <td>{{ lesson.subject.name }}</td>
+            <td>{{ lesson.teacher.user.get_full_name }}</td>
+            <td>{{ lesson.start_time }} - {{ lesson.end_time }}</td>
+            <td>{{ lesson.room }}</td>
+            <td>
+              {% if lesson.is_canceled %}
+                <span class="badge bg-danger">Canceled</span>
+              {% else %}
+                <span class="badge bg-success">Active</span>
+              {% endif %}
+            </td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#lessonModal"
+                      data-mode="edit"
+                      data-id="{{ lesson.id }}"
+                      data-timetable="{{ lesson.timetable.id }}"
+                      data-subject="{{ lesson.subject.id }}"
+                      data-teacher="{{ lesson.teacher.id }}"
+                      data-date="{{ lesson.date }}"
+                      data-start_time="{{ lesson.start_time }}"
+                      data-end_time="{{ lesson.end_time }}"
+                      data-room="{{ lesson.room }}"
+                      data-is_canceled="{{ lesson.is_canceled }}"
+                      data-notes="{{ lesson.notes|escapejs }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal"
+                      data-id="{{ lesson.id }}" data-name="{{ lesson.subject.name }} - {{ lesson.date }}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No lessons found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Lesson Modal -->
+<div class="modal fade" id="lessonModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="lessonModalTitle">Add Lesson</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="lessonForm" action="{% url 'school:lesson-create' %}">
+        {% csrf_token %}
+        <input type="hidden" name="mode" id="mode" value="create">
+        <div class="modal-body">
+          {% for field in form %}
+            <div class="mb-3">
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.errors %}
+                <div class="text-danger small">{{ field.errors }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete Lesson</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="deleteForm">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p>Are you sure you want to delete <strong id="deleteName"></strong>? This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const lessonModal = document.getElementById('lessonModal');
+  const lessonForm = document.getElementById('lessonForm');
+  const lessonModalTitle = document.getElementById('lessonModalTitle');
+  const modeInput = document.getElementById('mode');
+
+  lessonModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const mode = button.dataset.mode;
+    modeInput.value = mode;
+
+    if (mode === 'create') {
+      lessonModalTitle.textContent = 'Add Lesson';
+      lessonForm.action = "{% url 'school:lesson-create' %}";
+      lessonForm.reset();
+    } else if (mode === 'edit') {
+      const id = button.dataset.id;
+      lessonModalTitle.textContent = 'Edit Lesson';
+      lessonForm.action = "{% url 'school:lesson-edit' 0 %}".replace('0', id);
+      document.querySelector('#id_timetable').value = button.dataset.timetable;
+      document.querySelector('#id_subject').value = button.dataset.subject;
+      document.querySelector('#id_teacher').value = button.dataset.teacher;
+      document.querySelector('#id_date').value = button.dataset.date;
+      document.querySelector('#id_start_time').value = button.dataset.start_time;
+      document.querySelector('#id_end_time').value = button.dataset.end_time;
+      document.querySelector('#id_room').value = button.dataset.room;
+      document.querySelector('#id_is_canceled').checked = button.dataset.is_canceled === 'true';
+      document.querySelector('#id_notes').value = button.dataset.notes || '';
+    }
+  });
+
+  const deleteModal = document.getElementById('deleteModal');
+  const deleteForm = document.getElementById('deleteForm');
+  deleteModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const id = button.dataset.id;
+    const name = button.dataset.name;
+    document.getElementById('deleteName').textContent = name;
+    deleteForm.action = "{% url 'school:lesson-delete' 0 %}".replace('0', id);
+  });
+});
+</script>
+{% endblock %}

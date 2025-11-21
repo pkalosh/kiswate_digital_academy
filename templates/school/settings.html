@@ -1,0 +1,81 @@
+{% extends 'school/base.html' %}
+{% block title %}Settings | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">School Settings</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Settings</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+
+  {% if messages %}
+  <div class="row">
+    {% for message in messages %}
+    <div class="col-12">
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0 mx-auto" style="max-width:600px;">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-gear me-2"></i> Update School Information</h5>
+    </div>
+
+    <div class="card-body">
+      <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="id_name" class="form-label">School Name</label>
+          <input type="text" name="name" class="form-control" id="id_name" value="{{ school.name }}" required>
+        </div>
+
+        <div class="mb-3">
+          <label for="id_email" class="form-label">Contact Email</label>
+          <input type="email" name="email" class="form-control" id="id_email" value="{{ school.contact_email }}" required>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+          <a href="{% url 'school:dashboard' %}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-success">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</section>
+
+<script>
+  // Simple client-side validation for bootstrap
+  (() => {
+    'use strict';
+    const forms = document.querySelectorAll('.needs-validation');
+    Array.from(forms).forEach(form => {
+      form.addEventListener('submit', event => {
+        if (!form.checkValidity()) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+      }, false);
+    });
+  })();
+</script>
+
+{% endblock %}

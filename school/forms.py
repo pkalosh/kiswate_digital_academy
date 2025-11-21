@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
+from django.db.models import Q
 import uuid
 from .models import (
     Grade, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
@@ -139,22 +140,20 @@ INVOICE_STATUS_CHOICES = [
     ('void', 'Void'),
 ]
 class BaseForm(forms.ModelForm):
-    """Base form with common cleaning and user association."""
     def __init__(self, *args, school=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.school = school
-        if school:
-            # Limit choices to school
-            for field in self.fields:
-                if hasattr(self.instance, field) and hasattr(getattr(self.instance, field), 'field'):
-                    related_model = self.fields[field].remote_field.model
-                    if hasattr(related_model, 'school'):
-                        self.fields[field].queryset = self.fields[field].queryset.filter(school=school)
 
-    def clean(self):
-        cleaned_data = super().clean()
-        # Add school to instance if needed
-        return cleaned_data
+        if school:
+            for name, field in self.fields.items():
+                # Only filter fields that are QuerySets (FK or M2M)
+                if hasattr(field, "queryset"):
+                    model = field.queryset.model
+                    
+                    # Direct school relation
+                    if hasattr(model, "school"):
+                        field.queryset = field.queryset.filter(school=school)
+
 
 # ------------------------------- GRADE FORM -------------------------------
 class GradeForm(BaseForm):
@@ -170,7 +169,7 @@ class GradeForm(BaseForm):
 class SmartIDForm(BaseForm):
     class Meta:
         model = SmartID
-        fields = ['card_id', 'user_f18_id', 'is_active']
+        fields = ['profile', 'card_id', 'user_f18_id', 'is_active']
         widgets = {
             'card_id': forms.TextInput(attrs={'placeholder': 'Physical card serial'}),
             'user_f18_id': forms.TextInput(attrs={'placeholder': 'F18 user ID'}),
@@ -178,10 +177,19 @@ class SmartIDForm(BaseForm):
 
     def __init__(self, *args, school=None, **kwargs):
         super().__init__(*args, school=school, **kwargs)
+
         if school:
+            # Allow selecting only users belonging to this school (student/staff/parent)
             self.fields['profile'].queryset = User.objects.filter(
-                school__school_admin_profile__school=school  # Adjust based on User extension
-            ).select_related('student', 'staffprofile', 'parent')
+                Q(student__school=school) |
+                Q(staffprofile__school=school) |
+                Q(parent__school=school)
+            ).distinct().select_related(
+                'student',
+                'staffprofile',
+                'parent'
+            )
+
 
 # ------------------------------- PARENT FORMS -------------------------------
 class ParentCreationForm(BaseForm):
@@ -202,7 +210,7 @@ class ParentCreationForm(BaseForm):
         if not parent.user_id:
             # Create user if not provided
             user_data = {
-                'username': self.cleaned_data['phone'],  # Or generate
+                'phone_number': self.cleaned_data['phone'],  # Or generate
                 'email': f"{self.cleaned_data['phone']}@example.com",  # Placeholder
                 'first_name': self.cleaned_data.get('user__first_name', ''),
                 'last_name': self.cleaned_data.get('user__last_name', ''),
@@ -316,7 +324,7 @@ class StudentEditForm(StudentCreationForm):
 class SubjectForm(BaseForm):
     class Meta:
         model = Subject
-        fields = ['name', 'description', 'code', 'teacher', 'grade', 'start_date', 'end_date']
+        fields = ['name', 'description', 'code', 'teacher', 'grade', 'start_date', 'end_date', 'is_active']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'start_date': forms.DateInput(attrs={'type': 'date'}),
@@ -347,7 +355,7 @@ class TimetableForm(BaseForm):
 class LessonForm(forms.ModelForm):
     class Meta:
         model = Lesson
-        fields = ['timetable', 'subject', 'teacher', 'date', 'start_time', 'end_time', 'room', 'is_canceled', 'notes']
+        fields = ['timetable', 'subject', 'teacher', 'date', 'start_time','day_of_week', 'end_time', 'room', 'is_canceled', 'notes']
         widgets = {
             'date': forms.DateInput(attrs={'type': 'date'}),
             'start_time': forms.TimeInput(attrs={'type': 'time'}),
@@ -357,6 +365,7 @@ class LessonForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         date = cleaned_data.get('date')
+        day_of_week = cleaned_data.get('day_of_week')
         start_time = cleaned_data.get('start_time')
         end_time = cleaned_data.get('end_time')
         teacher = cleaned_data.get('teacher')
@@ -373,6 +382,7 @@ class LessonForm(forms.ModelForm):
             conflicts = Lesson.objects.filter(
                 teacher=teacher,
                 date=date,
+                day_of_week=day_of_week,
                 # Overlap query: Adapt to TimeField (use django.db.models.TimeField)
                 start_time__lt=end_time,  # existing_start < proposed_end
                 end_time__gt=start_time,  # existing_end > proposed_start
@@ -399,6 +409,11 @@ class SessionForm(BaseForm):
             'is_live': forms.CheckboxInput(),
             'recording_url': forms.URLInput(attrs={'placeholder': 'Recording link'}),
         }
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['subject'].queryset = Subject.objects.filter(school=school)
+            self.fields['lesson'].queryset = Lesson.objects.filter(timetable__school=school)
 
 # ------------------------------- ATTENDANCE FORM -------------------------------
 class AttendanceForm(BaseForm):
@@ -430,6 +445,11 @@ class DisciplineRecordForm(BaseForm):
             'incident_type': forms.Select(choices=INCIDENT_TYPE_CHOICES),
             'severity': forms.Select(choices=SEVERITY_CHOICES),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Prefill default value for severity
+        self.fields['severity'].initial = 'minor'
 
 # ------------------------------- NOTIFICATION FORM -------------------------------
 class NotificationForm(forms.ModelForm):

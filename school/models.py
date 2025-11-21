@@ -127,6 +127,14 @@ DISBURSEMENT_METHOD_CHOICES = [
     ('bank', 'Bank Account'),
 ]
 
+WEEKDAY_CHOICES = [
+    ('monday', 'Monday'),
+    ('tuesday', 'Tuesday'),
+    ('wednesday', 'Wednesday'),
+    ('thursday', 'Thursday'),
+    ('friday', 'Friday'),
+]
+
 class School(models.Model):
     name = models.CharField(max_length=255)
     school_admin = models.OneToOneField(User, on_delete=models.CASCADE, related_name='school_admin_profile')
@@ -267,6 +275,7 @@ class Lesson(models.Model):
     timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='lessons')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='lessons')
     teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='lessons_taught')
+    day_of_week = models.CharField(max_length=10, choices=WEEKDAY_CHOICES, blank=True, null=True)  # e.g., 'monday'
     date = models.DateField(db_index=True)
     start_time = models.TimeField()
     end_time = models.TimeField()

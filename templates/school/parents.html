@@ -117,7 +117,7 @@
                       <h5 class="modal-title" id="editModalLabel{{ parent.pk }}">Edit Parent: {{ parent.user.get_full_name }}</h5>
                       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form method="post" action="{% url 'school:parent_edit' parent.pk %}" enctype="multipart/form-data">
+                    <form method="post" action="{% url 'school:parent-edit' parent.pk %}" enctype="multipart/form-data">
                       {% csrf_token %}
                       <div class="modal-body">
                         <div class="row g-3">
@@ -213,7 +213,7 @@
                     </div>
                     <div class="modal-footer">
                       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                      <form method="post" action="{% url 'school:parent_delete' parent.pk %}" class="d-inline">
+                      <form method="post" action="{% url 'school:parent-delete' parent.pk %}" class="d-inline">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger">Delete Permanently</button>
                       </form>

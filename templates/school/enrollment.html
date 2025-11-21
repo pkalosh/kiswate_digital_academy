@@ -1,0 +1,184 @@
+{# templates/school/enrollment.html #}
+{% extends 'school/base.html' %}
+{% block title %}Enrollments | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex gap-2 align-items-center">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Enrollments</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Enrollments</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    <form method="get" class="d-inline">
+      <div class="input-group input-group-sm" style="width:300px;">
+        <input type="text" name="q" class="form-control" placeholder="Search students..." value="{{ query }}">
+        <select name="grade" class="form-select">
+          <option value="">All grades</option>
+            {% for l in lessons_list|default:"" %}
+            <option value="{{ g.id }}" {% if request.GET.grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+      </div>
+    </form>
+    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#enrollmentModal" data-mode="create"><i class="bi bi-plus"></i> Enroll Student</button>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i> Enrollments ({% if enrollments.paginator %}
+    {{ enrollments.paginator.count }}
+  {% else %}
+    {{ enrollments|length }}
+  {% endif %})</h5>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Grade</th>
+              <th>Status</th>
+              <th>Enrolled On</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in enrollments %}
+            <tr>
+              <td>{{ e.student.user.get_full_name }}</td>
+              <td>{{ e.grade.name }}</td>
+              <td>{% if e.status == 'active' %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">{{ e.status }}</span>{% endif %}</td>
+              <td>{{ e.created_at|date:"Y-m-d" }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#enrollmentModal" data-mode="edit" data-id="{{ e.id }}"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#enrollmentDeleteModal" data-id="{{ e.id }}" data-name="{{ e.student.user.get_full_name }}"><i class="bi bi-trash"></i></button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No enrollments found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if enrollments.has_other_pages %}
+      <nav>
+        <ul class="pagination pagination-sm">
+          {% if enrollments.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ enrollments.previous_page_number }}">Previous</a></li>{% endif %}
+          <li class="page-item disabled"><span class="page-link">Page {{ enrollments.number }} of {{ enrollments.paginator.num_pages }}</span></li>
+          {% if enrollments.has_next %}<li class="page-item"><a class="page-link" href="?page={{ enrollments.next_page_number }}">Next</a></li>{% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Enrollment Modal -->
+<div class="modal fade" id="enrollmentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="enrollmentForm" action="{% url 'school:enrollment-create' %}">
+        {% csrf_token %}
+        <input type="hidden" name="mode" id="enrollmentMode" value="create">
+        <div class="modal-header">
+          <h5 class="modal-title" id="enrollmentModalTitle">Enroll Student</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+          {% for field in form %}
+          <div class="mb-3">
+            {{ field.label_tag }} {{ field }}
+            {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Enrollment Delete Modal -->
+<div class="modal fade" id="enrollmentDeleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="enrollmentDeleteForm" method="post" action="{% url 'school:enrollment-delete' 0 %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Remove Enrollment</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Remove enrollment for <strong id="enrollmentDeleteName"></strong>?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger">Remove</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const enrollmentModal = document.getElementById('enrollmentModal');
+  if (enrollmentModal) {
+    enrollmentModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const mode = btn.dataset.mode || 'create';
+      document.getElementById('enrollmentMode').value = mode;
+      const form = document.getElementById('enrollmentForm');
+
+      if (mode === 'create') {
+        document.getElementById('enrollmentModalTitle').textContent = 'Enroll Student';
+        form.action = "{% url 'school:enrollment-create' %}";
+        form.reset();
+      } else {
+        const id = btn.dataset.id;
+        document.getElementById('enrollmentModalTitle').textContent = 'Edit Enrollment';
+        form.action = "{% url 'school:enrollment-edit' 0 %}".replace('0', id);
+        // populate if dataset attributes provided
+      }
+    });
+  }
+
+  const delModal = document.getElementById('enrollmentDeleteModal');
+  if (delModal) {
+    delModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const id = btn.dataset.id;
+      const name = btn.dataset.name;
+      document.getElementById('enrollmentDeleteName').textContent = name;
+      document.getElementById('enrollmentDeleteForm').action = "{% url 'school:enrollment-delete' 0 %}".replace('0', id);
+    });
+  }
+});
+</script>
+
+{% endblock %}
