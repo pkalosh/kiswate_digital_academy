@@ -146,21 +146,13 @@
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
-      
-      <!-- Dropdown (Collapsible) -->
-      <a class="side-link d-flex justify-content-between align-items-center" 
-        data-bs-toggle="collapse" href="#agencyMenu" role="button" aria-expanded="false" aria-controls="agencyMenu">
-        <span><i class="bi bi-diagram-3"></i> Schools Management</span>
-        <i class="bi bi-chevron-down small"></i>
-      </a>
-      <div class="collapse ps-4" id="agencyMenu">
-        <a class="side-link" href="{% url 'school:school-timetable' %}">Timetables</a>
-        <a class="side-link" href="{% url 'school:school-enrollment' %}">Enrollments</a>
-        <a class="side-link" href="{% url 'school:school-attendance' %}">Attendance</a>
-        <a class="side-link" href="{% url 'school:school-discipline' %}"><i class="bi bi-people"></i> Discipline</a>
+
+        <a class="side-link" href="{% url 'school:school-timetable' %}"><i class="bi bi-clipboard-check"></i> Timetables</a>
+        <a class="side-link" href="{% url 'school:school-enrollment' %}"><i class="bi bi-clipboard-check"></i> Enrollments</a>
+        <a class="side-link" href="{% url 'school:school-attendance' %}"><i  class="bi bi-clipboard-check"></i> Attendance</a>
+        <a class="side-link" href="{% url 'school:school-discipline' %}"><i class="bi bi-clipboard-check"></i> Announcements</a>
 
 
-      </div>
       <a class="side-link" href=""><i class="bi bi-gear"></i> Profile</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out

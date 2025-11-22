@@ -1,110 +1,122 @@
 {% extends 'school/parent/base.html' %}
-{% block title %}Parent Dashboard | {{ school.name }}{% endblock %}
+{% block title %}Parent Dashboard | {{ request.user.parent.school.name }}{% endblock %}
+
 {% block content %}
 <section class="bg-light py-4">
     <div class="container">
-        <!-- Child Selector -->
-        {% if children.count > 1 %}
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <form method="GET" class="d-flex">
-                    <select name="child_id" class="form-select me-2" onchange="this.form.submit()">
-                        {% for child in children %}
-                        <option value="{{ child.id }}" {% if child.id == child.id %}selected{% endif %}>{{ child.user.get_full_name }} ({{ child.grade_level.name }})</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-outline-primary d-none">Switch</button>
-                </form>
-            </div>
-        </div>
+
+        <!-- Child Tabs -->
+        {% if children %}
+        <ul class="nav nav-tabs mb-4" id="childTabs" role="tablist">
+            {% for data in child_data %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if data.child.id == selected_child.id %}active{% endif %}" 
+                        id="child-{{ data.child.id }}-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#child-{{ data.child.id }}" 
+                        type="button" role="tab">
+                    {{ data.child.user.get_full_name }} ({{ data.child.grade_level.name }})
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
         {% endif %}
-        
-        <div class="row g-4">
-            <!-- Child Attendance Summary -->
 
-            <div class="col-6 col-md-3">
-            <div class="card k-card">
-              <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="text-secondary small">Attendance This Term</div>
-                    <div class="h4 m-0 fw-bold"> {% if timetable %}
-                                {{ lessons.count|floatformat:0 }} / {{ lessons|length|add:1 }} ({{ lessons.count|floatformat:1 }}%)
-                            {% else %} N/A {% endif %}
-                        </div>
-                  </div>
-                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Details</span></a>
-                </div>
-              </div>
-            </div>
-          </div>           
-            
-            <!-- Upcoming Sessions -->
-            <div class="col-6 col-md-3">
-            <div class="card k-card">
-              <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="text-secondary small">Upcoming Sessions</div>
-                    <div class="h4 m-0 fw-bold"> {{ sessions|length|default:"0" }}
-                        </div>
-                  </div>
-                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> View Schedule</span></a>
-                </div>
-              </div>
-            </div>
-          </div>           
-            
+        <!-- Child Tab Content -->
+        <div class="tab-content" id="childTabsContent">
+            {% for data in child_data %}
+            <div class="tab-pane fade {% if data.child.id == selected_child.id %}show active{% endif %}" 
+                 id="child-{{ data.child.id }}" role="tabpanel">
 
-            <!-- Enrolled Subjects -->
-            <div class="col-6 col-md-3">
-            <div class="card k-card">
-              <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="text-secondary small">Enrolled Subjects</div>
-                    <div class="h4 m-0 fw-bold"> {{ enrollments.count|default:"0" }}
+                <div class="row g-4 mb-4">
+                    <!-- Attendance Summary -->
+                    <div class="col-6 col-md-3">
+                        <div class="card k-card">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-secondary small">Attendance This Term</div>
+                                        <div class="h4 m-0 fw-bold">
+                                            {% if data.lessons %}
+                                                {{ data.lessons|length }} / {{ data.lessons|length|add:1 }} <!-- Placeholder % -->
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <a href="#"><span class="k-pill"><i class="bi bi-eye"></i> Details</span></a>
+                                </div>
+                            </div>
                         </div>
-                  </div>
-                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> List</span></a>
-                </div>
-              </div>
-            </div>
-          </div>   
-            
-            <!-- Active Term -->
-            <div class="col-6 col-md-3">
-            <div class="card k-card">
-              <div class="card-body p-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="text-secondary small">Active Term</div>
-                    <div class="h4 m-0 fw-bold"> {{ active_term|default:"None" }}
+                    </div>
+
+                    <!-- Upcoming Sessions -->
+                    <div class="col-6 col-md-3">
+                        <div class="card k-card">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-secondary small">Upcoming Sessions</div>
+                                        <div class="h4 m-0 fw-bold">{{ data.sessions|length|default:"0" }}</div>
+                                    </div>
+                                    <a href="#"><span class="k-pill"><i class="bi bi-eye"></i> View Schedule</span></a>
+                                </div>
+                            </div>
                         </div>
-                  </div>
-                  <a href="{% url 'school:school-assignments' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Full Timetable</span></a>
+                    </div>
+
+                    <!-- Enrolled Subjects -->
+                    <div class="col-6 col-md-3">
+                        <div class="card k-card">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-secondary small">Enrolled Subjects</div>
+                                        <div class="h4 m-0 fw-bold">{{ data.enrollments|length|default:"0" }}</div>
+                                    </div>
+                                    <a href="#"><span class="k-pill"><i class="bi bi-eye"></i> List</span></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Term -->
+                    <div class="col-6 col-md-3">
+                        <div class="card k-card">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="text-secondary small">Active Term</div>
+                                        <div class="h4 m-0 fw-bold">{{ data.active_term|default:"None" }}</div>
+                                    </div>
+                                    <a href="#"><span class="k-pill"><i class="bi bi-eye"></i> Full Timetable</span></a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Upcoming Lessons/Sessions Table -->
-        {% if sessions or lessons %}
-        <div class="row mt-4">
-            <div class="col-12">
-                <h5 class="fw-semibold mb-3">Upcoming for {{ child.user.get_full_name }}</h5>
+
+                <!-- Upcoming Sessions Table -->
                 <div class="table-responsive">
                     <table class="table table-striped">
-                        <thead><tr><th>Date/Time</th><th>Subject</th><th>Platform</th><th>Status</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Subject</th>
+                                <th>Platform</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                            {% for session in sessions|slice:":5" %}
+                            {% for session in data.sessions|slice:":5" %}
                             <tr>
                                 <td>{{ session.scheduled_at|date:"M d, Y h:i A" }}</td>
                                 <td>{{ session.subject.name }}</td>
                                 <td>
                                     <span class="badge bg-info">{{ session.platform|title }}</span>
-                                    {% if session.meeting_link %}<a href="{{ session.meeting_link }}" class="ms-1">Join</a>{% endif %}
+                                    {% if session.meeting_link %}
+                                        <a href="{{ session.meeting_link }}" class="ms-1">Join</a>
+                                    {% endif %}
                                 </td>
                                 <td><span class="badge bg-success">Pending</span></td>
                             </tr>
@@ -114,9 +126,11 @@
                         </tbody>
                     </table>
                 </div>
+
             </div>
+            {% endfor %}
         </div>
-        {% endif %}
+
     </div>
 </section>
 {% endblock %}

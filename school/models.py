@@ -332,6 +332,9 @@ class Attendance(models.Model):
     def __str__(self):
         return f"{self.enrollment.student} - {self.get_status_display()} on {self.lesson.date if self.lesson else 'N/A'}"
 
+
+
+
 # DisciplineRecord
 class DisciplineRecord(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='discipline_records')
@@ -415,6 +418,17 @@ class ScanLog(models.Model):
 
     def __str__(self):
         return f"ScanLog: {self.smart_id} at {self.scanned_at}"
+
+class GradeAttendance(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='grade_attendance')
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE)
+    status = models.CharField(max_length=5, choices=ATTENDANCE_STATUS_CHOICES, default='P')
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    scan_log = models.ForeignKey(ScanLog, null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return f"{self.student.user.get_full_name()} - {self.status}"    
+
 # Payment model 
 class Payment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)  # Nullable for general payments

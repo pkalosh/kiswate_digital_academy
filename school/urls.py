@@ -48,7 +48,14 @@ urlpatterns = [
     path('subjects/create/', views.subject_create, name='subject-create'),
     path('subjects/<int:pk>/edit/', views.subject_edit, name='subject-edit'),
     path('subjects/<int:pk>/delete/', views.subject_delete, name='subject-delete'),
-    
+
+    #school Teacher Subjects
+    # Subjects Management
+    path('school/<int:staff_id>/subjects/', views.school_teacher_subjects, name='school-teacher-subjects'),
+    path('subjects/<int:staff_id>/create/', views.subject_teacher_create, name='subject-teacher-create'),
+    path('subjects/<int:staff_id>/<int:pk>/edit/', views.subject_teacher_edit, name='subject-teacher-edit'),
+    path('subjects/<int:staff_id>/<int:pk>/delete/', views.subject_teacher_delete, name='subject-teacher-delete'),
+
     # Enrollment Management
     path('enrollments/', views.school_enrollment, name='school-enrollment'),
     path('enrollments/create/', views.enrollment_create, name='enrollment-create'),
@@ -66,6 +73,12 @@ urlpatterns = [
     path('lessons/create/', views.lesson_create, name='lesson-create'),
     path('lessons/<int:lesson_id>/edit/', views.lesson_edit, name='lesson-edit'),
     path('lessons/<int:lesson_id>/delete/', views.lesson_delete, name='lesson-delete'),
+
+    #Lesson from Teachers
+    path('teacher/<int:staff_id>/lessons/', views.teacher_lessons, name='teacher-lessons'),
+    path('teacher/lessons/create/', views.teacher_lesson_create, name='teacher-lesson-create'),
+    path('teacher/lessons/<int:lesson_id>/edit/', views.teacher_lesson_edit, name='teacher-lesson-edit'),
+    path('teacher/lessons/<int:lesson_id>/delete/', views.teacher_lesson_delete, name='teacher-lesson-delete'),
     
     # Sessions/Virtual Classes
     path('sessions/', views.school_virtual_classes, name='school-sessions'),
@@ -81,6 +94,14 @@ urlpatterns = [
     path('attendance/<int:attendance_id>/delete/', views.attendance_delete, name='attendance-delete'),
     path('attendance/<int:attendance_id>/edit/', views.attendance_edit, name='attendance-edit'),
 
+    # Attendance Reports
+    path('teacher/attendance/', views.teacher_attendance, name='teacher-attendance'),
+    path('teacher/<int:lesson_id>/attendance/summary/', views.teacher_attendance_summary, name='teacher-attendance-summary'),
+    path('teacher/attendance/<int:lesson_id>/mark/', views.teacher_attendance_mark, name='teacher-attendance-mark'),
+    path('teacher/attendance/<int:attendance_id>/edit/', views.teacher_attendance_edit, name='teacher-attendance-edit'),
+    path('teacher/attendance/<int:attendance_id>/delete/', views.teacher_attendance_delete, name='teacher-attendance-delete'),
+    path('teacher/attendance/<int:grade_id>/class/', views.teacher_class_attendance_report, name='teacher-class-attendance-report'),
+
     
     # Discipline Management
     path('discipline/', views.school_discipline, name='school-discipline'),
@@ -88,7 +109,11 @@ urlpatterns = [
     path('discipline/<int:pk>/edit/', views.discipline_edit, name='discipline-edit'),
     path('discipline/<int:pk>/delete/', views.discipline_delete, name='discipline-delete'),
     # Add edit/delete as needed
-    
+    #teacher discipline'
+    path('teacher/discipline/', views.teacher_discipline, name='teacher-discipline'),
+    path('teacher/discipline/create/', views.teacher_discipline_create, name='teacher-discipline-create'),
+    path('teacher/discipline/<int:pk>/edit/', views.teacher_discipline_edit, name='teacher-discipline-edit'),
+    path('teacher/discipline/<int:pk>/delete/', views.teacher_discipline_delete, name='teacher-discipline-delete'),
     # Notifications
     path('notifications/', views.school_notifications, name='school-notifications'),
     path('notifications/send/', views.notification_send, name='notification-send'),
@@ -104,7 +129,7 @@ urlpatterns = [
     path('assignments/<int:pk>/edit/', views.assignment_edit, name='assignment-edit'),
     path('assignments/<int:pk>/delete/', views.assignment_delete, name='assignment-delete'),
 
-    path('submissions/', views.school_students_submissions, name='school-submissions'),
+    path('submissions/<int:pk>/', views.school_students_submissions, name='assignment-submissions'),
     path('submissions/<int:pk>/grade/', views.submission_grade, name='submission-grade'),
     # student submission create
     path('submissions/create/', views.submission_create, name='submission-create'),

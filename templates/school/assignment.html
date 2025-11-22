@@ -1,4 +1,4 @@
-{# templates/school/assignment.html #}
+{# templates/school/teacher/assignment.html #}
 {% extends 'school/base.html' %}
 {% block title %}Assignments | {{ school.name }}{% endblock %}
 
@@ -10,7 +10,7 @@
       <h6 class="m-0 fw-bold">Assignments</h6>
       <nav aria-label="breadcrumb" class="small">
         <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
           <li class="breadcrumb-item active" aria-current="page">Assignments</li>
         </ol>
       </nav>

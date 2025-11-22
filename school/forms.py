@@ -281,8 +281,36 @@ class ParentCreationForm(BaseForm):
         pass
 
 class ParentEditForm(ParentCreationForm):
+
     class Meta(ParentCreationForm.Meta):
-        exclude = ['parent_id']  # ID not editable
+        exclude = ['parent_id']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Remove creation-only fields
+        creation_fields = ['send_email', 'reset_password', 'email',
+                           'first_name', 'last_name', 'phone_number', 'country']
+
+        for field in creation_fields:
+            if field in self.fields:
+                self.fields.pop(field)
+
+    def save(self, commit=True):
+        """
+        Edit parent WITHOUT re-running the user creation logic
+        present in ParentCreationForm.save().
+        """
+        # IMPORTANT: use ModelForm save(), not ParentCreationForm.save()
+        parent = super(ParentCreationForm, self).save(commit=False)
+
+        # You can update 'phone' or other fields if needed:
+        # parent.phone = parent.user.phone_number
+
+        if commit:
+            parent.save()
+
+        return parent
 
 # ------------------------------- STAFF FORMS -------------------------------
 class StaffCreationForm(BaseForm):
@@ -326,26 +354,28 @@ class StaffCreationForm(BaseForm):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
     def save(self, commit=True):
-        # Create user using explicit form fields
         staff = super().save(commit=False)
+
+        # Generate temp password
         temp_password = self.generate_temp_password()
 
-        user = User.objects.create_user(
-            phone_number=self.cleaned_data['phone_number'],
-            first_name=self.cleaned_data['first_name'],
-            last_name=self.cleaned_data['last_name'],
-            email=self.cleaned_data.get('email') or f"{self.cleaned_data['staff_id']}@example.com",
-            password=temp_password,
-        )
+        # Create User
+        user_data = {
+            'first_name': self.cleaned_data['first_name'],
+            'last_name': self.cleaned_data['last_name'],
+            'email': self.cleaned_data.get('email') or f"{self.cleaned_data['staff_id']}@example.com",
+            'password': temp_password,
+            'is_staff': True,
+            'is_verified': True,
+            'is_teacher': True,  # Assuming staff are teachers by default
+        }
+        if hasattr(User, 'phone_number'):
+            user_data['phone_number'] = self.cleaned_data.get('phone_number', '')
 
-        # Optional: save phone_number if your User model supports it
-        if hasattr(user, 'phone_number'):
-            user.phone_number = self.cleaned_data.get('phone_number', '')
-            user.save()
-
+        user = User.objects.create_user(**user_data)
         staff.user = user
 
-        # Attach school if provided
+        # Attach school
         if self.school:
             staff.school = self.school
 
@@ -353,7 +383,6 @@ class StaffCreationForm(BaseForm):
             staff.save()
             self.save_m2m()
 
-        # Send welcome email if requested
         if self.cleaned_data.get('send_email'):
             self.send_welcome_email(staff, temp_password)
 
@@ -439,7 +468,7 @@ class StudentCreationForm(BaseForm):
         student = super().save(commit=False)
         student.user = user
         student.school = self.school
-        student.parents = self.cleaned_data.get('parents', [])
+        # student.parents = self.cleaned_data.get('parents', [])
 
         if commit:
             student.save()
@@ -491,7 +520,7 @@ class TimetableForm(BaseForm):
         }
 
 # ------------------------------- LESSON FORM -------------------------------
-class LessonForm(forms.ModelForm):
+class LessonForm(BaseForm):
     class Meta:
         model = Lesson
         fields = ['timetable', 'subject', 'teacher', 'date', 'start_time','day_of_week', 'end_time', 'room', 'is_canceled', 'notes']

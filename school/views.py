@@ -42,7 +42,7 @@ from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
-    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment
+    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -82,7 +82,7 @@ def dashboard(request):
                 request, 
                 f"You do not have permission to access this page. (User: {request.user.email})"
             )
-            return redirect('school:login')  # redirect to login or some "no access" page
+            return redirect('userauths:sign-in')  # redirect to login or some "no access" page
 
     # Aggregate data
     total_teachers = StaffProfile.objects.filter(school=school, position='teacher').count()
@@ -441,10 +441,6 @@ def parent_list_create(request):
 
 @login_required
 def parent_edit(request, pk):
-    """
-    Edit via modal form POST.
-    Redirects back to list on success/error.
-    """
     try:
         school = request.user.school_admin_profile
     except AttributeError:
@@ -459,18 +455,20 @@ def parent_edit(request, pk):
             form.save()
             messages.success(
                 request,
-                f'Successfully updated parent "{parent.user.get_full_name()}". '
-                f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}. '
-                f'Password reset: {"Yes" if form.cleaned_data["reset_password"] else "No"}.'
+                f'Successfully updated parent "{parent.user.get_full_name()}".'
             )
             logger.info(f"Updated parent {parent.parent_id}.")
-            return redirect('school:parent_list_create')  # Back to list (modal closes)
+            return redirect('school:parent_list_create')
         else:
             messages.error(request, "Please correct the form errors.")
-            # Re-render list with errors (modal will show on reopen, but since redirect, user sees list)
-    # For GET (if direct access): Redirect to list or render full edit (but modal-driven, so redirect)
+            # Still redirect back to list (modal-based editing)
+            return redirect('school:parent_list_create')
+
+    # If GET, editing is via modal only, so redirect to list
     messages.info(request, "Use the edit button in the list to modify.")
     return redirect('school:parent_list_create')
+
+
 
 
 @login_required
@@ -526,6 +524,7 @@ def staff_list_create(request):
             logger.info(f"Created staff {staff.staff_id} for school {school.name}.")
             return redirect('school:staff_list_create')
         else:
+            print(form.errors)  # <-- DEBUG: see why it's invalid
             messages.error(request, "Please correct the form errors below.")
     else:
         form = StaffCreationForm(school=school)
@@ -770,6 +769,115 @@ def school_certificates(request):
 
 def scholarships(request):
     return render(request, "school/scholarship.html", {})
+
+@login_required
+def school_teacher_subjects(request, staff_id):
+    """
+    View for school admin to manage subjects assigned to a specific teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+        print(school)
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
+    
+    query = request.GET.get('q', '')
+    subjects = Subject.objects.filter(school=school, teacher=teacher).select_related('grade')
+    if query:
+        subjects = subjects.filter(
+            Q(name__icontains=query) | Q(code__icontains=query)
+        )
+    form = SubjectForm(school=school)
+
+    context = {
+        'subjects': subjects,
+        'teacher': teacher,
+        'form': form,
+        'school': school,
+        'query': query,
+    }
+    return render(request, 'school/teacher/subjects.html', context)
+
+@login_required
+def subject_teacher_create(request, staff_id):
+    """
+    Assign a subject to a teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('school:school-subjects', staff_id=staff_id)
+    
+    teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
+    
+    if request.method == 'POST':
+        subject_id = request.POST.get('subject_id')
+        subject = get_object_or_404(Subject, pk=subject_id, school=school)
+        
+        if subject.teacher == teacher:
+            messages.warning(request, f'Subject "{subject.name}" is already assigned to {teacher.user.get_full_name()}.')
+        else:
+            subject.teacher = teacher
+            subject.save()
+            messages.success(request, f'Subject "{subject.name}" assigned to {teacher.user.get_full_name()}.')
+            logger.info(f"Assigned subject {subject.name} to teacher {teacher.user.get_full_name()} for school {school.name}.")
+        
+        return redirect('school:school-teacher-subjects', staff_id=staff_id)
+    
+    return redirect('school:school-teacher-subjects', staff_id=staff_id)
+
+@login_required
+def subject_teacher_edit(request, staff_id, pk):
+    """
+    Edit the subject assigned to a teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('school:school-subjects')
+    
+    teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
+    subject = get_object_or_404(Subject, pk=pk, school=school)
+    
+    if request.method == 'POST':
+        form = SubjectForm(request.POST, instance=subject, school=school)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Subject "{subject.name}" updated successfully.')
+            return redirect('school:school-teacher-subjects', staff_id=staff_id)
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{form.fields[field].label}: {error}")
+    
+    return redirect('school:school-teacher-subjects', staff_id=staff_id)
+
+@login_required
+def subject_teacher_delete(request, staff_id, pk):
+    """
+    Remove a subject from a teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('school:school-subjects')
+    
+    teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
+    subject = get_object_or_404(Subject, pk=pk, school=school)
+    
+    if request.method == 'POST':
+        subject.teacher = None
+        subject.save()
+        messages.success(request, f'Subject "{subject.name}" removed from {teacher.user.get_full_name()}.')
+        return redirect('school:school-teacher-subjects', staff_id=staff_id)
+    
+    return redirect('school:school-teacher-subjects', staff_id=staff_id)
 
 
 @login_required
@@ -1079,6 +1187,120 @@ def timetable_delete(request, pk):
 
 
 # List lessons via @login_required
+@login_required
+def teacher_lessons(request, staff_id):
+    """
+    List all lessons for a specific teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
+    lessons = Lesson.objects.filter(teacher=teacher).select_related('subject', 'timetable').order_by('date', 'start_time')
+    
+    query = request.GET.get('q', '')
+    if query:
+        lessons = lessons.filter(
+            Q(subject__name__icontains=query) |
+            Q(timetable__grade__name__icontains=query) |
+            Q(room__icontains=query)
+        )
+    
+    paginator = Paginator(lessons, 10)
+    page_number = request.GET.get('page')
+    lessons_page = paginator.get_page(page_number)
+    form = LessonForm(school=school)
+    context = {
+        'teacher': teacher,
+        'lessons': lessons_page,
+        'school': school,
+         'form': form,  
+        'query': query,
+    }
+    return render(request, 'school/teacher/lessons.html', context)
+
+@login_required
+def teacher_lesson_create(request):
+    """
+    Create a new lesson for a specific teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    if request.method == 'POST':
+        form = LessonForm(request.POST, school=school)
+        if form.is_valid():
+            lesson = form.save(commit=False)
+            lesson.teacher = request.user.staffprofile
+            lesson.save()
+            messages.success(request, f'Lesson for {lesson.subject} on {lesson.date} created.')
+            return redirect('school:teacher-lessons', staff_id=request.user.staffprofile.id)
+    else:
+        form = LessonForm(school=school)
+    
+    context = {
+        'form': form,
+        'school': school,
+        'teacher': request.user.staffprofile,
+    }
+    return render(request, 'school/teacher/lesson_form.html', context)  # Or modal-redirect
+
+
+@login_required
+def teacher_lesson_edit(request, lesson_id):
+    """
+    Edit an existing lesson for a specific teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    lesson = get_object_or_404(Lesson, pk=lesson_id, teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        form = LessonForm(request.POST, instance=lesson, school=school)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Lesson for {lesson.subject} on {lesson.date} updated.')
+            return redirect('school:teacher-lessons', staff_id=request.user.staffprofile.id)
+    else:
+        form = LessonForm(instance=lesson, school=school)
+    
+    context = {
+        'form': form,
+        'lesson': lesson,
+        'school': school,
+        'teacher': request.user.staffprofile,
+    }
+    return render(request, 'school/teacher/lesson_form.html', context)  # Or modal-redirect
+
+
+@login_required
+def teacher_lesson_delete(request, lesson_id):
+    """
+    Delete a lesson for a specific teacher.
+    """
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    lesson = get_object_or_404(Lesson, pk=lesson_id, teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        lesson.delete()
+        messages.success(request, f'Lesson for {lesson.subject} on {lesson.date} deleted.')
+        return redirect('school:teacher-lessons', staff_id=request.user.staffprofile.id)
+    messages.warning(request, "Confirm deletion.")
+    return redirect('school:teacher-lessons', staff_id=request.user.staffprofile.id)
+
 def lesson_list(request, timetable_id):
     """
     List all lessons for a specific timetable
@@ -1253,6 +1475,104 @@ def session_delete(request, session_id):
 
 # Create/edit similar to above...
 
+# def auto_mark_attendance_from_scan(student, grade, scan_log, min_interval_sec=3000):
+#     recent = GradeAttendance.objects.filter(
+#         student=student,
+#         grade=grade,
+#         scan_log__scanned_at__gte=scan_log.scanned_at - timezone.timedelta(seconds=min_interval_sec)
+#     )
+#     if recent.exists():
+#         print(f"⚠️ Duplicate scan ignored for {student.user.get_full_name()} at {scan_log.scanned_at}")
+#         return
+
+#     GradeAttendance.objects.create(
+#         student=student,
+#         grade=grade,
+#         status='P',
+#         scan_log=scan_log
+#     )
+
+def auto_mark_attendance_from_scan(student, grade, scan_log=None):
+    """
+    Auto-mark attendance using the given scan log.
+    Only creates GradeAttendance if the scan came from a device ID starting with 'grade'.
+    If scan_log is None, use the latest ScanLog for the student.
+    """
+    if not scan_log:
+        scan_log = ScanLog.objects.filter(
+            smart_id__profile=student.user,
+            smart_id__school=grade.school
+        ).order_by('-scanned_at').first()
+
+    if not scan_log:
+        print(f"⚠️ No scan found for {student.user.get_full_name()}")
+        return
+
+    # Only mark if device_id starts with 'grade'
+    if scan_log.device_id.lower().startswith('grade'):
+        GradeAttendance.objects.create(
+            student=student,
+            grade=grade,
+            status='P',
+            scan_log=scan_log
+        )
+        print(f"✅ Attendance saved for {student.user.get_full_name()} at {scan_log.scanned_at}")
+    else:
+        print(f"⚠️ Scan ignored (device_id: {scan_log.device_id}) for {student.user.get_full_name()}")
+
+
+
+@login_required
+def teacher_class_attendance_report(request, grade_id):
+    school = request.user.staffprofile.school
+    grade = get_object_or_404(Grade, id=grade_id, school=school)
+
+    students = grade.students.all()
+    attendance_summary = []
+
+    # Handle POST save
+    if request.method == 'POST':
+        for student in students:
+            status_key = f"status_{student.id}"
+            status = request.POST.get(status_key)
+
+            if status:
+                # Update latest attendance OR create new if none exists
+                latest = GradeAttendance.objects.filter(student=student, grade=grade).order_by('-recorded_at').first()
+                if latest:
+                    latest.status = status
+                    latest.save()
+                else:
+                    GradeAttendance.objects.create(student=student, grade=grade, status=status)
+        
+        messages.success(request, "Attendance saved successfully!")
+        return redirect(request.path)
+
+    # GET → Show UI
+    for student in students:
+
+        # Auto-mark using ScanLog (creates new records for each scan)
+        auto_mark_attendance_from_scan(student, grade)
+
+        # Get latest attendance for display
+        latest = GradeAttendance.objects.filter(student=student, grade=grade).order_by('-recorded_at').first()
+
+        attendance_summary.append({
+            'student': student,
+            'existing': latest
+        })
+
+    paginator = Paginator(attendance_summary, 50)
+    page = request.GET.get('page')
+    attendance_summary = paginator.get_page(page)
+
+    context = {
+        'grade': grade,
+        'attendance_summary': attendance_summary,
+        'school': school,
+    }
+    return render(request, 'school/teacher/class_attendance_report.html', context)
+
 @login_required
 def school_attendance(request):
     try:
@@ -1348,6 +1668,194 @@ def attendance_summary(request):
     }
     return render(request, 'school/attendance_summary.html', context)
 
+
+@login_required
+def teacher_attendance(request):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    attendances = Attendance.objects.filter(lesson__teacher=request.user.staffprofile).select_related('enrollment__student', 'lesson')
+    
+    paginator = Paginator(attendances, 50)
+    page = request.GET.get('page')
+    attendances_page = paginator.get_page(page)
+    
+    context = {
+        'attendances': attendances_page,
+        'school': school,
+    }
+    return render(request, 'school/teacher/attendance.html', context)
+
+@login_required
+def teacher_attendance_mark(request, lesson_id):
+    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
+    students = Enrollment.objects.filter(subject=lesson.subject, status='active')
+    attendance_dict = {
+        att.enrollment.id: att
+        for att in Attendance.objects.filter(lesson=lesson)
+    }
+
+    if request.method == 'POST':
+        for enrollment in students:
+            status = request.POST.get(f'status_{enrollment.id}', 'P')
+            Attendance.objects.update_or_create(
+                enrollment=enrollment,
+                lesson=lesson,
+                defaults={'status': status, 'marked_by': request.user.staffprofile}
+            )
+        messages.success(request, f'Attendance marked for {lesson.subject} on {lesson.date}.')
+        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
+
+    context = {
+        'school': request.user.staffprofile.school,
+        'lesson': lesson,
+        'students': students,
+        'attendance_dict': attendance_dict,
+    }
+    return render(request, 'school/teacher/attendance_mark.html', context)
+
+
+@login_required
+def teacher_attendance_edit(request, attendance_id):
+    attendance = get_object_or_404(Attendance, id=attendance_id, lesson__teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        form = AttendanceForm(request.POST, instance=attendance)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Attendance for {attendance.enrollment.student} updated successfully.')
+        else:
+            messages.error(request, "Error updating attendance. Check the form.")
+    return redirect('school:teacher-attendance')
+
+@login_required
+def teacher_attendance_delete(request, attendance_id):
+    attendance = get_object_or_404(Attendance, id=attendance_id, lesson__teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        attendance.delete()
+        messages.success(request, f'Attendance for {attendance.enrollment.student} deleted successfully.')
+    return redirect('school:teacher-attendance')
+
+@login_required
+def teacher_attendance_summary(request):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    period_start = request.GET.get('start')
+    period_end = request.GET.get('end')
+    if not period_start or not period_end:
+        period_start = timezone.now().date().replace(day=1)
+        period_end = timezone.now().date()
+    
+    lessons = Lesson.objects.filter(date__range=[period_start, period_end], teacher=request.user.staffprofile)
+    attendances = Attendance.objects.filter(lesson__in=lessons)
+    
+    summary = attendances.values('status').annotate(count=Count('status'))
+    total_sessions = lessons.count()
+    present_pct = (summary.get('P', {'count': 0})['count'] / (len(enrollments) * total_sessions)) * 100 if total_sessions else 0
+    
+    context = {
+        'summary': summary,
+        'period_start': period_start,
+        'period_end': period_end,
+        'present_pct': round(present_pct, 2),
+        'school': school,
+    }
+    return render(request, 'school/teacher/attendance_summary.html', context)
+
+#teacher discipline
+
+@login_required
+def teacher_discipline(request):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    records = DisciplineRecord.objects.filter(school=school, teacher=request.user.staffprofile).select_related('student')
+    
+    query = request.GET.get('q', '')
+    if query:
+        records = records.filter(
+            Q(student__user__first_name__icontains=query) | Q(description__icontains=query)
+        )
+    
+    paginator = Paginator(records, 10)
+    page_number = request.GET.get('page')
+    records_page = paginator.get_page(page_number)
+    form = DisciplineRecordForm(school=school)
+    context = {
+        'records': records_page,
+        'school': school,
+        'form': form,
+        'query': query,
+    }
+    return render(request, 'school/teacher/discipline.html', context)
+
+@login_required
+def teacher_discipline_create(request):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    if request.method == 'POST':
+        form = DisciplineRecordForm(request.POST, school=school)
+        if form.is_valid():
+            record = form.save(commit=False)
+            record.school = school
+            record.teacher = request.user.staffprofile
+            record.reported_by = request.user
+            record.save()
+            messages.success(request, f'Discipline record for {record.student} created.')
+            return redirect('school:teacher-discipline')
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{form.fields[field].label}: {error}")
+    return redirect('school:teacher-discipline')
+
+@login_required
+def teacher_discipline_delete(request, record_id):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    record = get_object_or_404(DisciplineRecord, id=record_id, school=school, teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        record.delete()
+        messages.success(request, f'Discipline record for {record.student} deleted.')
+    return redirect('school:teacher-discipline')
+
+@login_required
+def teacher_discipline_edit(request, record_id):
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('userauths:teacher-dashboard')
+    
+    record = get_object_or_404(DisciplineRecord, id=record_id, school=school, teacher=request.user.staffprofile)
+    if request.method == 'POST':
+        form = DisciplineRecordForm(request.POST, instance=record, school=school)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Discipline record for {record.student} updated.')
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{form.fields[field].label}: {error}")
+    return redirect('school:teacher-discipline')
+
 @login_required
 def school_discipline(request):
     try:
@@ -1388,14 +1896,18 @@ def discipline_create(request):
             record.teacher = request.user.staffprofile
             record.reported_by = request.user
             record.save()
-            # Trigger notification
-            Notification.objects.create(
-                recipient=record.student.parent.user,
-                title="Discipline Incident Logged",
-                message=f"An incident of {record.incident_type} has been recorded.",
-                related_discipline=record,
-                school=school
-            )
+            
+            # Trigger notification to first parent (User instance)
+            parent_user = record.student.parents.first().user if record.student.parents.exists() else None
+            if parent_user:
+                Notification.objects.create(
+                    recipient=parent_user,
+                    title="Discipline Incident Logged",
+                    message=f"An incident of {record.incident_type} has been recorded.",
+                    related_discipline=record,
+                    school=school
+                )
+
             messages.success(request, f'Discipline record for {record.student} created.')
             return redirect('school:school-discipline')
         else:
@@ -1555,7 +2067,7 @@ def export_pdf_report(request):
 @login_required
 def school_student_assignments(request):
     try:
-        school = request.user.school_admin_profile
+        school = request.user.staffprofile.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('school:dashboard')
@@ -1578,10 +2090,10 @@ def school_student_assignments(request):
 @login_required
 def assignment_create(request):
     try:
-        school = request.user.school_admin_profile
+        school = request.user.staffprofile.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-student-assignments')
+        return redirect('school:school-assignments')
     
     if request.method == 'POST':
         form = AssignmentForm(request.POST, school=school)
@@ -1591,19 +2103,19 @@ def assignment_create(request):
             assignment.teacher = request.user.staffprofile
             assignment.save()
             messages.success(request, f'Assignment "{assignment.title}" created successfully.')
-            return redirect('school:school-student-assignments')
+            return redirect('school:school-assignments')
         else:
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"{form.fields[field].label}: {error}")
-    return redirect('school:school-student-assignments')
+    return redirect('school:school-assignments')
 @login_required
 def assignment_edit(request, pk):
     try:
-        school = request.user.school_admin_profile
+        school = request.user.staffprofile.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-student-assignments')
+        return redirect('school:school-assignments')
     
     assignment = get_object_or_404(Assignment, pk=pk, school=school)
     if request.method == 'POST':
@@ -1611,35 +2123,35 @@ def assignment_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, f'Assignment "{assignment.title}" updated successfully.')
-            return redirect('school:school-student-assignments')
+            return redirect('school:school-assignments')
         else:
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"{form.fields[field].label}: {error}")
-    return redirect('school:school-student-assignments')
+    return redirect('school:school-assignments')
 
 @login_required
 def assignment_delete(request, pk):
     try:
-        school = request.user.school_admin_profile
+        school = request.user.staffprofile.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-student-assignments')
+        return redirect('school:school-assignments')
     
     assignment = get_object_or_404(Assignment, pk=pk, school=school)
     assignment.delete()
     messages.success(request, f'Assignment "{assignment.title}" deleted successfully.')
-    return redirect('school:school-student-assignments')
+    return redirect('school:school-assignments')
 # Delete assignment
 
 
 @login_required
-def school_students_submissions(request):
+def school_students_submissions(request, pk):
     try:
-        school = request.user.school_admin_profile
+        school = request.user.staffprofile.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:dashboard')
+        return redirect('userauths:teacher-dashboard')
     
     query = request.GET.get('q', '')
     submissions = Submission.objects.filter(school=school).select_related('enrollment__student', 'assignment')

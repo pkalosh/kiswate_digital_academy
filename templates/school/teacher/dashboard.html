@@ -14,7 +14,7 @@
                     <div class="text-secondary small">Today's Lessons</div>
                     <div class="h4 m-0 fw-bold">{{ today_lessons.count|default:"0" }}</div>
                   </div>
-                  <a href="{% url 'school:school-attendance' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Mark Attendance</span></a>
+                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> Mark Grade Attendance</span></a>
                 </div>
               </div>
             </div>
@@ -91,7 +91,7 @@
                                         <td>{{ lesson.date|date:"M d" }} {{ lesson.start_time }}</td>
                                         <td>{{ lesson.subject.name }}</td>
                                         <td>{{ lesson.room|default:"N/A" }}</td>
-                                        <td><a href="{% url 'school:attendance-mark' lesson.id %}" class="btn btn-sm btn-primary">Mark</a></td>
+                                        <td><a href="{% url 'school:teacher-attendance-mark' lesson.id %}" class="btn btn-sm btn-success">Mark</a></td>
                                     </tr>
                                     {% empty %}
                                     <tr><td colspan="4">No lessons for this grade.</td></tr>
@@ -101,6 +101,45 @@
                         </div>
                     </div>
                     {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+         <!-- Grade Attendance Section -->
+        {% if grades %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <h5 class="fw-semibold mb-3">Grade Attendance</h5>
+
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Grade</th>
+                                <th>Students</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grade in grades %}
+                                <tr>
+                                    <td>{{ grade.name }}</td>
+                                    <td>{{ grade.students.count }}</td>
+                                    <td>
+                                        <a href="{% url 'school:teacher-class-attendance-report' grade.id %}"
+                                           class="btn btn-sm btn-success">
+                                           <i class="bi bi-pencil-square"></i> Mark Attendance
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No grades assigned.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

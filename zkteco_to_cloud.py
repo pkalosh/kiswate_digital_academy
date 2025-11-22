@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'src.settings')  # replace with 
 
 django.setup()
 from userauths.models import User  # adjust path to your app
-from school.models import ScanLog, School, SmartID, Student  # adjust path to your app
+from school.models import ScanLog, School, SmartID, Student,Grade, GradeAttendance  # adjust path to your app
 from django.utils import timezone
 from django.db import IntegrityError
 
@@ -23,6 +23,7 @@ from django.db import IntegrityError
 
 DEVICES = [
     {"ip": "192.168.100.201", "id": "Device-A", "location": "Main Gate"},
+    # {"ip": "192.168.100.201", "id": "grade1", "location": "grade1"},
     # {"ip": "192.168.100.202", "id": "Device-B", "location": "Back Gate"},
     # {"ip": "192.168.100.303", "id": "Device-C", "location": "Office Entrance"},
 ]
@@ -166,7 +167,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
                     time.sleep(POLL_INTERVAL)
                     continue
 
-                # Save log to database
+                # Save log to ScanLog first
                 scan_record = save_scan_to_db(
                     user_id=latest_log.user_id,
                     scan_time=log_time,
@@ -179,55 +180,55 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
                     profile = smart_id.profile  # SmartID → profile → User
 
                     # -------------------------------
-                    # If the scanned user is a student
+                    # If device is a grade device → save GradeAttendance, no SMS
                     # -------------------------------
-                    if profile.is_student:
-                        print(f"📚 Student scan detected: {profile.email}")
-
+                    if device_id.lower().startswith("grade") and profile.is_student:
                         student = Student.objects.filter(
                             user=profile,
                             school=smart_id.school
                         ).first()
 
                         if student:
-                            parents = student.parent.all()
-                            full_name = f"{profile.first_name} {profile.last_name}"
-
-                            message = (
-                                f"New Scan: {full_name} at {location} "
-                                f"({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
+                            # Save attendance
+                            GradeAttendance.objects.create(
+                                student=student,
+                                grade=student.grade_level,
+                                status='P',  # Present
+                                scan_log=scan_record
                             )
-
-                            # Send SMS to each parent
-                            for parent in parents:
-                                phone = parent.phone  # Parent.phone is the correct field
-
-                                if phone:
-                                    _send_sms_via_eujim(phone, message)
-                                    print(f"📩 SMS sent to parent ({parent.user.email}): {phone}")
-                                else:
-                                    print(f"⚠️ Parent {parent.user.email} has no phone number.")
-
+                            print(f"✅ GradeAttendance saved for {profile.get_full_name()} ({device_id}) at {log_time}")
                         else:
-                            print(f"⚠️ No student record found for {profile.email}")
+                            print(f"⚠️ No student record found for {profile.email} on grade device.")
 
                     # -------------------------------
-                    # For non-students
+                    # Otherwise: regular SMS logic
                     # -------------------------------
                     else:
                         full_name = f"{profile.first_name} {profile.last_name}"
+
                         message = (
                             f"New Scan: {full_name} at {location} "
                             f"({log_time.strftime('%Y-%m-%d %H:%M:%S')})"
                         )
 
-                        phone = profile.phone_number
-
-                        if phone:
-                            _send_sms_via_eujim(phone, message)
-                            print(f"📩 SMS sent to user ({profile.email}): {phone}")
+                        if profile.is_student:
+                            student = Student.objects.filter(user=profile, school=smart_id.school).first()
+                            if student:
+                                parents = student.parents.all()
+                                for parent in parents:
+                                    phone = parent.phone
+                                    if phone:
+                                        _send_sms_via_eujim(phone, message)
+                                        print(f"📩 SMS sent to parent ({parent.user.email}): {phone}")
+                                    else:
+                                        print(f"⚠️ Parent {parent.user.email} has no phone number.")
                         else:
-                            print(f"⚠️ User {profile.email} has no phone number.")
+                            phone = profile.phone_number
+                            if phone:
+                                _send_sms_via_eujim(phone, message)
+                                print(f"📩 SMS sent to user ({profile.email}): {phone}")
+                            else:
+                                print(f"⚠️ User {profile.email} has no phone number.")
 
                     last_scan_time = log_time
 
@@ -249,6 +250,7 @@ def poll_device_and_send_sms_for_device(ip, device_id, location):
         except:
             pass
         print(f"🔌 Disconnected from {device_id}")
+
 
 
 def poll_all_devices_parallel():

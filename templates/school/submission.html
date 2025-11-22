@@ -1,5 +1,5 @@
 {# templates/school/submission.html #}
-{% extends 'school/base.html' %}
+{% extends 'school/teacher/base.html' %}
 {% block title %}Submissions | {{ school.name }}{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
       <h6 class="m-0 fw-bold">Submissions</h6>
       <nav aria-label="breadcrumb" class="small">
         <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
           <li class="breadcrumb-item active" aria-current="page">Submissions</li>
         </ol>
       </nav>
@@ -48,7 +48,6 @@
                 {{ submissions|length }}
             {% endif %})</h5>
             
-      <a class="btn btn-sm btn-outline-success" href="#" data-bs-toggle="modal" data-bs-target="#newSubmissionModal">New Submission</a>
       <a class="btn btn-sm btn-outline-success" href="#" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
     </div>
 
@@ -75,7 +74,7 @@
               <td>{{ s.feedback|default:"-" }}</td>
               <td>
                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#gradeModal" data-id="{{ s.id }}"><i class="bi bi-pen"></i></button>
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'school:submission-download' s.id %}"><i class="bi bi-download"></i></a>
+                <a class="btn btn-sm btn-outline-secondary" href=""><i class="bi bi-download"></i></a>
               </td>
             </tr>
             {% empty %}
@@ -99,54 +98,6 @@
 </section>
 
 
-
-<!-- New Submission Modal -->
-<div class="modal fade" id="newSubmissionModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form method="post" action="{% url 'school:submission-create' %}" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="modal-header">
-          <h5 class="modal-title">Add New Submission</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label for="id_enrollment" class="form-label">Student</label>
-            <select name="enrollment" id="id_enrollment" class="form-select" required>
-              {% for e in enrollments %}
-                <option value="{{ e.id }}">{{ e.student.user.get_full_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label for="id_assignment" class="form-label">Assignment</label>
-            <select name="assignment" id="id_assignment" class="form-select" required>
-              {% for a in assignments %}
-                <option value="{{ a.id }}">{{ a.title }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label for="id_file" class="form-label">File</label>
-            <input type="file" name="file" id="id_file" class="form-control" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-success">Submit</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-
-<!-- Export Modal -->
-<div class="modal fade" id="exportModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
-  <div class="modal-header"><h5 class="modal-title">Export Submissions</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-  <div class="modal-body"><p>Export as CSV or PDF?</p><a class="btn btn-outline-primary me-2" href="#">CSV</a><a class="btn btn-outline-secondary" href="#">PDF</a></div>
-</div></div></div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
