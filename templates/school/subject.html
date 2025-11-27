@@ -75,7 +75,6 @@
             <tr>
               <td><strong>{{ subject.name }}</strong></td>
               <td><code>{{ subject.code }}</code></td>
-              <td>{{ subject.teacher.user.get_full_name }}</td>
               <td>{{ subject.grade.name }}</td>
               <td>{{ subject.start_date }}</td>
               <td>{{ subject.end_date|default:"-" }}</td>
@@ -97,7 +96,6 @@
                         data-name="{{ subject.name|escapejs }}"
                         data-code="{{ subject.code|escapejs }}"
                         data-description="{{ subject.description|escapejs }}"
-                        data-teacher="{{ subject.teacher.id }}"
                         data-grade="{{ subject.grade.id }}"
                         data-start_date="{{ subject.start_date }}"
                         data-end_date="{{ subject.end_date }}"
@@ -157,11 +155,6 @@
               <div class="col-md-6 mb-3">
                 {{ form.code.label_tag }}
                 {{ form.code }}
-              </div>
-
-              <div class="col-md-6 mb-3">
-                {{ form.teacher.label_tag }}
-                {{ form.teacher }}
               </div>
 
               <div class="col-md-6 mb-3">
@@ -282,7 +275,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelector('#id_name').value = button.dataset.name;
         document.querySelector('#id_code').value = button.dataset.code;
         document.querySelector('#id_description').value = button.dataset.description;
-        document.querySelector('#id_teacher').value = button.dataset.teacher;
         document.querySelector('#id_grade').value = button.dataset.grade;
         document.querySelector('#id_start_date').value = button.dataset.start_date;
         document.querySelector('#id_end_date').value = button.dataset.end_date;

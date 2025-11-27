@@ -492,7 +492,7 @@ class StudentEditForm(StudentCreationForm):
 class SubjectForm(BaseForm):
     class Meta:
         model = Subject
-        fields = ['name', 'description', 'code', 'teacher', 'grade', 'start_date', 'end_date', 'is_active']
+        fields = ['name', 'description', 'code', 'grade', 'start_date', 'end_date', 'is_active']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'start_date': forms.DateInput(attrs={'type': 'date'}),

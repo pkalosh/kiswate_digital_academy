@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'userauths',
     'school',
     'kiswate_digital_app',
+    'widget_tweaks',  # <- add this line
 ]
 
 MIDDLEWARE = [

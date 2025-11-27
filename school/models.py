@@ -135,6 +135,42 @@ WEEKDAY_CHOICES = [
     ('friday', 'Friday'),
 ]
 
+class County(models.Model):
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+    
+class City(models.Model):
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    county = models.ForeignKey(County, on_delete=models.CASCADE, related_name='cities', blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+class Constituency(models.Model):
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    county = models.ForeignKey(County, on_delete=models.CASCADE, related_name='constituencies', blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+    
+class SubCounty(models.Model):
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    county = models.ForeignKey(County, on_delete=models.CASCADE, related_name='sub_counties', blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+class Ward(models.Model):
+    name = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    constituency = models.ForeignKey(Constituency, on_delete=models.CASCADE, related_name='wards', blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+# School model
+
 class School(models.Model):
     name = models.CharField(max_length=255)
     school_admin = models.OneToOneField(User, on_delete=models.CASCADE, related_name='school_admin_profile')
@@ -142,6 +178,11 @@ class School(models.Model):
     address = models.TextField(blank=True)
     contact_email = models.EmailField()
     contact_phone = models.CharField(max_length=15)
+    county = models.ForeignKey(County, on_delete=models.SET_NULL, null=True, blank=True)
+    city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True, blank=True)
+    constituency = models.ForeignKey(Constituency, on_delete=models.SET_NULL, null=True, blank=True)
+    sub_county = models.ForeignKey(SubCounty, on_delete=models.SET_NULL, null=True, blank=True)
+    ward = models.ForeignKey(Ward, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 
@@ -152,6 +193,7 @@ class School(models.Model):
 class Grade(models.Model):
     name = models.CharField(max_length=50)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='grades')
+    lessons_per_term = models.PositiveIntegerField(default=9)
     description = models.TextField(blank=True)
     code = models.CharField(max_length=50, db_index=True)
     capacity = models.PositiveIntegerField(default=30)
@@ -164,6 +206,19 @@ class Grade(models.Model):
     def __str__(self):
         return f"{self.name} - {self.school.name}"
 
+class Streams(models.Model):
+    name = models.CharField(max_length=50)
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='streams')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='streams')
+    capacity = models.PositiveIntegerField(default=30)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['grade', 'name', 'school']
+
+    def __str__(self):
+        return f"{self.name} - {self.grade.name} - {self.school.name}"
+
 #Role Model for granular permissions
 class Role(models.Model):
     name = models.CharField(max_length=50, unique=True)  # e.g., 'mark_suspension', 'view_parental_dashboard'
@@ -172,6 +227,21 @@ class Role(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# Subject
+class Subject(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    code = models.CharField(max_length=100, blank=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
+    start_date = models.DateField()
+    end_date = models.DateField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.teacher}"
 
 # StaffProfile
 class StaffProfile(models.Model):
@@ -183,10 +253,10 @@ class StaffProfile(models.Model):
     position = models.CharField(max_length=100, choices=POSITION_CHOICES)
     tsc_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
     qualification = models.TextField(blank=True, null=True)
-    subjects = models.CharField(max_length=255, blank=True, null=True)
+    subjects = models.ManyToManyField(Subject, related_name='teachers_subjects')  # Changed(max_length=255, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='teachers/', blank=True, null=True)
-    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    school = models.ForeignKey(School, on_delete=models.CASCADE)    
     # New: department for support services (e.g., 'kitchen', 'security')
     department = models.CharField(max_length=50, blank=True)  # e.g., 'Dining Hall', 'School Gate'
     # New: M2M for permissions
@@ -227,20 +297,6 @@ class Student(models.Model):
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.student_id}) - {self.school.name}"
 
-# Subject
-class Subject(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    code = models.CharField(max_length=100, blank=True)
-    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='subjects_taught')
-    school = models.ForeignKey(School, on_delete=models.CASCADE)
-    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
-    start_date = models.DateField()
-    end_date = models.DateField(blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-
-    def __str__(self):
-        return f"{self.name} - {self.teacher}"
 
 # Enrollment
 class Enrollment(models.Model):

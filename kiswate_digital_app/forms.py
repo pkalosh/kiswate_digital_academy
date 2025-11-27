@@ -9,7 +9,7 @@ from django.core.validators import MinValueValidator
 from django.conf import settings
 from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
-from school.models import School,Scholarship,SchoolSubscription,SubscriptionPlan
+from school.models import School,Scholarship,SchoolSubscription,SubscriptionPlan,County,City,Constituency,SubCounty,Ward, Streams,Grade
 from userauths.models import User
 
 
@@ -72,7 +72,7 @@ class SchoolCreationForm(forms.ModelForm):
 
     class Meta:
         model = School
-        fields = ['name', 'code', 'address', 'contact_email', 'contact_phone']
+        fields = ['name', 'code','county','city','constituency','sub_county','ward', 'address', 'contact_email', 'contact_phone']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'School name'}),
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Unique school code'}),
@@ -80,6 +80,37 @@ class SchoolCreationForm(forms.ModelForm):
             'contact_email': forms.EmailInput(attrs={'class': 'form-control'}),
             'contact_phone': forms.TextInput(attrs={'class': 'form-control'}),
         }
+
+        county = forms.ModelChoiceField(
+            queryset=County.objects.all(),
+            required=False,
+            widget=forms.Select(attrs={'class': 'form-select'})
+        )
+
+        city = forms.ModelChoiceField(
+            queryset=City.objects.all(),
+            required=False,
+            widget=forms.Select(attrs={'class': 'form-select'})
+        )
+
+        constituency = forms.ModelChoiceField(
+            queryset=Constituency.objects.all(),
+            required=False,
+            widget=forms.Select(attrs={'class': 'form-select'})
+        )
+
+        sub_county = forms.ModelChoiceField(
+            queryset=SubCounty.objects.all(),
+            required=False,
+            widget=forms.Select(attrs={'class': 'form-select'})
+        )
+
+        ward = forms.ModelChoiceField(
+            queryset=Ward.objects.all(),
+            required=False,
+            widget=forms.Select(attrs={'class': 'form-select'})
+        )
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -144,13 +175,13 @@ class SchoolCreationForm(forms.ModelForm):
             Best regards,
             System Admin
             """
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [admin_user.email],
-                fail_silently=False,
-            )
+            # send_mail(
+            #     subject,
+            #     message,
+            #     settings.DEFAULT_FROM_EMAIL,
+            #     [admin_user.email],
+            #     fail_silently=False,
+            # )
 
         return school, password  # Return for messages
 
@@ -472,3 +503,10 @@ class SchoolSubscriptionForm(forms.ModelForm):
             if current_buses_count > max_buses:
                 raise ValidationError(_("Bus count exceeds plan limit."))
         return cleaned_data
+
+
+class StreamForm(forms.ModelForm):
+    class Meta:
+        model = Streams
+        fields = ['name','capacity']
+        #filter grades for the school

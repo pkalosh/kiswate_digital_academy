@@ -1,466 +1,292 @@
-<!-- templates/school/staff.html -->
 {% extends 'school/base.html' %}
 {% load static %}
-{% block title %}Staff | {{ school.name }}{% endblock %}
+{% load widget_tweaks %}
+{% block title %}School Users | {{ school.name }}{% endblock %}
 {% block content %}
-  <header class="header d-flex align-items-center justify-content-between">
-    <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-      <div>
-        <h6 class="m-0 fw-bold">Staff Management</h6>
-        <nav aria-label="breadcrumb" class="small">
-          <ol class="breadcrumb mb-0">
-            <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Staff</li>
-          </ol>
-        </nav>
-      </div>
-    </div>
-    <div class="d-flex align-items-center gap-2">
-      <form method="get" class="d-inline">
-        <div class="input-group input-group-sm" style="width: 250px;">
-          <input type="text" name="q" class="form-control" placeholder="Search staff by name, ID, position..." value="{{ query }}">
-          <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
-        </div>
-      </form>
-      <button class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#addStaffModal">
-        <i class="bi bi-person-plus"></i> Add Staff
-      </button>
-      <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
-    </div>
-  </header>
 
-  <section class="content container-fluid py-4">
-    <!-- Messages -->
+<section class="content container-fluid py-4">
+
+    <!-- System Messages -->
     {% if messages %}
-      <div class="row">
+    <div class="row">
         {% for message in messages %}
-          <div class="col-12">
+        <div class="col-12">
             <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-              <i class="bi bi-{{ message.tags|lower }}-circle me-2"></i>
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-          </div>
+        </div>
         {% endfor %}
-      </div>
+    </div>
     {% endif %}
 
-    <!-- Staff List -->
-    <div class="card shadow-sm border-0 rounded-4">
-      <div class="card-header d-flex justify-content-between align-items-center bg-light">
-        <h5 class="mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>All Staff ({{ staff_list.count }})</h5>
-        <div>
-          <a href="#" class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#exportModal">
-            <i class="bi bi-download"></i> Export
-          </a>
-          <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addStaffModal">
-            <i class="bi bi-person-plus"></i> Add New
-          </button>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead class="table-light">
-              <tr>
-                <th><i class="bi bi-person-circle"></i> Photo</th>
-                <th><i class="bi bi-person-badge"></i> Name / ID</th>
-                <th><i class="bi bi-telephone"></i> Phone</th>
-                <th><i class="bi bi-briefcase"></i> Position</th>
-                <th><i class="bi bi-book"></i> Subjects / TSC</th>
-                <th><i class="bi bi-person-lines-fill"></i> Bio Snippet</th>
-                <th><i class="bi bi-gear"></i> Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for staff in staff_list %}
-              <tr>
-                <td>
-                  {% if staff.profile_picture %}
-                    <img src="{{ staff.profile_picture.url }}" alt="{{ staff.user.get_full_name }}" class="rounded-circle shadow-sm" width="40" height="40" style="object-fit: cover;">
-                  {% else %}
-                    <span class="avatar-placeholder bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width: 40px; height: 40px; font-size: 0.8em;">
-                      {{ staff.user.get_full_name.0|upper }}
-                    </span>
-                  {% endif %}
-                </td>
-                <td>
-                  <strong class="text-dark">{{ staff.user.get_full_name }}</strong><br>
-                  <small class="text-muted">ID: {{ staff.staff_id }}</small><br>
-                  <small class="text-muted">Email: {{ staff.user.email }}</small>
-                </td>
-                <td>
-                  <a href="tel:{{ staff.phone }}" class="text-decoration-none">
-                    <i class="bi bi-telephone-fill text-success me-1"></i>{{ staff.phone }}
-                  </a>
-                </td>
-                <td>
-                  <span class="badge bg-{{ staff.position|lower }} text-white">{{ staff.get_position_display }}</span>
-                  {% if staff.employment_date %}
-                    <br><small class="text-muted">Since {{ staff.employment_date|date:"M Y" }}</small>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if staff.subjects %}
-                    <small class="text-muted d-block">{{ staff.subjects|truncatechars:20 }}</small>
-                  {% endif %}
-                  {% if staff.tsc_number %}
-                    <small class="text-primary d-block">TSC: {{ staff.tsc_number }}</small>
-                  {% endif %}
-                  {% if staff.qualification %}
-                    <small class="text-muted d-block">{{ staff.qualification|truncatechars:15 }}</small>
-                  {% endif %}
-                </td>
-                <td>
-                  <div class="text-truncate" style="max-width: 150px;">
-                    {{ staff.bio|truncatewords:10|default:"N/A" }}
-                  </div>
-                </td>
-                <td>
-                  <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
-                      <i class="bi bi-three-dots-vertical"></i>
+    <div class="container">
+        <h2 class="mb-4">School Users Management</h2>
+
+        <!-- NAV TABS -->
+        <ul class="nav nav-tabs" id="userTabs">
+            <li class="nav-item"><button class="nav-link active" data-bs-target="#teachers" data-bs-toggle="tab">Teachers</button></li>
+            <li class="nav-item"><button class="nav-link btn-success" data-bs-target="#staff" data-bs-toggle="tab">Other Staff</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#students" data-bs-toggle="tab">Students</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-target="#parents" data-bs-toggle="tab">Parents</button></li>
+        </ul>
+
+        <div class="tab-content mt-4">
+
+            <!-- ======================= TEACHERS TAB ======================= -->
+            <div class="tab-pane fade show active" id="teachers">
+
+                <!-- Search Bar -->
+                <form method="GET" class="mb-3 d-flex" action="">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                </form>
+
+                <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+                        <i class="bi bi-plus-circle"></i> Create Staff
                     </button>
-                    <ul class="dropdown-menu">
-                      <li>
-                        <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ staff.pk }}">
-                          <i class="bi bi-pencil-square me-2 text-success"></i>Edit Profile
-                        </button>
-                      </li>
-                      <li><hr class="dropdown-divider"></li>
-                      <li>
-                        <button class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ staff.pk }}">
-                          <i class="bi bi-trash me-2"></i>Delete Staff
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                </td>
-              </tr>
-
-              <!-- Edit Modal for {{ staff.pk }} -->
-              <div class="modal fade" id="editModal{{ staff.pk }}" tabindex="-1" aria-labelledby="editModalLabel{{ staff.pk }}" aria-hidden="true">
-                <div class="modal-dialog modal-xl">
-                  <div class="modal-content">
-                    <div class="modal-header bg-warning text-dark">
-                      <h5 class="modal-title" id="editModalLabel{{ staff.pk }}">
-                        <i class="bi bi-pencil-square me-2"></i>Edit Staff: {{ staff.user.get_full_name }}
-                      </h5>
-                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form method="post" action="{% url 'school:staff-edit' staff.pk %}" enctype="multipart/form-data">
-                      {% csrf_token %}
-                      <div class="modal-body">
-                        <div class="row g-3">
-                          <!-- User Fields -->
-                          <div class="col-md-6">
-                            <label class="form-label">Email <span class="text-danger">*</span></label>
-                            <input type="email" class="form-control" name="email" value="{{ staff.user.email }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">First Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="first_name" value="{{ staff.user.first_name }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="last_name" value="{{ staff.user.last_name }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Phone Number <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="phone_number" value="{{ staff.user.phone_number }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Country</label>
-                            <input type="text" class="form-control" name="country" value="{{ staff.user.country|default:'' }}">
-                          </div>
-                          <!-- Options -->
-                          <div class="col-12">
-                            <div class="row">
-                              <div class="col-md-6">
-                                <div class="form-check">
-                                  <input class="form-check-input" type="checkbox" name="reset_password">
-                                  <label class="form-check-label">
-                                    <i class="bi bi-key me-1"></i>Reset Password (auto-generate)
-                                  </label>
-                                </div>
-                              </div>
-                              <div class="col-md-6">
-                                <div class="form-check">
-                                  <input class="form-check-input" type="checkbox" name="send_email">
-                                  <label class="form-check-label">
-                                    <i class="bi bi-envelope me-1"></i>Send Email Notification
-                                  </label>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <!-- Staff Fields -->
-                          <div class="col-md-6">
-                            <label class="form-label">Staff ID <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="staff_id" value="{{ staff.staff_id }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Employment Date <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" name="employment_date" value="{{ staff.employment_date|date:'Y-m-d' }}" required>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Position <span class="text-danger">*</span></label>
-                            <select class="form-select" name="position" required>
-                              {% for value, label in form.fields.position.choices %}
-                                <option value="{{ value }}" {% if staff.position == value %}selected{% endif %}>{{ label }}</option>
-                              {% endfor %}
-                            </select>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Date of Birth</label>
-                            <input type="date" class="form-control" name="date_of_birth" value="{{ staff.date_of_birth|date:'Y-m-d'|default:'' }}">
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Gender</label>
-                            <select class="form-select" name="gender">
-                              <option value="">Select Gender</option>
-                              {% for value, label in form.fields.gender.choices %}
-                                <option value="{{ value }}" {% if staff.gender == value %}selected{% endif %}>{{ label }}</option>
-                              {% endfor %}
-                            </select>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">TSC Number (Teachers only)</label>
-                            <input type="text" class="form-control" name="tsc_number" value="{{ staff.tsc_number|default:'' }}">
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Qualification</label>
-                            <textarea class="form-control" name="qualification" rows="2">{{ staff.qualification|default:'' }}</textarea>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Subjects (comma-separated)</label>
-                            <input type="text" class="form-control" name="subjects" value="{{ staff.subjects|default:'' }}" placeholder="e.g., Math, English">
-                          </div>
-                        
-                          <div class="col-12">
-                            <label class="form-label">Bio</label>
-                            <textarea class="form-control" name="bio" rows="2">{{ staff.bio|default:'' }}</textarea>
-                          </div>
-                          <div class="col-md-6">
-                            <label class="form-label">Profile Picture</label>
-                            <input type="file" class="form-control" name="profile_picture" accept="image/*">
-                            {% if staff.profile_picture %}
-                              <div class="mt-2">
-                                <img src="{{ staff.profile_picture.url }}" alt="Current" class="rounded-circle shadow-sm" width="60" height="60" style="object-fit: cover;">
-                                <small class="text-muted d-block">Current photo</small>
-                              </div>
-                            {% endif %}
-                          </div>
-                        </div>
-                      </div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                          <i class="bi bi-x-circle me-1"></i>Cancel
-                        </button>
-                        <button type="submit" class="btn btn-warning">
-                          <i class="bi bi-check-circle me-1"></i>Update Staff
-                        </button>
-                      </div>
-                    </form>
-                  </div>
                 </div>
-              </div>
 
-              <!-- Delete Modal for {{ staff.pk }} -->
-              <div class="modal fade" id="deleteModal{{ staff.pk }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ staff.pk }}" aria-hidden="true">
-                <div class="modal-dialog">
-                  <div class="modal-content">
-                    <div class="modal-header bg-danger text-white">
-                      <h5 class="modal-title" id="deleteModalLabel{{ staff.pk }}">
-                        <i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete
-                      </h5>
-                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                      <p>Are you sure you want to delete <strong>{{ staff.user.get_full_name }}</strong> ({{ staff.staff_id }})?</p>
-                      <p class="text-muted small">Position: {{ staff.get_position_display }}. This will deactivate their user account and remove all associated data. This action cannot be undone.</p>
-                    </div>
-                    <div class="modal-footer">
-                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle me-1"></i>Cancel
-                      </button>
-                      <form method="post" action="{% url 'school:staff-delete' staff.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger">
-                          <i class="bi bi-trash me-1"></i>Delete Permanently
-                        </button>
-                      </form>
-                    </div>
-                  </div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr><th>Name</th><th>Subject</th><th>Class Teacher</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in teachers %}
+                        <tr>
+                            <td>{{ t.user.first_name }} {{ t.user.last_name }}</td>
+                            <td>{{ t.user.staffprofile.subjects|default:"-" }}</td>
+                            <td>{{ t.class_teacher_of|default:"-" }}</td>
+                            <td class="d-flex gap-1">
+                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStaffModal{{ t.id }}">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </button>
+                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteTeacherModal{{ t.id }}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center">No teachers found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% include 'school/partials/pagination.html' with page_obj=teachers_page %}
+
+            </div>
+
+            <!-- ======================= OTHER STAFF ======================= -->
+            <div class="tab-pane fade" id="staff">
+
+                <form method="GET" class="mb-3 d-flex" action="">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                </form>
+
+                <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+                        <i class="bi bi-plus-circle"></i> Create Staff
+                    </button>
                 </div>
-              </div>
-              {% empty %}
-              <tr><td colspan="8" class="text-center text-muted py-4">
-                <i class="bi bi-inbox fs-1 text-muted mb-3 d-block"></i>
-                No staff found. <a href="#" data-bs-toggle="modal" data-bs-target="#addStaffModal" class="text-success">Add one now</a>.
-              </td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+
+                <table class="table table-striped">
+                    <thead><tr><th>Name</th><th>Role</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for s in other_staff %}
+                        <tr>
+                            <td>{{ s.user.first_name }} {{ s.user.last_name }}</td>
+                            <td>{{ s.position }}</td>
+                            <td class="d-flex gap-1">
+                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStaffModal{{ s.id }}">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </button>
+                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteStaffModal{{ s.id }}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center">No other staff found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% include 'school/partials/pagination.html' with page_obj=staff_page %}
+
+            </div>
+
+            <!-- ======================= STUDENTS TAB ======================= -->
+            <div class="tab-pane fade" id="students">
+
+                <form method="GET" class="mb-3 d-flex" action="">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                </form>
+
+                <div class="d-flex justify-content-end mb-3">
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createStudentModal">
+                        <i class="bi bi-plus-circle"></i> Create Student
+                    </button>
+                </div>
+
+                <table class="table table-striped">
+                    <thead>
+                        <tr><th>Name</th><th>Class</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for st in students %}
+                        <tr>
+                            <td>{{ st.user.first_name }} {{ st.user.last_name }}</td>
+                            <td>{{ st.grade_level }}</td>
+                            <td class="d-flex gap-1">
+                                <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewStudentModal{{ st.id }}">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStudentModal{{ st.id }}">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </button>
+                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteStudentModal{{ st.id }}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center">No students found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% include 'school/partials/pagination.html' with page_obj=students_page %}
+
+            </div>
+
+            <!-- ======================= PARENTS TAB ======================= -->
+            <div class="tab-pane fade" id="parents">
+
+                <form method="GET" class="mb-3 d-flex" action="">
+                    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                </form>
+
+                <div class="d-flex justify-content-end mb-3 gap-2">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createParentStudentModal">
+                        <i class="bi bi-plus-circle"></i> Create Parent + Student
+                    </button>
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#assignStudentModal">
+                        <i class="bi bi-person-plus"></i> Assign Student
+                    </button>
+                </div>
+
+                <table class="table table-striped">
+                    <thead>
+                        <tr><th>Parent Name</th><th>Phone</th><th>Students</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for p in parents %}
+                        <tr>
+                            <td>{{ p.user.first_name }} {{ p.user.last_name }}</td>
+                            <td>{{ p.phone }}</td>
+                            <td>
+                                {% for child in p.student_set.all %}
+                                    <span class="badge bg-primary">{{ child.user.full_name }}</span>
+                                {% empty %}
+                                    <span class="text-muted">No students</span>
+                                {% endfor %}
+                            </td>
+                            <td class="d-flex gap-1">
+                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editParentModal{{ p.id }}">
+                                    <i class="bi bi-pencil-square"></i> Edit
+                                </button>
+                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteParentModal{{ p.id }}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center">No parents found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% include 'school/partials/pagination.html' with page_obj=parents_page %}
+
+            </div>
         </div>
-      </div>
     </div>
 
-    <!-- Add New Staff Modal -->
-    <div class="modal fade" id="addStaffModal" tabindex="-1" aria-labelledby="addStaffModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-          <div class="modal-header bg-success text-white">
-            <h5 class="modal-title" id="addStaffModalLabel">
-              <i class="bi bi-person-plus me-2"></i>Add New Staff Member
-            </h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="modal-body">
-              <p class="text-muted small mb-3">
-                <i class="bi bi-info-circle me-1"></i>A new user account will be created automatically. Password auto-generated (recommend emailing it).
-              </p>
-              <div class="row g-3">
-                <!-- User Fields -->
-                <div class="col-md-6">
-                  <label class="form-label">Email <span class="text-danger">*</span></label>
-                  {{ form.email }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">First Name <span class="text-danger">*</span></label>
-                  {{ form.first_name }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                  {{ form.last_name }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Phone Number <span class="text-danger">*</span></label>
-                  {{ form.phone_number }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Country</label>
-                  {{ form.country }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Send Credentials via Email</label>
-                  <div class="form-check">
-                    {{ form.send_email }}
-                    <label class="form-check-label">
-                      <i class="bi bi-envelope me-1"></i>Notify via Email
-                    </label>
-                  </div>
-                </div>
+    <!-- ======================= CREATE / EDIT MODALS ======================= -->
+    {% include 'school/partials/modals.html' %} {# Contains all Create/Edit modals with 3-col/2-col layout #}
 
-                <!-- Staff Fields -->
-                <div class="col-md-6">
-                  <label class="form-label">Staff ID <span class="text-danger">*</span></label>
-                  {{ form.staff_id }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Employment Date <span class="text-danger">*</span></label>
-                  {{ form.employment_date }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Position <span class="text-danger">*</span></label>
-                  {{ form.position }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Date of Birth</label>
-                  {{ form.date_of_birth }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Gender</label>
-                  {{ form.gender }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">TSC Number (Teachers only)</label>
-                  {{ form.tsc_number }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Qualification</label>
-                  {{ form.qualification }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Subjects (comma-separated)</label>
-                  {{ form.subjects }}
-                </div>
-              
-                <div class="col-12">
-                  <label class="form-label">Bio</label>
-                  {{ form.bio }}
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label">Profile Picture</label>
-                  {{ form.profile_picture }}
-                </div>
-              </div>
-            </div>
+    <!-- ======================= DELETE MODALS ======================= -->
+    {% for t in teachers %}
+    <div class="modal fade" id="deleteTeacherModal{{ t.id }}">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Confirm Delete</h5></div>
+            <div class="modal-body">Delete teacher <strong>{{ t.user.full_name }}</strong>?</div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                <i class="bi bi-x-circle me-1"></i>Cancel
-              </button>
-              <button type="submit" class="btn btn-success">
-                <i class="bi bi-person-plus me-1"></i>Create Staff & User
-              </button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{% url 'school:delete_staff' t.id %}" class="btn btn-danger">Delete</a>
             </div>
-          </form>
-        </div>
-      </div>
+        </div></div>
     </div>
+    {% endfor %}
 
-    <!-- Export Modal -->
-    <div class="modal fade" id="exportModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title"><i class="bi bi-download me-2"></i>Export Staff</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <p>Select format:</p>
-            <a href="#" class="btn btn-outline-primary me-2"><i class="bi bi-filetype-csv"></i> CSV</a>
-            <a href="#" class="btn btn-outline-secondary"><i class="bi bi-filetype-pdf"></i> PDF</a>
-          </div>
-        </div>
-      </div>
+    {% for s in other_staff %}
+    <div class="modal fade" id="deleteStaffModal{{ s.id }}">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Confirm Delete</h5></div>
+            <div class="modal-body">Delete staff <strong>{{ s.user.full_name }}</strong>?</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{% url 'school:delete_staff' s.id %}" class="btn btn-danger">Delete</a>
+            </div>
+        </div></div>
     </div>
-  </section>
+    {% endfor %}
 
+    {% for st in students %}
+    <div class="modal fade" id="deleteStudentModal{{ st.id }}">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Confirm Delete</h5></div>
+            <div class="modal-body">Delete student <strong>{{ st.user.full_name }}</strong>?</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{% url 'school:delete_student' st.id %}" class="btn btn-danger">Delete</a>
+            </div>
+        </div></div>
+    </div>
+    {% endfor %}
+
+    {% for p in parents %}
+    <div class="modal fade" id="deleteParentModal{{ p.id }}">
+        <div class="modal-dialog"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Confirm Delete</h5></div>
+            <div class="modal-body">Delete parent <strong>{{ p.user.full_name }}</strong>?</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="{% url 'school:delete_parent' p.id %}" class="btn btn-danger">Delete</a>
+            </div>
+        </div></div>
+    </div>
+    {% endfor %}
+
+</section>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  // Dynamic field show/hide for TSC (teachers only)
-  const positionSelects = document.querySelectorAll('select[name="position"]');
-  positionSelects.forEach(select => {
-    select.addEventListener('change', function() {
-      const tscField = this.closest('form').querySelector('input[name="tsc_number"]').closest('.col-md-6');
-      if (this.value === 'teacher') {
-        tscField.style.display = 'block';
-      } else {
-        tscField.style.display = 'none';
-      }
-    });
-  });
+document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById("teacherSearch");
+    const rows = document.querySelectorAll("#teachers table tbody tr");
 
-  // Modal error highlighting
-  const modals = document.querySelectorAll('[id^="addStaffModal"], [id^="editModal"]');
-  modals.forEach(modal => {
-    modal.addEventListener('shown.bs.modal', function () {
-      this.querySelectorAll('.is-invalid').forEach(field => field.focus());
-    });
-  });
+    searchInput.addEventListener("keyup", function () {
+        let query = this.value.toLowerCase();
 
-  // Auto-hide alerts
-  document.querySelectorAll('.alert').forEach(alert => {
-    setTimeout(() => {
-      const bsAlert = new bootstrap.Alert(alert);
-      bsAlert.close();
-    }, 6000);
-  });
+        rows.forEach(row => {
+            let text = row.innerText.toLowerCase();
+            if (text.includes(query)) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
+        });
+    });
 });
 </script>
+
 {% endblock %}

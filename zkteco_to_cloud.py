@@ -22,8 +22,8 @@ from django.db import IntegrityError
 
 
 DEVICES = [
-    {"ip": "192.168.100.201", "id": "Device-A", "location": "Main Gate"},
-    # {"ip": "192.168.100.201", "id": "grade1", "location": "grade1"},
+    # {"ip": "192.168.100.201", "id": "Device-A", "location": "Main Gate"},
+    {"ip": "192.168.100.201", "id": "grade1", "location": "grade1"},
     # {"ip": "192.168.100.202", "id": "Device-B", "location": "Back Gate"},
     # {"ip": "192.168.100.303", "id": "Device-C", "location": "Office Entrance"},
 ]

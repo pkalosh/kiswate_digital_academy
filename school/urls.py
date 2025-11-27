@@ -18,21 +18,43 @@ urlpatterns = [
     path('grades/create/', views.grade_create, name='grade-create'),
     path('grades/<int:pk>/edit/', views.grade_edit, name='edit-grade'),
     path('grades/<int:pk>/delete/', views.grade_delete, name='delete-grade'),
-    
-    # Parents Management
-    path('parents/', views.parent_list_create, name='parent_list_create'),
-    path('parents/<int:pk>/edit/', views.parent_edit, name='parent-edit'),
-    path('parents/<int:pk>/delete/', views.parent_delete, name='parent-delete'),
+
+    # streams Management
+    path("grade/<int:grade_id>/streams/", views.grade_streams_view, name="grade-streams"),
+    path("grade/<int:grade_id>/streams/create/", views.create_stream, name="stream-create"),
+    path("stream/<int:stream_id>/delete/", views.delete_stream, name="stream-delete"),
+
+
+    path("school-users/", views.school_users, name="school-users"),
+
+    # Student
+    path("student/<int:student_id>/details/", views.student_details, name="student_details"),
+    path("student/<int:student_id>/edit/", views.edit_student, name="edit_student"),
+    path("student/<int:student_id>/delete/", views.delete_student, name="delete_student"),
+
+    # Staff
+    path("staff/<int:staff_id>/edit/", views.edit_staff, name="edit_staff"),
+    path("staff/<int:staff_id>/delete/", views.delete_staff, name="delete_staff"),
+
+    # Parents
+    path("parent/<int:parent_id>/edit/", views.edit_parent, name="edit_parent"),
+    path("parent/<int:parent_id>/delete/", views.delete_parent, name="delete_parent"),
+
+
+    # # Parents Management
+    # path('parents/', views.parent_list_create, name='parent_list_create'),
+    # path('parents/<int:pk>/edit/', views.parent_edit, name='parent-edit'),
+    # path('parents/<int:pk>/delete/', views.parent_delete, name='parent-delete'),
     
     # Staff Management
-    path('staff/', views.staff_list_create, name='staff_list_create'),
-    path('staff/<int:pk>/edit/', views.staff_edit, name='staff-edit'),
-    path('staff/<int:pk>/delete/', views.staff_delete, name='staff-delete'),
+    # path('staff/', views.staff_list_create, name='staff_list_create'),
+    # path('staff/<int:pk>/edit/', views.staff_edit, name='staff-edit'),
+    # path('staff/<int:pk>/delete/', views.staff_delete, name='staff-delete'),
     
     # Students Management
-    path('students/', views.student_list_create, name='student_list_create'),
-    path('students/<int:pk>/edit/', views.student_edit, name='student-edit'),
-    path('students/<int:pk>/delete/', views.student_delete, name='student-delete'),  # Duplicate removed
+    # path('students/', views.student_list_create, name='student_list_create'),
+    # path('students/<int:pk>/edit/', views.student_edit, name='student-edit'),
+    # path('students/<int:pk>/delete/', views.student_delete, name='student-delete'),  # Duplicate removed
     
     # SmartID Management
     path('smartids/', views.smartid_list, name='smartid-list'),

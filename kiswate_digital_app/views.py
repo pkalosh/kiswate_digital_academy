@@ -113,7 +113,7 @@ def delete_school(request, pk):
         school.save()
         messages.success(request, f'School "{school.name}" ({school.code}) has been deactivated.')
         logger.info(f"Deactivated school {school.code} by superuser {request.user.email}.")
-        return redirect('school:school_list')
+        return redirect('kiswate_digital_app:school_list')
     
     # For GET: Redirect to list
     messages.warning(request, "Use the delete button in the list to confirm.")

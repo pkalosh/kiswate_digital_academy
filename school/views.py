@@ -42,7 +42,7 @@ from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
-    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance
+    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -53,6 +53,7 @@ from .forms import (
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
     ContactMessageForm
 )
+from kiswate_digital_app.forms import StreamForm
 
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,180 @@ def dashboard(request):
     return render(request, "school/dashboard.html", context)
 
 
+@login_required
+def school_users(request):
+    school = None
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError:
+        try:
+            school = request.user.staffprofile.school
+        except AttributeError as e:
+            logger.warning(f"Permission denied for user {request.user.email}: {e}")
+            messages.error(
+                request,
+                f"You do not have permission to access this page. (User: {request.user.email})"
+            )
+            return redirect('userauths:sign-in')
+
+    # Querysets
+    teachers = StaffProfile.objects.filter(school=school, position="teacher")
+    other_staff = StaffProfile.objects.filter(school=school).exclude(position="teacher")
+    students = Student.objects.filter(school=school)
+    parents = Parent.objects.filter(school=school)
+
+    # Forms
+    staff_form = StaffCreationForm(school=school)
+    student_form = StudentCreationForm(school=school)
+    parent_form = ParentCreationForm(school=school)
+
+    combined_parent_student_form = {
+        "parent_form": ParentCreationForm(school=school),
+        "student_form": StudentCreationForm(school=school)
+    }
+
+    if request.method == "POST":
+
+        # Create Staff
+        if "create_staff" in request.POST:
+            form = StaffCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                staff, password = form.save()
+                messages.success(request, f"Staff created. Password: {password}")
+                return redirect("school:school-users")
+            staff_form = form  
+
+        # Create Student
+        if "create_student" in request.POST:
+            form = StudentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                student, password = form.save()
+                messages.success(request, "Student created successfully.")
+                return redirect("school:school-users")
+            student_form = form
+
+        # Create Parent
+        if "create_parent" in request.POST:
+            form = ParentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                parent, password = form.save()
+                messages.success(request, "Parent created successfully.")
+                return redirect("school:school-users")
+            parent_form = form
+
+        # Create Parent + Student
+        if "create_parent_student" in request.POST:
+            parent_form = ParentCreationForm(request.POST, request.FILES, school=school)
+            student_form = StudentCreationForm(request.POST, request.FILES, school=school)
+
+            if parent_form.is_valid() and student_form.is_valid():
+                parent, _ = parent_form.save()
+                student, _ = student_form.save()
+                student.parents.add(parent)
+
+                messages.success(request, "Parent + Student created successfully.")
+                return redirect("school:school-users")
+
+            combined_parent_student_form = {
+                "parent_form": parent_form,
+                "student_form": student_form
+            }
+
+        # Assign Student
+        if "assign_student" in request.POST:
+            parent = Parent.objects.get(id=request.POST.get("parent_id"), school=school)
+            student = Student.objects.get(id=request.POST.get("student_id"), school=school)
+            student.parents.add(parent)
+
+            messages.success(request, "Student assigned to parent.")
+            return redirect("school:school-users")
+
+    context = {
+        "teachers": teachers,
+        "other_staff": other_staff,
+        "students": students,
+        "parents": parents,
+
+        "staff_form": staff_form,
+        "student_form": student_form,
+        "parent_form": parent_form,
+
+        "combined_parent_student_form": combined_parent_student_form,
+
+        "assign_students": students,
+        "assign_parents": parents,
+    }
+
+    return render(request, "school/staff.html", context)
+
+
+@login_required
+def student_details(request, student_id):
+    student = get_object_or_404(Student, id=student_id)
+    return render(request, "school/student_details.html", {"student": student})
+
+@login_required
+def edit_staff(request, staff_id):
+    staff = get_object_or_404(StaffProfile, id=staff_id)
+    form = StaffCreationForm(request.POST or None, request.FILES or None, instance=staff, school=staff.school)
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Staff updated successfully.")
+        return redirect("school_users")
+
+    return render(request, "school/forms/edit_staff.html", {"form": form})
+@login_required
+def edit_student(request, student_id):
+    student = get_object_or_404(Student, id=student_id)
+    form = StudentCreationForm(
+        request.POST or None,
+        request.FILES or None,
+        instance=student,
+        school=student.school
+    )
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Student updated successfully.")
+        return redirect("school_users")
+
+    return render(request, "school/forms/edit_student.html", {"form": form})
+
+@login_required
+def edit_parent(request, parent_id):
+    parent = get_object_or_404(Parent, id=parent_id)
+    form = ParentCreationForm(
+        request.POST or None,
+        request.FILES or None,
+        instance=parent,
+        school=parent.school
+    )
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Parent updated successfully.")
+        return redirect("school_users")
+
+    return render(request, "school/forms/edit_parent.html", {"form": form})
+@login_required
+def delete_staff(request, staff_id):
+    staff = get_object_or_404(StaffProfile, id=staff_id)
+    staff.delete()
+    messages.success(request, "Staff deleted.")
+    return redirect("school_users")
+@login_required
+def delete_student(request, student_id):
+    student = get_object_or_404(Student, id=student_id)
+    student.delete()
+    messages.success(request, "Student deleted.")
+    return redirect("school_users")
+@login_required
+def delete_parent(request, parent_id):
+    parent = get_object_or_404(Parent, id=parent_id)
+    parent.delete()
+    messages.success(request, "Parent deleted.")
+    return redirect("school_users")
 
 @login_required
 def school_grades(request):
@@ -137,17 +312,21 @@ def school_grades(request):
         return redirect('school:dashboard')
 
     form = GradeForm(school=school)
+    stream_form = StreamForm()
 
     # Fetch grades for the school, with search/filter
     query = request.GET.get('q', '')
     grades = Grade.objects.filter(school=school, is_active=True)
+    streams = Streams.objects.filter(school=school, is_active=True)
     if query:
         grades = grades.filter(Q(name__icontains=query) | Q(code__icontains=query))
 
     context = {
         'grades': grades,
         'form': form,
+        'stream_form': stream_form,
         'school': school,
+        'streams': streams,
         'query': query,
     }
     return render(request, "school/grade.html", context)
@@ -890,7 +1069,7 @@ def school_subjects(request):
         return redirect('school:dashboard')
     
     query = request.GET.get('q', '')
-    subjects = Subject.objects.filter(school=school).select_related('teacher', 'grade')
+    subjects = Subject.objects.filter(school=school).select_related('grade')
     if query:
         subjects = subjects.filter(
             Q(name__icontains=query) | Q(code__icontains=query) | Q(teacher__user__first_name__icontains=query)
@@ -2432,4 +2611,33 @@ def mpesa_payment_callback(request):
     # Update related Payment/Invoice status to 'paid'
     return JsonResponse({'ResultCode': 0, 'ResultDesc': 'Success'})
 
+@login_required
+def grade_streams_view(request, grade_id):
+    grade = get_object_or_404(Grade, id=grade_id)
+    streams = grade.streams.all().values("id", "name")
 
+    return JsonResponse(list(streams), safe=False)
+
+@login_required
+def create_stream(request, grade_id):
+    grade = get_object_or_404(Grade, id=grade_id)
+
+    if request.method == "POST":
+        form = StreamForm(request.POST)
+        if form.is_valid():
+            stream = form.save(commit=False)
+            stream.grade = grade
+            stream.school = grade.school
+            stream.save()
+            messages.success(request, "Stream added successfully.")
+        else:
+            messages.error(request, "Failed to create stream. Check form inputs.")
+
+    return redirect("school:school-grades")
+
+@login_required
+def delete_stream(request, stream_id):
+    stream = get_object_or_404(Streams, id=stream_id)
+    stream.delete()
+    messages.success(request, "Stream deleted successfully.")
+    return redirect("school:school-grades")
