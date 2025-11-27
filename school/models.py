@@ -238,12 +238,16 @@ class Subject(models.Model):
     grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
     start_date = models.DateField()
     end_date = models.DateField(blank=True, null=True)
+    sessions_per_week = models.PositiveIntegerField(default=2)
+
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.name} - {self.school}"
+        return f"{self.name} - {self.grade.name}"
 
-# StaffProfile
+
+
+
 class StaffProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     staff_id = models.CharField(max_length=50, unique=True, db_index=True)
@@ -310,41 +314,65 @@ class Enrollment(models.Model):
     def __str__(self):
         return f"{self.student} enrolled in {self.subject} - {self.get_status_display()}"
 
-# Timetable Model
+class Term(models.Model):
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='terms')
+    name = models.CharField(max_length=80)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.name} - {self.school.name}"
+
 class Timetable(models.Model):
-    TERM_CHOICES = [('1', 'Term 1'), ('2', 'Term 2'), ('3', 'Term 3')]
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='timetables')
-    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='timetables')
-    term = models.CharField(max_length=5, choices=TERM_CHOICES)
-    year = models.PositiveIntegerField()  # e.g., 2025
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='timetables', blank=True, null=True)
+    grade = models.ForeignKey('Grade', on_delete=models.CASCADE, related_name='timetables', blank=True, null=True)  
+    stream = models.ForeignKey('Streams', on_delete=models.CASCADE, related_name='timetables', blank=True, null=True)
+    term = models.ForeignKey(Term, on_delete=models.CASCADE, related_name='term_timetables', blank=True, null=True)
+    year = models.PositiveIntegerField()
     start_date = models.DateField()
     end_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['school', 'grade', 'term', 'year']
+        unique_together = ['school', 'grade', 'stream', 'term', 'year']
 
     def __str__(self):
-        return f"{self.grade.name} - Term {self.term} {self.year}"
+        return f"{self.grade.name} {self.stream.name} - {self.term.name} {self.year}"
 
-# Lesson Model
+
+WEEKDAY_CHOICES = [
+    ('monday', 'Monday'),
+    ('tuesday', 'Tuesday'),
+    ('wednesday', 'Wednesday'),
+    ('thursday', 'Thursday'),
+    ('friday', 'Friday'),
+    ('saturday', 'Saturday'),
+    ('sunday', 'Sunday'),
+]
+
 class Lesson(models.Model):
-    timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='lessons')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='lessons')
-    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='lessons_taught')
-    day_of_week = models.CharField(max_length=10, choices=WEEKDAY_CHOICES, blank=True, null=True)  # e.g., 'monday'
+    timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
+    stream = models.ForeignKey('Streams', on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
+    teacher = models.ForeignKey('StaffProfile', on_delete=models.CASCADE, related_name='lessons_taught')
+    day_of_week = models.CharField(max_length=10, choices=WEEKDAY_CHOICES, blank=True, null=True)
     date = models.DateField(db_index=True)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    room = models.CharField(max_length=50, blank=True)  # e.g., "Classroom A"
+    room = models.CharField(max_length=50, blank=True)
     is_canceled = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
 
     class Meta:
-        unique_together = ['timetable', 'subject', 'date', 'start_time']
+        ordering = ['date', 'start_time']
+        unique_together = ['timetable', 'subject', 'date', 'start_time', 'stream']
 
     def __str__(self):
-        return f"{self.subject.name} - {self.date} {self.start_time} ({self.timetable.grade.name})"
+        return f"{self.subject.name} - {self.stream.name} - {self.date} {self.start_time}"
 
 # VirtualClass 
 class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid

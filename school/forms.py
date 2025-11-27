@@ -14,7 +14,7 @@ from .models import (
     Session, Attendance, DisciplineRecord, Notification, SmartID, Payment,
     Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
-    Certificate  # Include if needed, but per request, exclude LMS parts where possible
+    Certificate,Term  # Include if needed, but per request, exclude LMS parts where possible
 )
 from django.db import transaction
 
@@ -514,16 +514,28 @@ class EnrollmentForm(BaseForm):
             'status': forms.Select(choices=ENROLLMENT_STATUS_CHOICES),
         }
 
-# ------------------------------- TIMETABLE FORM -------------------------------
+class TermForm(BaseForm):
+    class Meta:
+        model = Term
+        fields = ['name', 'start_date', 'end_date']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
 class TimetableForm(BaseForm):
     class Meta:
         model = Timetable
         fields = ['grade', 'term', 'year', 'start_date', 'end_date']
         widgets = {
-            'term': forms.Select(choices=Timetable.TERM_CHOICES),
+            'term': forms.Select(),
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
         }
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['term'].queryset = Term.objects.filter(school=school)
 
 # ------------------------------- LESSON FORM -------------------------------
 class LessonForm(BaseForm):
