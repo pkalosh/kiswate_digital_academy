@@ -241,7 +241,7 @@ class Subject(models.Model):
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.name} - {self.teacher}"
+        return f"{self.name} - {self.school}"
 
 # StaffProfile
 class StaffProfile(models.Model):
@@ -289,6 +289,7 @@ class Student(models.Model):
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
     enrollment_date = models.DateField()
     grade_level = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='students')
+    stream = models.ForeignKey(Streams, on_delete=models.CASCADE, related_name='student_stream', blank=True, null=True)
     bio = models.TextField(blank=True)
     parents = models.ManyToManyField(Parent, blank=True, related_name='children')
     profile_picture = models.ImageField(upload_to='students/', blank=True)

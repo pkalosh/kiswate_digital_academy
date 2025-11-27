@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
+
 from django.db.models import Q
 import uuid
 from .models import (
@@ -15,6 +16,8 @@ from .models import (
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
     Certificate  # Include if needed, but per request, exclude LMS parts where possible
 )
+from django.db import transaction
+
 
 from userauths.models import User
 GENDER_CHOICES = [
@@ -333,7 +336,7 @@ class StaffCreationForm(BaseForm):
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'employment_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'subjects': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Math, English'}),
+            'subjects': forms.SelectMultiple(attrs={'class': 'form-select select2'}),
             'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'department': forms.TextInput(attrs={'class': 'form-control'}),
             'roles': forms.SelectMultiple(attrs={'class': 'form-select select2'}),
@@ -348,6 +351,9 @@ class StaffCreationForm(BaseForm):
         # Filter roles by school if provided
         if school and 'roles' in self.fields:
             self.fields['roles'].queryset = Role.objects.filter(school=school)
+        if school and 'subjects' in self.fields:
+            self.fields['subjects'].queryset = Subject.objects.filter(school=school)
+
 
     def generate_temp_password(self):
         """Generate a random temporary password."""
@@ -700,6 +706,129 @@ class ContactMessageForm(forms.ModelForm):
         widgets = {
             'message': forms.Textarea(attrs={'rows': 5}),
         }
+
+
+class ParentStudentCreationForm(forms.ModelForm):
+    # Common User fields for parent and student
+    parent_first_name = forms.CharField(max_length=100, required=True, label="Parent First Name")
+    parent_last_name = forms.CharField(max_length=100, required=True, label="Parent Last Name")
+    parent_email = forms.EmailField(required=False, label="Parent Email")
+    parent_phone_number = forms.CharField(max_length=20, required=True, label="Parent Phone")
+
+    student_first_name = forms.CharField(max_length=100, required=True, label="Student First Name")
+    student_last_name = forms.CharField(max_length=100, required=True, label="Student Last Name")
+    student_email = forms.EmailField(required=False, label="Student Email")
+    student_phone_number = forms.CharField(max_length=20, required=False, label="Student Phone")
+
+    # Extra options
+    send_email = forms.BooleanField(required=False, initial=True)
+    reset_password = forms.BooleanField(required=False, initial=False)
+
+    # Parent-specific fields
+    parent_id = forms.CharField(max_length=50, required=True)
+    parent_dob = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    parent_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
+    parent_address = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), required=False)
+    parent_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
+    parent_profile_picture = forms.ImageField(required=False)
+
+    # Student-specific fields
+    student_id = forms.CharField(max_length=50, required=True)
+    student_dob = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
+    enrollment_date = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
+    student_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
+    grade_level = forms.ModelChoiceField(queryset=Grade.objects.none(), required=True)
+    student_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
+    student_profile_picture = forms.ImageField(required=False)
+    # student_parents = forms.ModelMultipleChoiceField(queryset=Parent.objects.none(), required=False)
+
+    class Meta:
+        model = User  # We are creating related Parent and Student
+        fields = []
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+
+        # Bootstrap styling
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-control'
+        for name in ['send_email', 'reset_password']:
+            self.fields[name].widget.attrs['class'] = 'form-check-input'
+
+        # Set queryset for related fields
+        if self.school:
+            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
+            # self.fields['student_parents'].queryset = Parent.objects.filter(school=self.school)
+            # self.fields['student_parents'].widget.attrs.update({'class': 'form-control select2', 'multiple': True})
+
+    def generate_temp_password(self):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+    @transaction.atomic
+    def save(self, commit=True):
+        # ----- CREATE PARENT USER -----
+        parent_temp_password = self.generate_temp_password()
+        parent_user = User.objects.create_user(
+            email=self.cleaned_data.get('parent_email') or f"{self.cleaned_data['parent_id']}@example.com",
+            first_name=self.cleaned_data['parent_first_name'],
+            last_name=self.cleaned_data['parent_last_name'],
+            phone_number=self.cleaned_data['parent_phone_number'],
+            password=parent_temp_password,
+            is_verified=True,
+            is_parent=True,
+        )
+
+        parent = Parent.objects.create(
+            user=parent_user,
+            parent_id=self.cleaned_data['parent_id'],
+            date_of_birth=self.cleaned_data['parent_dob'],
+            gender=self.cleaned_data['parent_gender'],
+            phone=self.cleaned_data['parent_phone_number'],
+            address=self.cleaned_data['parent_address'],
+            bio=self.cleaned_data['parent_bio'],
+            profile_picture=self.cleaned_data['parent_profile_picture'],
+            school=self.school,
+        )
+
+        # ----- CREATE STUDENT USER -----
+        student_temp_password = self.generate_temp_password()
+        student_user = User.objects.create_user(
+            email=self.cleaned_data.get('student_email') or f"{self.cleaned_data['student_id']}@example.com",
+            first_name=self.cleaned_data['student_first_name'],
+            last_name=self.cleaned_data['student_last_name'],
+            phone_number=self.cleaned_data.get('student_phone_number', ''),
+            password=student_temp_password,
+            is_verified=True,
+            is_student=True,
+        )
+
+        student = Student.objects.create(
+            user=student_user,
+            student_id=self.cleaned_data['student_id'],
+            date_of_birth=self.cleaned_data['student_dob'],
+            enrollment_date=self.cleaned_data['enrollment_date'],
+            gender=self.cleaned_data['student_gender'],
+            grade_level=self.cleaned_data['grade_level'],
+            bio=self.cleaned_data['student_bio'],
+            profile_picture=self.cleaned_data['student_profile_picture'],
+            school=self.school,
+        )
+
+        # Link student to parent
+        student.parents.add(parent)
+
+        # Send welcome email if needed
+        if self.cleaned_data['send_email']:
+            self.send_welcome_email(parent, parent_temp_password)
+            self.send_welcome_email(student, student_temp_password)
+
+        return parent, student, parent_temp_password, student_temp_password
+
+    def send_welcome_email(self, instance, password):
+        # TODO: Implement email logic
+        pass
 
 # ------------------------------- SCHOLARSHIP FORMS (if needed, but per request exclude) -------------------------------
 # Skip LMS: ScholarshipForm, etc.

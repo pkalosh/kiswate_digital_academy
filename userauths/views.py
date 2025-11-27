@@ -276,7 +276,7 @@ def teacher_dashboard(request):
             lessons_by_grade.setdefault(grade, []).append(lesson)
 
         # Subjects taught by teacher
-        subjects = teacher.subjects.split(',') if teacher.subjects else []
+        subjects = teacher.subjects.all()
 
         context = {
             'lessons': assigned_lessons,

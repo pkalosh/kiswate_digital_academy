@@ -70,7 +70,7 @@ urlpatterns = [
     path('subjects/create/', views.subject_create, name='subject-create'),
     path('subjects/<int:pk>/edit/', views.subject_edit, name='subject-edit'),
     path('subjects/<int:pk>/delete/', views.subject_delete, name='subject-delete'),
-
+    path('parent-student/create/', views.create_parent_student, name='parent-student-create'),
     #school Teacher Subjects
     # Subjects Management
     path('school/<int:staff_id>/subjects/', views.school_teacher_subjects, name='school-teacher-subjects'),

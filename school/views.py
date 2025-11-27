@@ -51,7 +51,7 @@ from .forms import (
     SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
-    ContactMessageForm
+    ContactMessageForm,ParentStudentCreationForm
 )
 from kiswate_digital_app.forms import StreamForm
 
@@ -148,6 +148,7 @@ def school_users(request):
     staff_form = StaffCreationForm(school=school)
     student_form = StudentCreationForm(school=school)
     parent_form = ParentCreationForm(school=school)
+    parent_student_form = ParentStudentCreationForm(school=school)
 
     combined_parent_student_form = {
         "parent_form": ParentCreationForm(school=school),
@@ -185,10 +186,9 @@ def school_users(request):
 
         # Create Parent + Student
         if "create_parent_student" in request.POST:
-            parent_form = ParentCreationForm(request.POST, request.FILES, school=school)
-            student_form = StudentCreationForm(request.POST, request.FILES, school=school)
+            parent__student_form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
 
-            if parent_form.is_valid() and student_form.is_valid():
+            if parent__student_form.is_valid():
                 parent, _ = parent_form.save()
                 student, _ = student_form.save()
                 student.parents.add(parent)
@@ -196,10 +196,7 @@ def school_users(request):
                 messages.success(request, "Parent + Student created successfully.")
                 return redirect("school:school-users")
 
-            combined_parent_student_form = {
-                "parent_form": parent_form,
-                "student_form": student_form
-            }
+            parent__student_form = parent__student_form
 
         # Assign Student
         if "assign_student" in request.POST:
@@ -221,6 +218,7 @@ def school_users(request):
         "parent_form": parent_form,
 
         "combined_parent_student_form": combined_parent_student_form,
+        "parent_student_form": parent_student_form,
 
         "assign_students": students,
         "assign_parents": parents,
@@ -2641,3 +2639,46 @@ def delete_stream(request, stream_id):
     stream.delete()
     messages.success(request, "Stream deleted successfully.")
     return redirect("school:school-grades")
+
+
+@login_required
+def create_parent_student(request):
+    # Ensure user is a school admin
+    school = getattr(request.user, 'school_admin_profile', None)
+    if not school:
+        messages.error(request, "You do not have permission to add members.")
+        return redirect('school:dashboard')
+
+    if request.method == "POST":
+        form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
+        print(form)
+        print(form.errors)
+        print(request.POST)
+        if form.is_valid():
+            try:
+                # Atomic creation to ensure both User and Parent/Student are saved
+                with transaction.atomic():
+                    obj, temp_password = form.save(commit=True)
+
+                member_type = 'Parent' if form.cleaned_data.get('member_type') == 'parent' else 'Student'
+                messages.success(request, f"{member_type} created successfully.")
+
+                # Optional: show temp password if email sending is disabled
+                if form.cleaned_data.get('send_email'):
+                    messages.info(request, f"A welcome email has been sent. Temporary password: {temp_password}")
+
+                # Redirect to the members listing page
+                return redirect('school:members-list')
+
+            except Exception as e:
+                messages.error(request, f"Failed to create member: {str(e)}")
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = ParentStudentCreationForm(school=school)
+
+    context = {
+        'parent_student_form': form,
+        'school': school,
+    }
+    return render(request, 'school/staff.html', context)

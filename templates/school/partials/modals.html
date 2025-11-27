@@ -179,49 +179,119 @@
                 </div>
 
                 <div class="modal-body">
+
+                    <!-- Parent Details -->
                     <h5>Parent Details</h5>
                     <div class="row">
-                        {% for field in combined_parent_student_form.parent_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_first_name.label_tag }}
+                            {{ parent_student_form.parent_first_name }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_last_name.label_tag }}
+                            {{ parent_student_form.parent_last_name }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_email.label_tag }}
+                            {{ parent_student_form.parent_email }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_phone_number.label_tag }}
+                            {{ parent_student_form.parent_phone_number }}
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_id.label_tag }}
+                            {{ parent_student_form.parent_id }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_dob.label_tag }}
+                            {{ parent_student_form.parent_dob }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_gender.label_tag }}
+                            {{ parent_student_form.parent_gender }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ parent_student_form.parent_address.label_tag }}
+                            {{ parent_student_form.parent_address }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ parent_student_form.parent_bio.label_tag }}
+                            {{ parent_student_form.parent_bio }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.parent_profile_picture.label_tag }}
+                            {{ parent_student_form.parent_profile_picture }}
+                        </div>
                     </div>
 
+                    <!-- Student Details -->
                     <h5 class="mt-4">Student Details</h5>
                     <div class="row">
-                        {% for field in combined_parent_student_form.student_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_first_name.label_tag }}
+                            {{ parent_student_form.student_first_name }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_last_name.label_tag }}
+                            {{ parent_student_form.student_last_name }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_email.label_tag }}
+                            {{ parent_student_form.student_email }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_phone_number.label_tag }}
+                            {{ parent_student_form.student_phone_number }}
+                        </div>
+
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_id.label_tag }}
+                            {{ parent_student_form.student_id }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_dob.label_tag }}
+                            {{ parent_student_form.student_dob }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.enrollment_date.label_tag }}
+                            {{ parent_student_form.enrollment_date }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_gender.label_tag }}
+                            {{ parent_student_form.student_gender }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.grade_level.label_tag }}
+                            {{ parent_student_form.grade_level }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ parent_student_form.student_profile_picture.label_tag }}
+                            {{ parent_student_form.student_profile_picture }}
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            {{ parent_student_form.student_bio.label_tag }}
+                            {{ parent_student_form.student_bio }}
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            {{ parent_student_form.student_parents.label_tag }}
+                            {{ parent_student_form.student_parents }}
+                            <small class="text-muted">Hold Ctrl/Cmd to select multiple parents.</small>
+                        </div>
                     </div>
+
                 </div>
 
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary">Save</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
 
 {# ----------------------- EDIT PARENT ----------------------- #}
 {% for p in parents %}

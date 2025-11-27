@@ -1,6 +1,7 @@
 # forms.py (add School forms)
 import random
 import string
+from django.db import transaction
 import json
 from django import forms
 from django.core.mail import send_mail
