@@ -1,0 +1,202 @@
+{% extends 'school/base.html' %}
+{% block title %}Time Slots | {{ school.name }}{% endblock %}
+
+{% block content %}
+
+<header class="header d-flex align-items-center justify-content-between mb-3">
+      {% if messages %}
+  <div class="row">
+    {% for message in messages %}
+    <div class="col-12">
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+    <div>
+        <h6 class="m-0 fw-bold">Time Slots</h6>
+        <nav aria-label="breadcrumb" class="small">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Time Slots</li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#timeSlotModal" data-mode="create">
+            <i class="bi bi-plus"></i> Add Time Slot
+        </button>
+    </div>
+</header>
+
+<section class="content container-fluid">
+
+    {% if messages %}
+        <div class="row mb-2">
+            {% for message in messages %}
+                <div class="col-12">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                        {{ message }}
+                        <button class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Description</th>
+                            <th>Created By</th>
+                            <th>Updated By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for slot in slots %}
+                        <tr>
+                            <td>{{ slot.start_time }}</td>
+                            <td>{{ slot.end_time }}</td>
+                            <td>{{ slot.description|default:"-" }}</td>
+                            <td>{{ slot.created_by.user.get_full_name}}</td>
+                            <td>{{ slot.updated_by.user.get_full_name }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#timeSlotModal"
+                                        data-mode="edit"
+                                        data-id="{{ slot.id }}"
+                                        data-start="{{ slot.start_time|date:'Y-m-d\\TH:i' }}"
+                                        data-end="{{ slot.end_time|date:'Y-m-d\\TH:i' }}"
+                                        data-description="{{ slot.description }}">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+
+                                <button class="btn btn-sm btn-outline-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteModal"
+                                        data-id="{{ slot.id }}"
+                                        data-description="{{ slot.description }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No time slots found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</section>
+
+<!-- Create / Edit Modal -->
+<div class="modal fade" id="timeSlotModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="timeSlotModalTitle">Add Time Slot</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="timeSlotForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_start_time" class="form-label">Start Time</label>
+                        <input type="time-local" name="start_time" id="id_start_time" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_end_time" class="form-label">End Time</label>
+                        <input type="time-local" name="end_time" id="id_end_time" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_description" class="form-label">Description</label>
+                        <input type="text" name="description" id="id_description" class="form-control" placeholder="Optional">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Time Slot</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="deleteForm">{% csrf_token %}
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this time slot: <strong id="deleteDescription"></strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const timeSlotModal = document.getElementById('timeSlotModal');
+    const timeSlotForm = document.getElementById('timeSlotForm');
+    const modalTitle = document.getElementById('timeSlotModalTitle');
+
+    timeSlotModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const mode = button.dataset.mode;
+
+        if (mode === "create") {
+            modalTitle.textContent = "Add Time Slot";
+            timeSlotForm.action = "{% url 'school:time-slot-create' %}";
+            timeSlotForm.reset();
+        }
+
+        if (mode === "edit") {
+            modalTitle.textContent = "Edit Time Slot";
+            const slotId = button.dataset.id;
+            timeSlotForm.action = "{% url 'school:time-slot-edit' 0 %}".replace("0", slotId);
+
+            document.querySelector("#id_start_time").value = button.dataset.start;
+            document.querySelector("#id_end_time").value = button.dataset.end;
+            document.querySelector("#id_description").value = button.dataset.description;
+        }
+    });
+
+    const deleteModal = document.getElementById('deleteModal');
+    const deleteForm = document.getElementById('deleteForm');
+
+    deleteModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const slotId = button.dataset.id;
+        deleteForm.action = "{% url 'school:time-slot-delete' 0 %}".replace("0", slotId);
+        document.getElementById('deleteDescription').textContent = button.dataset.description || "N/A";
+    });
+
+});
+</script>
+
+{% endblock %}

@@ -14,7 +14,7 @@ from .models import (
     Session, Attendance, DisciplineRecord, Notification, SmartID, Payment,
     Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
-    Certificate,Term  # Include if needed, but per request, exclude LMS parts where possible
+    Certificate,Term,School,Streams, TimeSlot  # Include if needed, but per request, exclude LMS parts where possible
 )
 from django.db import transaction
 
@@ -164,6 +164,94 @@ class BaseForm(forms.ModelForm):
                     field.queryset = field.queryset.filter(school=school)
 
 
+
+class TermForm(BaseForm):
+
+    class Meta:
+        model = Term
+        fields = ["name", "start_date", "end_date", "is_active"]
+
+        widgets = {
+            "name": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "Enter term name (e.g., Term 1)"
+            }),
+            "start_date": forms.DateInput(attrs={
+                "class": "form-control",
+                "type": "date"
+            }),
+            "end_date": forms.DateInput(attrs={
+                "class": "form-control",
+                "type": "date"
+            }),
+            "is_active": forms.CheckboxInput(attrs={
+                "class": "form-check-input"
+            }),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get("start_date")
+        end = cleaned_data.get("end_date")
+        name = cleaned_data.get("name")
+
+        # Date validation
+        if start and end and end < start:
+            raise forms.ValidationError("End date cannot be earlier than start date.")
+
+        # Prevent overlapping terms for same school
+        if self.instance and self.instance.school:
+            school = self.instance.school
+            qs = Term.objects.filter(school=school)
+
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+
+            if start and end:
+                if qs.filter(start_date__lte=end, end_date__gte=start).exists():
+                    raise forms.ValidationError(
+                        "This term overlaps with an existing term for this school."
+                    )
+
+        return cleaned_data
+
+
+class TimeSlotForm(BaseForm):
+    class Meta:
+        model = TimeSlot
+        fields = ["start_time", "end_time", "description"]
+        widgets = {
+            "start_time": forms.DateTimeInput(attrs={
+                "class": "form-control",
+                "type": "datetime-local"
+            }),
+            "end_time": forms.DateTimeInput(attrs={
+                "class": "form-control",
+                "type": "datetime-local"
+            }),
+            "description": forms.TextInput(attrs={
+                "class": "form-control",
+                "placeholder": "Optional description"
+            }),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get("start_time")
+        end = cleaned_data.get("end_time")
+
+        if start and end and end <= start:
+            raise forms.ValidationError("End time must be after start time.")
+
+        # Prevent overlapping times for the same school
+        if self.school and start and end:
+            qs = TimeSlot.objects.filter(school=self.school)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.filter(start_time__lt=end, end_time__gt=start).exists():
+                raise forms.ValidationError("This time slot overlaps with an existing time slot.")
+
+        return cleaned_data
 
 # ------------------------------- GRADE FORM -------------------------------
 class GradeForm(BaseForm):
@@ -523,6 +611,43 @@ class TermForm(BaseForm):
             'end_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
+
+class GenerateTimetableForm(forms.Form):
+    SCOPE_CHOICES = [
+        ('school', 'Whole School'),
+        ('grade', 'Specific Grade'),
+        ('stream', 'Specific Stream'),
+    ]
+
+    scope = forms.ChoiceField(
+        choices=SCOPE_CHOICES,
+        widget=forms.RadioSelect,
+        required=True
+    )
+
+    school = forms.ModelChoiceField(
+        queryset=School.objects.all(),
+        required=True
+    )
+
+    grade = forms.ModelChoiceField(
+        queryset=Grade.objects.all(),
+        required=False
+    )
+
+    stream = forms.ModelChoiceField(
+        queryset=Streams.objects.all(),
+        required=False
+    )
+
+    overwrite = forms.BooleanField(
+        required=False,
+        initial=False,
+        help_text="If checked, existing lessons in timetable will be deleted and regenerated."
+    )
+
+
+
 class TimetableForm(BaseForm):
     class Meta:
         model = Timetable
@@ -541,46 +666,40 @@ class TimetableForm(BaseForm):
 class LessonForm(BaseForm):
     class Meta:
         model = Lesson
-        fields = ['timetable', 'subject', 'teacher', 'date', 'start_time','day_of_week', 'end_time', 'room', 'is_canceled', 'notes']
+        fields = ['timetable', 'subject', 'teacher', 'day_of_week', 'time_slot', 'room', 'is_canceled', 'notes']
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'start_time': forms.TimeInput(attrs={'type': 'time'}),
-            'end_time': forms.TimeInput(attrs={'type': 'time'}),
+            'time_slot': forms.Select(),
+            'day_of_week': forms.Select(),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        date = cleaned_data.get('date')
         day_of_week = cleaned_data.get('day_of_week')
-        start_time = cleaned_data.get('start_time')
-        end_time = cleaned_data.get('end_time')
+        time_slot = cleaned_data.get('time_slot')
         teacher = cleaned_data.get('teacher')
         timetable = cleaned_data.get('timetable')
         instance = self.instance  # For edits
 
-        if date and start_time and end_time and teacher:
-            # Validate against timetable dates
-            if date < timetable.start_date or date > timetable.end_date:
-                raise ValidationError("Lesson date must be within the timetable term.")
-
-            # Check teacher conflicts (core logic)
+        if day_of_week and time_slot and teacher:
             exclude_id = instance.id if instance else None
+
+            # Check if teacher already has a lesson in that time slot on that day
             conflicts = Lesson.objects.filter(
                 teacher=teacher,
-                date=date,
                 day_of_week=day_of_week,
-                # Overlap query: Adapt to TimeField (use django.db.models.TimeField)
-                start_time__lt=end_time,  # existing_start < proposed_end
-                end_time__gt=start_time,  # existing_end > proposed_start
+                time_slot=time_slot,
             ).exclude(id=exclude_id)
 
             if conflicts.exists():
-                conflict_details = conflicts.values_list('id', 'timetable__grade__name', 'subject__name')
+                conflict_details = conflicts.values_list(
+                    'id', 'timetable__grade__name', 'subject__name'
+                )
                 raise ValidationError(
-                    f"Teacher conflict on {date}: Already scheduled for {list(conflict_details)}."
+                    f"Teacher conflict on {day_of_week}: Already scheduled for {list(conflict_details)}."
                 )
 
         return cleaned_data
+
 # ------------------------------- SESSION FORM (Virtual/Hybrid) -------------------------------
 class SessionForm(BaseForm):
     class Meta:
@@ -605,10 +724,10 @@ class SessionForm(BaseForm):
 class AttendanceForm(BaseForm):
     class Meta:
         model = Attendance
-        fields = ['status', 'notes']
+        fields = ['status', 'remarks']
         widgets = {
             'status': forms.Select(choices=ATTENDANCE_STATUS_CHOICES),
-            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Reason for absence/tardy'}),
+            'remarks': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Reason for absence/tardy'}),
         }
 
     def __init__(self, *args, lesson=None, **kwargs):

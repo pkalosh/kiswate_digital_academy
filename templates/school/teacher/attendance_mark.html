@@ -37,26 +37,15 @@
   {% if lesson %}
   <div class="card shadow-sm rounded-4 border-0 mb-4">
     <div class="card-header bg-light">
-      <h5 class="mb-0 fw-bold">Mark Attendance for {{ lesson.subject.name }} — {{ lesson.date }}</h5>
+      <h5 class="mb-0 fw-bold">Mark Attendance for {{ lesson.subject.name }} — {{ lesson.lesson_date }}</h5>
     </div>
 
     <div class="card-body">
 
       <!-- SMART ID SCAN -->
       <div class="alert alert-info border-0 shadow-sm p-3 rounded-4 mb-4">
-        <h6 class="fw-bold mb-2"><i class="bi bi-qr-code-scan"></i> Smart ID Attendance</h6>
-        <p class="small text-muted mb-2">Scan or type a student's Smart ID to mark them <strong>Present</strong>.</p>
-
-        <form method="post" action="" class="row g-3">
-          {% csrf_token %}
-          <div class="col-md-6">
-            <input type="text" name="smart_id" class="form-control form-control-lg"
-              placeholder="Enter or Scan Smart ID ..." autofocus required>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-primary btn-lg">Mark Present</button>
-          </div>
-        </form>
+        <h6 class="fw-bold mb-2"><i class="bi bi-qr-code-scan"></i> Smart ID Attendance</h6>            
+        <button class="btn btn-primary btn-lg">Scan</button>
       </div>
       <!-- END SMART ID SCAN -->
 
@@ -84,55 +73,57 @@
                   </td>
 
                   <td class="text-center">
-
                     <div class="btn-group" role="group">
 
                       <!-- Present -->
-                      <input type="radio"
-                        class="btn-check"
-                        name="status_{{ enrollment.id }}"
-                        id="present_{{ enrollment.id }}"
-                        value="P"
-                        {% if existing and existing.status == 'P' %}checked{% endif %}
-                      >
-                      <label class="btn btn-outline-success btn-sm px-3"
-                        for="present_{{ enrollment.id }}">Present</label>
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="present_{{ enrollment.id }}" value="P"
+                             {% if existing and existing.status == 'P' %}checked{% endif %}>
+                      <label class="btn btn-outline-success btn-sm px-3" for="present_{{ enrollment.id }}">Present</label>
 
-                      <!-- Absent -->
-                      <input type="radio"
-                        class="btn-check"
-                        name="status_{{ enrollment.id }}"
-                        id="absent_{{ enrollment.id }}"
-                        value="A"
-                        {% if existing and existing.status == 'A' %}checked{% endif %}
-                      >
-                      <label class="btn btn-outline-danger btn-sm px-3"
-                        for="absent_{{ enrollment.id }}">Absent</label>
+                      <!-- Excused Tardy -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="et_{{ enrollment.id }}" value="ET"
+                             {% if existing and existing.status == 'ET' %}checked{% endif %}>
+                      <label class="btn btn-outline-primary btn-sm px-3" for="et_{{ enrollment.id }}">Excused Tardy</label>
 
-                      <!-- Excused -->
-                      <input type="radio"
-                        class="btn-check"
-                        name="status_{{ enrollment.id }}"
-                        id="excused_{{ enrollment.id }}"
-                        value="ET"
-                        {% if existing and existing.status == 'ET' %}checked{% endif %}
-                      >
-                      <label class="btn btn-outline-primary btn-sm px-3"
-                        for="excused_{{ enrollment.id }}">Excused</label>
+                      <!-- Unexcused Tardy -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="ut_{{ enrollment.id }}" value="UT"
+                             {% if existing and existing.status == 'UT' %}checked{% endif %}>
+                      <label class="btn btn-outline-danger btn-sm px-3" for="ut_{{ enrollment.id }}">Unexcused Tardy</label>
 
-                      <!-- Early Leave -->
-                      <input type="radio"
-                        class="btn-check"
-                        name="status_{{ enrollment.id }}"
-                        id="early_{{ enrollment.id }}"
-                        value="EA"
-                        {% if existing and existing.status == 'EA' %}checked{% endif %}
-                      >
-                      <label class="btn btn-outline-warning btn-sm px-3"
-                        for="early_{{ enrollment.id }}">Early Leave</label>
+                      <!-- Excused Absence -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="ea_{{ enrollment.id }}" value="EA"
+                             {% if existing and existing.status == 'EA' %}checked{% endif %}>
+                      <label class="btn btn-outline-warning btn-sm px-3" for="ea_{{ enrollment.id }}">Excused Absence</label>
+
+                      <!-- Unexcused Absence -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="ua_{{ enrollment.id }}" value="UA"
+                             {% if existing and existing.status == 'UA' %}checked{% endif %}>
+                      <label class="btn btn-outline-danger btn-sm px-3" for="ua_{{ enrollment.id }}">Unexcused Absence</label>
+
+                      <!-- Inappropriate Behavior -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="ib_{{ enrollment.id }}" value="IB"
+                             {% if existing and existing.status == 'IB' %}checked{% endif %}>
+                      <label class="btn btn-outline-dark btn-sm px-3" for="ib_{{ enrollment.id }}">Inappropriate Behavior</label>
+
+                      <!-- Suspension -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="susp_{{ enrollment.id }}" value="18"
+                             {% if existing and existing.status == '18' %}checked{% endif %}>
+                      <label class="btn btn-outline-secondary btn-sm px-3" for="susp_{{ enrollment.id }}">Suspension</label>
+
+                      <!-- Expulsion -->
+                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}"
+                             id="exp_{{ enrollment.id }}" value="20"
+                             {% if existing and existing.status == '20' %}checked{% endif %}>
+                      <label class="btn btn-outline-danger btn-sm px-3" for="exp_{{ enrollment.id }}">Expulsion</label>
 
                     </div>
-
                   </td>
                 </tr>
 

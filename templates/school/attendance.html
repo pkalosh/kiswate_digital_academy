@@ -3,11 +3,116 @@
 {% block title %}Attendance | {{ school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
+<style>
+  /* Tailwind-like soft palette but using Bootstrap layout */
+  :root{
+    --bg-soft:#f8fafc;
+    --muted:#6b7280;
+    --card:#ffffff;
+    --accent-1:#60a5fa; /* blue */
+    --accent-2:#34d399; /* green */
+    --accent-3:#7c3aed; /* purple */
+    --accent-4:#f59e0b; /* amber */
+    --success:#10b981;
+    --danger:#ef4444;
+    --border: #e6edf3;
+    --shadow: 0 6px 18px rgba(15,23,42,0.06);
+  }
+
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
+  .stat-value { font-weight:700; font-size:1.25rem; }
+  .stat-label { color:var(--muted); font-size:.875rem; }
+  .small-muted { color:var(--muted); font-size:.9rem; }
+  .badge-soft { padding:.25rem .5rem; border-radius:999px; font-weight:600; font-size:.8rem; }
+  .card-compact { padding:12px; border-radius:12px; border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow); }
+  .chart-card { min-height:220px; display:flex; align-items:center; justify-content:center; }
+  .table-mini td, .table-mini th { padding: .45rem .6rem; vertical-align: middle; font-size:.92rem; }
+</style>
+<style>
+/* MOBILE OPTIMIZATION */
+
+/* 1. Make header filters stack */
+@media (max-width: 576px) {
+    header .input-group {
+        width: 100% !important;
+        flex-direction: column;
+    }
+    header .input-group input,
+    header .input-group select,
+    header .input-group button {
+        width: 100% !important;
+        margin-bottom: 6px;
+    }
+    header .d-flex.gap-2.align-items-center {
+        flex-direction: column;
+        align-items: stretch !important;
+        width: 100%;
+    }
+}
+
+/* 2. Make stat cards stack full-width */
+@media (max-width: 768px) {
+    .stat-card {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .stat-card i {
+        font-size: 1.8rem !important;
+    }
+}
+
+/* 3. Charts responsive */
+.chart-card canvas {
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* 4. Filter bar (grade + stream) stack */
+@media (max-width: 768px) {
+    .card-compact form.d-flex.gap-2 {
+        flex-direction: column;
+        width: 100%;
+    }
+    .card-compact select {
+        width: 100% !important;
+    }
+    .card-compact button {
+        width: 100%;
+    }
+}
+
+/* 5. Tables: reduce text size on mobile */
+@media (max-width: 576px) {
+    .table-mini td, .table-mini th {
+        font-size: 0.75rem;
+        padding: .35rem .45rem;
+    }
+}
+
+/* 6. Action buttons in table stack */
+@media (max-width: 576px) {
+    table .btn {
+        padding: 2px 6px !important;
+        font-size: 0.75rem !important;
+    }
+}
+
+/* 7. Page header spacing optimization */
+@media (max-width: 576px) {
+    .header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+    }
+}
+</style>
+
+
+<header class="header d-flex align-items-center justify-content-between mb-3">
   <div class="d-flex gap-2 align-items-center">
     <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
     <div>
-      <h6 class="m-0 fw-bold">Attendance</h6>
+      <h5 class="m-0 fw-bold">Attendance</h5>
       <nav aria-label="breadcrumb" class="small">
         <ol class="breadcrumb mb-0">
           <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
@@ -19,11 +124,11 @@
 
   <div class="d-flex gap-2 align-items-center">
     <form method="get" class="d-inline">
-      <div class="input-group input-group-sm" style="width:300px;">
+      <div class="input-group input-group-sm" style="width:360px;">
         <input type="date" name="date" class="form-control" value="{{ request.GET.date }}">
         <select name="lesson" class="form-select">
           <option value="">All lessons</option>
-            {% for l in lessons_list|default:"" %}                
+          {% for l in lessons_list|default:"" %}
             <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>{{ l.subject.name }} — {{ l.date }}</option>
           {% endfor %}
         </select>
@@ -34,9 +139,9 @@
   </div>
 </header>
 
-<section class="content container-fluid py-4">
+<section class="content container-fluid py-3">
   {% if messages %}
-    <div class="row">
+    <div class="row mb-3">
       {% for message in messages %}
         <div class="col-12">
           <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}
@@ -47,85 +152,365 @@
     </div>
   {% endif %}
 
-  <div class="card shadow-sm rounded-4 border-0">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-check2-square me-2"></i> Attendance ({% if attendances.paginator %}
-    {{ attendances.paginator.count }}
-{% else %}
-    {{ attendances|length }}
-{% endif %}
- )</h5>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#attendanceModal" data-mode="create">
-          <i class="bi bi-plus"></i> Mark Attendance
-        </button>
-        <a class="btn btn-sm btn-outline-success" href="#" data-bs-toggle="modal" data-bs-target="#exportModal">Export</a>
-      </div>
-    </div>
+  <!-- Top stats -->
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="d-flex gap-2 flex-wrap">
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Present</div>
+            <div class="stat-value text-success">{{ stats.P|default:0 }}</div>
+          </div>
+          <div class="ms-3">
+            <i class="bi bi-check2-circle fs-3" style="color:var(--accent-2)"></i>
+          </div>
+        </div>
 
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle">
-          <thead class="table-light">
-            <tr>
-              <th>Student</th>
-              <th>Lesson</th>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Marked By</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for attendance in attendances %}
-            <tr>
-              <td>{{ attendance.enrollment.student.user.get_full_name }}</td>
-              <td>{{ attendance.lesson.subject.name }} — {{ attendance.lesson.timetable.grade.name }}</td>
-              <td>{{ attendance.lesson.date }}</td>
-              <td>
-                {% if attendance.status == 'P' %}<span class="badge bg-success">Present</span>
-                {% elif attendance.status == 'A' %}<span class="badge bg-danger">Absent</span>
-                {% else %}<span class="badge bg-secondary">{{ attendance.status }}</span>{% endif %}
-              </td>
-              <td>{% if attendance.marked_by %}
-                    {{ attendance.marked_by.user.get_full_name }}
-                {% else %}
-                    Not marked
-                {% endif %}</td>
-              <td>
-                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceModal"
-                        data-mode="edit" data-id="{{ attendance.id }}"
-                        data-enrollment="{{ attendance.enrollment.id }}"
-                        data-status="{{ attendance.status }}">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#attendanceDeleteModal"
-                        data-id="{{ attendance.id }}" data-name="{{ attendance.enrollment.student.user.get_full_name }}">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="6" class="text-center text-muted py-4">No attendance records found.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Excused Tardy (ET)</div>
+            <div class="stat-value">{{ stats.ET|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-clock-history fs-3" style="color:var(--accent-1)"></i></div>
+        </div>
 
-      <!-- Pagination -->
-      {% if attendances.has_other_pages %}
-      <nav>
-        <ul class="pagination pagination-sm">
-          {% if attendances.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ attendances.previous_page_number }}{% if request.GET.date %}&date={{ request.GET.date }}{% endif %}{% if request.GET.lesson %}&lesson={{ request.GET.lesson }}{% endif %}">Previous</a></li>{% endif %}
-          <li class="page-item disabled"><span class="page-link">Page {{ attendances.number }} of {{ attendances.paginator.num_pages }}</span></li>
-          {% if attendances.has_next %}<li class="page-item"><a class="page-link" href="?page={{ attendances.next_page_number }}{% if request.GET.date %}&date={{ request.GET.date }}{% endif %}{% if request.GET.lesson %}&lesson={{ request.GET.lesson }}{% endif %}">Next</a></li>{% endif %}
-        </ul>
-      </nav>
-      {% endif %}
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Unexcused Tardy (UT)</div>
+            <div class="stat-value">{{ stats.UT|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-exclamation-triangle fs-3" style="color:#f97316"></i></div>
+        </div>
+
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Excused Absence (EA)</div>
+            <div class="stat-value">{{ stats.EA|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-file-earmark-medical fs-3" style="color:#60a5fa"></i></div>
+        </div>
+
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Unexcused Absence (UA)</div>
+            <div class="stat-value text-danger">{{ stats.UA|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-person-x fs-3" style="color:var(--danger)"></i></div>
+        </div>
+
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Inappropriate Behavior (IB)</div>
+            <div class="stat-value">{{ stats.IB|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-emoji-frown fs-3" style="color:#7c3aed"></i></div>
+        </div>
+
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Suspensions (18)</div>
+            <div class="stat-value">{{ stats.18|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-shield-exclamation fs-3" style="color:#fb923c"></i></div>
+        </div>
+
+        <div class="stat-card d-flex align-items-center gap-3">
+          <div>
+            <div class="stat-label">Expulsions (20)</div>
+            <div class="stat-value">{{ stats.20|default:0 }}</div>
+          </div>
+          <div class="ms-3"><i class="bi bi-x-circle fs-3" style="color:#ef4444"></i></div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Charts + Filters row -->
+  <div class="row gy-3">
+    <div class="col-lg-4">
+      <div class="card-compact">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Status Distribution</div>
+            <div class="fw-semibold">Present vs Absences</div>
+          </div>
+          <div class="small-muted">Last 30 days</div>
+        </div>
+        <div class="chart-card">
+          <canvas id="statusPie" style="max-width:100%"></canvas>
+        </div>
+      </div>
+
+      <div class="card-compact mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Subject Attendance</div>
+            <div class="fw-semibold">By subject (rate)</div>
+          </div>
+          <div class="small-muted">Top subjects</div>
+        </div>
+        <div class="chart-card">
+          <canvas id="subjectBar" style="width:100%; max-height:220px"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card-compact">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Attendance Trend</div>
+            <div class="fw-semibold">Daily attendance (last 30 days)</div>
+          </div>
+          <div>
+            <form method="get" class="d-flex gap-2">
+              <select class="form-select form-select-sm" name="grade" style="width:140px;">
+                <option value="">All grades</option>
+                {% for g in grades|default_if_none:"" %}
+                  <option value="{{ g.id }}" {% if request.GET.grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+
+              </select>
+              <select class="form-select form-select-sm" name="stream" style="width:140px;">
+                <option value="">All streams</option>
+                {% for s in streams|default_if_none:"" %}
+                  <option value="{{ s.id }}" {% if request.GET.stream == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm btn-outline-primary">Apply</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="chart-card" style="min-height:260px;">
+          <canvas id="dailyTrend" style="width:100%;"></canvas>
+        </div>
+      </div>
+
+      <!-- Grade & Stream table -->
+      <div class="card-compact mt-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">By Grade & Stream</div>
+            <div class="fw-semibold">Class level breakdown</div>
+          </div>
+          <div class="small-muted">Sortable</div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-mini table-hover table-mini">
+            <thead class="table-light">
+              <tr>
+                <th>Grade</th>
+                <th>Stream</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Present</th>
+                <th class="text-end">Absent</th>
+                <th class="text-end">Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in grade_stats|default_if_none:"" %}
+              <tr>
+                <td>{{ row.grade }}</td>
+                <td>{{ row.stream }}</td>
+                <td class="text-end">{{ row.total }}</td>
+                <td class="text-end">{{ row.present|default:0 }}</td>
+                <td class="text-end">{{ row.absent|default:0 }}</td>
+                <td class="text-end">{{ row.present|default:0|floatformat:0 }}/{{ row.total|default:1 }} </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center small-muted py-3">No grade/stream data available.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Subject & Student lists -->
+  <div class="row gy-3 mt-3">
+    <div class="col-lg-6">
+      <div class="card-compact">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Top Subjects</div>
+            <div class="fw-semibold">Attendance by subject</div>
+          </div>
+          <div class="small-muted">Exportable</div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-mini table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Subject</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Present</th>
+                <th class="text-end">Absent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in subject_stats|default_if_none:"" %}
+              <tr>
+                <td>{{ s.subject }}</td>
+                <td class="text-end">{{ s.total }}</td>
+                <td class="text-end">{{ s.present|default:0 }}</td>
+                <td class="text-end">{{ s.absent|default:0 }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center small-muted py-3">No subject data.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card-compact">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Students</div>
+            <div class="fw-semibold">Attendance summary (top 25)</div>
+          </div>
+          <div class="small-muted">View / Export</div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-mini table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Student</th>
+                <th class="text-end">Present</th>
+                <th class="text-end">Absent</th>
+                <th class="text-end">Rate %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for st in student_stats|default_if_none:"" %}
+              <tr>
+                <td>{{ st.student }}</td>
+                <td class="text-end">{{ st.present|default:0 }}</td>
+                <td class="text-end">{{ st.absent|default:0 }}</td>
+                <td class="text-end">{{ st.rate|default:0 }}%</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center small-muted py-3">No student data.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw attendance list (paginated) -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card-compact">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="small-muted">Attendance Records</div>
+            <div class="fw-semibold">Raw listing (paginated)</div>
+          </div>
+          <div>
+            <a class="btn btn-sm btn-outline-primary" href="">Export CSV</a>
+            <a class="btn btn-sm btn-outline-secondary" href="">Export PDF</a>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Student</th>
+                <th>Subject</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Marked By</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attendance in attendances %}
+              <tr>
+                <td>{{ attendance.enrollment.student.user.get_full_name }}</td>
+                <td>{{ attendance.enrollment.subject.name }}</td>
+                <td>{{ attendance.date }}</td>
+                <td>
+                  {% with s=attendance.status %}
+                    {% if s == 'P' %}
+                      <span class="badge bg-success badge-soft">Present</span>
+                    {% elif s == 'ET' %}
+                      <span class="badge badge-soft" style="background:#e6f6ff;color:#0369a1">ET</span>
+                    {% elif s == 'UT' %}
+                      <span class="badge badge-soft" style="background:#fff4e6;color:#b45309">UT</span>
+                    {% elif s == 'EA' %}
+                      <span class="badge badge-soft" style="background:#ecfeff;color:#0369a1">EA</span>
+                    {% elif s == 'UA' %}
+                      <span class="badge badge-soft" style="background:#fff1f2;color:#b91c1c">UA</span>
+                    {% elif s == 'IB' %}
+                      <span class="badge badge-soft" style="background:#f3e8ff;color:#6b21a8">IB</span>
+                    {% elif s == '18' %}
+                      <span class="badge badge-soft" style="background:#fff7ed;color:#92400e">Susp</span>
+                    {% elif s == '20' %}
+                      <span class="badge badge-soft" style="background:#fff1f2;color:#82171c">Expel</span>
+                    {% else %}
+                      <span class="badge bg-secondary badge-soft">{{ s }}</span>
+                    {% endif %}
+                  {% endwith %}
+                </td>
+                <td>
+                  {% if attendance.marked_by %}
+                    {{ attendance.marked_by.user.get_full_name }}
+                  {% else %}
+                    <span class="small-muted">Not marked</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attendanceModal"
+                          data-mode="edit" data-id="{{ attendance.id }}"
+                          data-enrollment="{{ attendance.enrollment.id }}"
+                          data-status="{{ attendance.status }}">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#attendanceDeleteModal"
+                          data-id="{{ attendance.id }}" data-name="{{ attendance.enrollment.student.user.get_full_name }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="6" class="text-center text-muted py-4">No attendance records found.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if attendances.has_other_pages %}
+        <nav class="mt-2">
+          <ul class="pagination pagination-sm">
+            {% if attendances.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ attendances.previous_page_number }}{% if request.GET.date %}&date={{ request.GET.date }}{% endif %}{% if request.GET.lesson %}&lesson={{ request.GET.lesson }}{% endif %}">Previous</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ attendances.number }} of {{ attendances.paginator.num_pages }}</span></li>
+            {% if attendances.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ attendances.next_page_number }}{% if request.GET.date %}&date={{ request.GET.date }}{% endif %}{% if request.GET.lesson %}&lesson={{ request.GET.lesson }}{% endif %}">Next</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
 </section>
 
+<!-- Modals (reuse your existing modal markup) -->
 <!-- Attendance Modal (create/edit) -->
 <div class="modal fade" id="attendanceModal" tabindex="-1">
   <div class="modal-dialog">
@@ -191,16 +576,111 @@
       </div>
       <div class="modal-body">
         <p>Export as CSV or PDF?</p>
-        <a class="btn btn-outline-primary me-2" href="#">CSV</a>
-        <a class="btn btn-outline-secondary" href="#">PDF</a>
+        <a class="btn btn-outline-primary me-2" href="">CSV</a>
+        <a class="btn btn-outline-secondary" href="">PDF</a>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Charts: Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // Attendance modal behavior
+  // Helper to read data from context safely
+  const statusPie = {
+    labels: {{ status_pie.labels|default:"[]"|safe }},
+    data: {{ status_pie.values|default:"[]"|safe }}
+  };
+
+  const dailyTrend = {
+    labels: {{ daily_trend.labels|default:"[]"|safe }},
+    data: {{ daily_trend.values|default:"[]"|safe }}
+  };
+
+  const subjectBar = {
+    labels: {{ subject_bar.labels|default:"[]"|safe }},
+    data: {{ subject_bar.values|default:"[]"|safe }}
+  };
+
+  // Soft palette matching Tailwind-like aesthetic
+  const palette = [
+    '#60a5fa','#34d399','#7c3aed','#f59e0b','#fb7185','#60a5fa','#a78bfa','#f97316'
+  ];
+
+  // Status Pie
+  const ctxPie = document.getElementById('statusPie').getContext('2d');
+  new Chart(ctxPie, {
+    type: 'pie',
+    data: {
+      labels: statusPie.labels,
+      datasets: [{
+        data: statusPie.data,
+        backgroundColor: palette.slice(0, statusPie.data.length),
+        borderColor: '#fff',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  // Subject Bar
+  const ctxSub = document.getElementById('subjectBar').getContext('2d');
+  new Chart(ctxSub, {
+    type: 'bar',
+    data: {
+      labels: subjectBar.labels,
+      datasets: [{
+        label: 'Attendance Rate',
+        data: subjectBar.data,
+        backgroundColor: palette,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { maxRotation: 25, minRotation: 0 } },
+        y: { beginAtZero: true }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Daily Trend - line
+  const ctxLine = document.getElementById('dailyTrend').getContext('2d');
+  new Chart(ctxLine, {
+    type: 'line',
+    data: {
+      labels: dailyTrend.labels,
+      datasets: [{
+        label: 'Attendance Records',
+        data: dailyTrend.data,
+        fill: true,
+        tension: 0.3,
+        backgroundColor: 'rgba(52,211,153,0.12)',
+        borderColor: '#34d399',
+        pointRadius: 2,
+        pointHoverRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { maxRotation: 25, minRotation: 0 } },
+        y: { beginAtZero: true }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index', intersect: false }
+      }
+    }
+  });
+
+  // Modal population (reuse your existing JS)
   const attendanceModal = document.getElementById('attendanceModal');
   if (attendanceModal) {
     attendanceModal.addEventListener('show.bs.modal', function (event) {
@@ -217,7 +697,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const id = button.dataset.id;
         document.getElementById('attendanceModalTitle').textContent = 'Edit Attendance';
         form.action = "{% url 'school:attendance-edit' 0 %}".replace('0', id);
-        // populate fields if data-* provided
         if (button.dataset.enrollment) {
           const el = document.querySelector('#id_enrollment');
           if (el) el.value = button.dataset.enrollment;
@@ -230,7 +709,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Attendance delete modal
+  // Delete modal
   const deleteModal = document.getElementById('attendanceDeleteModal');
   if (deleteModal) {
     deleteModal.addEventListener('show.bs.modal', function (event) {

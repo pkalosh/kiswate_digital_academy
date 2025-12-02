@@ -88,7 +88,7 @@
                                 <tbody>
                                     {% for lesson in grade_lessons|slice:":5" %}
                                     <tr>
-                                        <td>{{ lesson.date|date:"M d" }} {{ lesson.start_time }}</td>
+                                        <td>{{ lesson.lesson_date|date:"M d" }} : {{ lesson.time_slot.start_time }} - {{ lesson.time_slot.end_time }}</td>
                                         <td>{{ lesson.subject.name }}</td>
                                         <td>{{ lesson.room|default:"N/A" }}</td>
                                         <td><a href="{% url 'school:teacher-attendance-mark' lesson.id %}" class="btn btn-sm btn-success">Mark</a></td>

@@ -24,6 +24,8 @@ urlpatterns = [
     path("grade/<int:grade_id>/streams/create/", views.create_stream, name="stream-create"),
     path("stream/<int:stream_id>/delete/", views.delete_stream, name="stream-delete"),
 
+    # Term
+    # path("terms/", views.terms, name="terms"),
 
     path("school-users/", views.school_users, name="school-users"),
 
@@ -95,6 +97,24 @@ urlpatterns = [
     path('lessons/create/', views.lesson_create, name='lesson-create'),
     path('lessons/<int:lesson_id>/edit/', views.lesson_edit, name='lesson-edit'),
     path('lessons/<int:lesson_id>/delete/', views.lesson_delete, name='lesson-delete'),
+
+    # Time Slots
+    path('time-slots/', views.time_slot_list, name='time-slot-list'),
+    path('time-slots/create/', views.time_slot_create, name='time-slot-create'),
+    path('time-slots/<int:pk>/edit/', views.time_slot_edit, name='time-slot-edit'),
+    path('time-slots/<int:pk>/delete/', views.time_slot_delete, name='time-slot-delete'),
+
+    # Terms Management
+    path("terms/", views.term_list, name="term-list"),
+    path("terms/create/", views.create_term, name="create-term"),
+    path("terms/<int:term_id>/delete/", views.delete_term, name="delete-term"),
+    path("terms/<int:term_id>/edit/", views.edit_term, name="edit-term"),
+
+
+
+    path('generate-timetable/', views.generate_timetable_view, name='generate_timetable'),
+    path('timetable/week/', views.view_timetable_week, name='timetable_week'),
+    path('timetable/teacher/', views.teacher_timetable_view, name='teacher_timetable'),
 
     #Lesson from Teachers
     path('teacher/<int:staff_id>/lessons/', views.teacher_lessons, name='teacher-lessons'),

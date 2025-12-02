@@ -1,0 +1,220 @@
+{% extends 'school/base.html' %}
+{% block title %}Terms | {{ school.name }}{% endblock %}
+
+{% block content %}
+
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">School Terms</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Terms</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
+  <div>
+    <button class="btn btn-sm btn-success"
+            data-bs-toggle="modal"
+            data-bs-target="#termModal"
+            data-mode="create">
+      <i class="bi bi-plus"></i> Add Term
+    </button>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+
+  {% if messages %}
+  <div class="row">
+    {% for message in messages %}
+    <div class="col-12">
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-calendar-week me-2"></i> Terms ({{ terms.count }})</h5>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for term in terms %}
+            <tr>
+              <td>{{ term.name }}</td>
+              <td>{{ term.start_date }}</td>
+              <td>{{ term.end_date }}</td>
+              <td>
+                {% if term.is_active %}
+                  <span class="badge bg-success">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#termModal"
+                        data-mode="edit"
+                        data-id="{{ term.id }}"
+                        data-name="{{ term.name }}"
+                        data-start="{{ term.start_date }}"
+                        data-end="{{ term.end_date }}"
+                        data-active="{{ term.is_active }}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+
+                <button class="btn btn-sm btn-outline-danger"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteModal"
+                        data-id="{{ term.id }}"
+                        data-name="{{ term.name }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">No terms found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Term Modal -->
+<div class="modal fade" id="termModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="termModalTitle">Add Term</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form method="post" id="termForm">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            {{ form.name.label_tag }}{{ form.name }}
+          </div>
+          <div class="mb-3">
+            {{ form.start_date.label_tag }}{{ form.start_date }}
+          </div>
+          <div class="mb-3">
+            {{ form.end_date.label_tag }}{{ form.end_date }}
+          </div>
+          <div class="mb-3">
+            {{ form.is_active.label_tag }}{{ form.is_active }}
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete Term</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form method="post" id="deleteForm">{% csrf_token %}
+        <div class="modal-body">
+          <p>Are you sure you want to delete the term <strong id="deleteName"></strong>?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger">Delete</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  /* ----------------------
+     TERM CREATE / EDIT MODAL
+     ---------------------- */
+  const termModal = document.getElementById('termModal');
+  const termForm = document.getElementById('termForm');
+  const termModalTitle = document.getElementById('termModalTitle');
+
+  termModal.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    const mode = btn.dataset.mode;
+
+    if (mode === "create") {
+      termModalTitle.textContent = "Add Term";
+      termForm.action = "{% url 'school:create-term' %}";
+      termForm.reset();
+    }
+
+    if (mode === "edit") {
+      termModalTitle.textContent = "Edit Term";
+      const termId = btn.dataset.id;
+
+      termForm.action = "{% url 'school:edit-term' 0 %}".replace("0", termId);
+
+      document.querySelector("#id_name").value = btn.dataset.name;
+      document.querySelector("#id_start_date").value = btn.dataset.start;
+      document.querySelector("#id_end_date").value = btn.dataset.end;
+      document.querySelector("#id_is_active").checked = btn.dataset.active === "True";
+    }
+  });
+
+
+
+  /* ----------------------
+     DELETE MODAL
+     ---------------------- */
+  const deleteModal = document.getElementById('deleteModal');
+  const deleteForm = document.getElementById('deleteForm');
+
+  deleteModal.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    const termId = btn.dataset.id;
+
+    deleteForm.action = "{% url 'school:delete-term' 0 %}".replace("0", termId);
+
+    document.getElementById('deleteName').textContent = btn.dataset.name;
+  });
+
+});
+</script>
+
+{% endblock %}

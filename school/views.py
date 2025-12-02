@@ -13,7 +13,15 @@ from django.utils.safestring import mark_safe
 from django.core.mail import send_mail
 import random
 import string
+from datetime import timedelta, date
+from .services.timetable_generator import generate_for_stream
 from collections import defaultdict
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import JsonResponse, HttpResponseForbidden
+from datetime import timedelta
+import datetime
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -36,22 +44,23 @@ import csv
 from io import StringIO
 import logging
 from decimal import Decimal
+from datetime import timedelta
 import uuid
 from userauths.models import User
 from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
-    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams
+    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
     GradeForm,ParentCreationForm, ParentEditForm,StaffCreationForm, StaffEditForm,
-    StudentCreationForm, StudentEditForm,SmartIDForm,
+    StudentCreationForm, StudentEditForm,SmartIDForm,GenerateTimetableForm,
     SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
-    ContactMessageForm,ParentStudentCreationForm
+    ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm
 )
 from kiswate_digital_app.forms import StreamForm
 
@@ -100,7 +109,7 @@ def dashboard(request):
     for tt in timetables:
         lessons_qs = Lesson.objects.filter(timetable=tt)\
                                    .select_related('subject', 'teacher')\
-                                   .order_by('date', 'start_time')[:20]
+                                   .order_by('time_slot','lesson_date')[:20]
         lessons_count = Lesson.objects.filter(timetable=tt).count()
         timetables_with_lessons.append({
             'timetable': tt,
@@ -112,6 +121,7 @@ def dashboard(request):
     context = {
         "total_teachers": total_teachers,
         "total_students": total_students,
+        "school": school,
         "total_parents": total_parents,
         "total_discipline_cases": total_discipline_cases,
         "total_timetable_slots": total_timetable_slots,
@@ -120,6 +130,137 @@ def dashboard(request):
     }
 
     return render(request, "school/dashboard.html", context)
+
+
+@login_required
+def time_slot_list(request):
+    # Assuming staff belongs to a school
+    school = request.user.staffprofile.school
+    slots = TimeSlot.objects.filter(school=school).order_by("start_time")
+    return render(request, "school/time_slots.html", {"slots": slots, "school": school})
+
+@login_required
+def time_slot_create(request):
+    school = request.user.staffprofile.school
+    form = TimeSlotForm(request.POST or None, school=school)
+
+    if request.method == "POST" and form.is_valid():
+        slot = form.save(commit=False)
+        slot.school = school
+        slot.created_by = request.user.staffprofile
+        slot.updated_by = request.user.staffprofile
+        slot.save()
+        messages.success(request, "Time slot created successfully.")
+        return redirect("school:time-slot-list")
+
+    return render(request, "school/time_slots.html", {"form": form, "school": school, "mode": "create"})
+
+@login_required
+def time_slot_edit(request, pk):
+    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.staffprofile.school)
+    form = TimeSlotForm(request.POST or None, instance=slot, school=slot.school)
+
+    if request.method == "POST" and form.is_valid():
+        slot = form.save(commit=False)
+        slot.updated_by = request.user.staffprofile
+        slot.save()
+        messages.success(request, "Time slot updated successfully.")
+        return redirect("school:time-slot-list")
+
+    return render(request, "school/time_slots.html", {"form": form, "school": slot.school, "mode": "edit", "slot": slot})
+
+@login_required
+def time_slot_delete(request, pk):
+    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.staffprofile.school)
+    if request.method == "POST":
+        slot.delete()
+        messages.success(request, "Time slot deleted successfully.")
+        return redirect("school:time-slot-list")
+
+    return render(request, "school/time_slots.html", {"slot": slot})
+
+
+
+def term_list(request):
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    terms = Term.objects.filter(school=school)
+    form = TermForm()
+    return render(request, "school/terms.html", {"school": school, "terms": terms, "form": form})
+
+
+@login_required
+def create_term(request):
+    try:
+        school = request.user.school_admin_profile
+    
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+    
+    form = TermForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        term = form.save(commit=False)
+        term.school = school
+        term.save()
+
+        # If new term is active → deactivate all other terms
+        if term.is_active:
+            Term.objects.filter(school=school).exclude(id=term.id).update(is_active=False)
+
+        messages.success(request, "New term created successfully.")
+        return redirect("school:term-list", school_id=school.id)
+
+    return render(request, "school/terms/create_term.html", {
+        "form": form,
+        "school": school
+    })
+
+@login_required
+def edit_term(request, term_id):
+    term = get_object_or_404(Term, id=term_id)
+    school = term.school
+
+    form = TermForm(request.POST or None, instance=term)
+
+    if request.method == "POST" and form.is_valid():
+        updated_term = form.save(commit=False)
+        updated_term.school = school
+        updated_term.save()
+
+        # If edited term is now active → deactivate all other terms
+        if updated_term.is_active:
+            Term.objects.filter(school=school).exclude(id=updated_term.id).update(is_active=False)
+
+        messages.success(request, "Term updated successfully.")
+        return redirect("school:term-list", school_id=school.id)
+
+    return render(request, "school/terms/edit_term.html", {
+        "form": form,
+        "term": term,
+        "school": school,
+    })
+
+
+@login_required
+def delete_term(request, term_id):
+    term = get_object_or_404(Term, id=term_id)
+    school_id = term.school.id
+
+    if request.method == "POST":
+        term.delete()
+        messages.success(request, "Term deleted successfully.")
+        return redirect("school:term-list", school_id=school_id)
+
+    return render(request, "school/terms/delete_term_confirm.html", {
+        "term": term
+    })
 
 
 @login_required
@@ -225,6 +366,185 @@ def school_users(request):
     }
 
     return render(request, "school/staff.html", context)
+
+
+def is_school_admin(user):
+    # adapt to your project's admin flag - either is_superuser or custom flag on user
+    return user.is_active and (user.is_superuser or getattr(user, 'is_admin', False))
+
+@login_required
+@user_passes_test(is_school_admin)
+def generate_timetable_view(request):
+    """
+    Admin endpoint that processes GenerateTimetableForm and triggers generation.
+    """
+    if request.method == 'POST':
+        form = GenerateTimetableForm(request.POST)
+        if form.is_valid():
+            scope = form.cleaned_data['scope']
+            school = form.cleaned_data['school']
+            grade = form.cleaned_data.get('grade')
+            time_slot = form.cleaned_data.get('time_slot')
+            stream = form.cleaned_data.get('stream')
+            overwrite = form.cleaned_data.get('overwrite')
+
+            # pick term: active term for that school
+            term = Term.objects.filter(school=school, is_active=True).first()
+            if not term:
+                messages.error(request, "No active term defined for the selected school.")
+                return redirect(request.META.get('HTTP_REFERER', '/'))
+
+            created_total = 0
+            errors = []
+            if scope == 'school':
+                streams_qs = Streams.objects.filter(grade__school=school)
+                for st in streams_qs:
+                    # create timetable if not exists
+                    tt, created = Timetable.objects.get_or_create(
+                        school=school, grade=st.grade, stream=st, term=term, year=term.start_date.year,
+                        defaults={'start_date': term.start_date, 'end_date': term.end_date}
+                    )
+                    try:
+                        created_lessons = generate_for_stream(tt, overwrite=overwrite)
+                        created_total += len(created_lessons)
+                    except Exception as e:
+                        errors.append(str(e))
+            elif scope == 'grade':
+                if not grade:
+                    messages.error(request, "Please select a grade.")
+                    return redirect(request.META.get('HTTP_REFERER', '/'))
+                streams_qs = Streams.objects.filter(grade=grade)
+                for st in streams_qs:
+                    tt, created = Timetable.objects.get_or_create(
+                        school=school, grade=grade, stream=st, term=term, year=term.start_date.year,
+                        defaults={'start_date': term.start_date, 'end_date': term.end_date}
+                    )
+                    try:
+                        created_lessons = generate_for_stream(tt, overwrite=overwrite)
+                        created_total += len(created_lessons)
+                    except Exception as e:
+                        errors.append(str(e))
+            else:  # stream
+                if not stream:
+                    messages.error(request, "Please select a stream.")
+                    return redirect(request.META.get('HTTP_REFERER', '/'))
+                tt, created = Timetable.objects.get_or_create(
+                    school=school, grade=stream.grade, stream=stream, term=term, year=term.start_date.year,
+                    defaults={'start_date': term.start_date, 'end_date': term.end_date}
+                )
+                try:
+                    created_lessons = generate_for_stream(tt, overwrite=overwrite)
+                    created_total += len(created_lessons)
+                except Exception as e:
+                    errors.append(str(e))
+
+            if created_total:
+                messages.success(request, f"Timetable generated — {created_total} lessons created.")
+            if errors:
+                messages.warning(request, "Some errors: " + "; ".join(errors))
+            return redirect(request.META.get('HTTP_REFERER', '/'))
+    else:
+        form = GenerateTimetableForm()
+
+    return render(request, 'school/generate_timetable.html', {'form': form})
+
+
+@login_required
+def view_timetable_week(request):
+    """
+    Weekly timetable view: Admin, Teacher, Student, Parent
+    Handles recurring lessons (day_of_week) and one-off lessons (lesson_date)
+    """
+    user = request.user
+    school_id = user.school_admin_profile.id 
+
+    # Focus date
+    date_str = request.GET.get('date')
+    try:
+        focus_date = date.fromisoformat(date_str) if date_str else timezone.localdate()
+    except ValueError:
+        focus_date = timezone.localdate()
+
+    # Week range: Monday → Friday
+    monday = focus_date - timedelta(days=focus_date.weekday())
+    week_days = [monday + timedelta(days=i) for i in range(5)]
+
+    # Map Python weekday to Lesson.day_of_week
+    WEEKDAY_MAP = {0:'monday',1:'tuesday',2:'wednesday',3:'thursday',4:'friday',5:'saturday',6:'sunday'}
+
+    # Base lessons queryset
+    lessons_qs = Lesson.objects.select_related('timetable','subject','teacher','stream','time_slot')
+    if is_school_admin(user):
+        if school_id:
+            lessons_qs = lessons_qs.filter(timetable__school_id=school_id)
+    elif hasattr(user,'staffprofile'):
+        lessons_qs = lessons_qs.filter(teacher=user.staffprofile)
+    elif hasattr(user,'student'):
+        lessons_qs = lessons_qs.filter(stream=user.student.stream)
+    elif hasattr(user,'parent'):
+        child_stream_ids = user.parent.children.values_list('stream_id', flat=True)
+        lessons_qs = lessons_qs.filter(stream_id__in=child_stream_ids)
+    else:
+        lessons_qs = lessons_qs.none()
+
+    # Time slots for the school
+    if school_id:
+        school = get_object_or_404(School, id=school_id)
+        print(f"school: {school.name}")
+        time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
+
+    else:
+        time_slots = TimeSlot.objects.none()
+
+    # Build table: {date: {slot: [lessons]}}
+    table_data = {}
+    for d in week_days:
+        weekday_str = WEEKDAY_MAP[d.weekday()]
+        table_data[d] = {}
+        for slot in time_slots:
+            # Include one-off lessons for this date
+            lessons_on_date = lessons_qs.filter(time_slot=slot, lesson_date=d)
+            print("lesson",lessons_on_date)
+            # Include recurring lessons for this weekday
+            lessons_recurring = lessons_qs.filter(time_slot=slot, day_of_week=weekday_str, lesson_date__isnull=True)
+            table_data[d][slot] = lessons_on_date | lessons_recurring
+
+    context = {
+        'week_days': week_days,
+        'time_slots': time_slots,
+        'table_data': table_data,
+        'focus_date': focus_date,
+    }
+    print(context)
+    return render(request, 'school/timetable_week.html', context)
+
+
+@login_required
+def teacher_timetable_view(request):
+    if not hasattr(request.user, 'staffprofile'):
+        return HttpResponseForbidden()
+    teacher = request.user.staffprofile
+    time_slots =  TimeSlot.objects.filter(school=teacher.school).order_by("start_time")
+    date_str = request.GET.get('date')
+    if date_str:
+        focus_date = datetime.date.fromisoformat(date_str)
+    else:
+        focus_date = timezone.localdate()
+    monday = focus_date - timedelta(days=focus_date.weekday())
+    week_days = [monday + timedelta(days=i) for i in range(5)]
+
+    lessons_qs = Lesson.objects.filter(teacher=teacher, date__range=(week_days[0], week_days[-1])).order_by('lesson_date')
+
+    # Group by date
+    lessons_by_date = {d: lessons_qs.filter(lesson_date=d) for d in week_days}
+
+    context = {
+        'week_days': week_days,
+        'lessons_by_date': lessons_by_date,
+        'time_slots': time_slots,
+        'focus_date': focus_date,
+    }
+    return render(request, 'school/teacher_timetable.html', context)
 
 
 @login_required
@@ -1376,14 +1696,14 @@ def teacher_lessons(request, staff_id):
         return redirect('userauths:teacher-dashboard')
     
     teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
-    lessons = Lesson.objects.filter(teacher=teacher).select_related('subject', 'timetable').order_by('date', 'start_time')
+    lessons = Lesson.objects.filter(teacher=teacher).select_related('subject', 'timetable').order_by('lesson_date')
     
     query = request.GET.get('q', '')
     if query:
         lessons = lessons.filter(
             Q(subject__name__icontains=query) |
             Q(timetable__grade__name__icontains=query) |
-            Q(room__icontains=query)
+            Q(stream=query)
         )
     
     paginator = Paginator(lessons, 10)
@@ -1752,30 +2072,163 @@ def teacher_class_attendance_report(request, grade_id):
 
 @login_required
 def school_attendance(request):
+    # Ensure this is a school admin
     try:
         school = request.user.school_admin_profile
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('school:dashboard')
-    
-    # Filter by date/lesson if provided
+
+    # Base queryset
+    attendances = Attendance.objects.filter(
+        enrollment__school=school
+    ).select_related(
+        'enrollment__student__user',
+        'enrollment__subject',
+        'marked_by__user'
+    )
+
+    # ----------- FILTERS -----------
     date_filter = request.GET.get('date')
-    lesson_id = request.GET.get('lesson')
-    attendances = Attendance.objects.select_related('enrollment__student', 'lesson', 'marked_by')
+    subject_id = request.GET.get('subject')
+    grade_id = request.GET.get('grade')
+    stream_id = request.GET.get('stream')
+    status_filter = request.GET.get('status')
+
     if date_filter:
-        attendances = attendances.filter(lesson__date=date_filter)
-    if lesson_id:
-        attendances = attendances.filter(lesson_id=lesson_id)
-    
-    paginator = Paginator(attendances, 50)
+        attendances = attendances.filter(date=date_filter)
+
+    if subject_id:
+        attendances = attendances.filter(enrollment__subject_id=subject_id)
+
+    if grade_id:
+        attendances = attendances.filter(enrollment__student__grade_id=grade_id)
+
+    if stream_id:
+        attendances = attendances.filter(enrollment__student__stream_id=stream_id)
+
+    if status_filter:
+        attendances = attendances.filter(status=status_filter)
+
+    # ----------- AGGREGATIONS -----------
+
+    # Individual status counts
+    count_P = attendances.filter(status="P").count()
+    count_ET = attendances.filter(status="ET").count()
+    count_UT = attendances.filter(status="UT").count()
+    count_EA = attendances.filter(status="EA").count()
+    count_UA = attendances.filter(status="UA").count()
+    count_IB = attendances.filter(status="IB").count()
+    count_18 = attendances.filter(status="18").count()
+    count_20 = attendances.filter(status="20").count()
+
+    # ----------- Grade Stats -----------
+    grade_attendance = (
+        attendances.values(
+            'enrollment__student__grade_level__name',
+            'enrollment__student__stream__name'
+        )
+        .annotate(
+            total=Count('id'),
+            present=Count('id', filter=Q(status="P")),
+            tardy=Count('id', filter=Q(status__in=["ET", "UT"])),
+            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
+        )
+        .order_by('enrollment__student__grade_level__name')
+    )
+
+    # ----------- Subject Stats -----------
+    subject_attendance = (
+        attendances.values('enrollment__subject__name')
+        .annotate(
+            total=Count('id'),
+            present=Count('id', filter=Q(status="P")),
+            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
+            behavior=Count('id', filter=Q(status="IB")),
+        )
+        .order_by('enrollment__subject__name')
+    )
+
+    # ----------- Student Stats -----------
+    student_attendance = (
+        attendances.values(
+            'enrollment__student__user__first_name',
+            'enrollment__student__user__last_name',
+        )
+        .annotate(
+            total=Count('id'),
+            present=Count('id', filter=Q(status="P")),
+            tardy=Count('id', filter=Q(status__in=["ET", "UT"])),
+            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
+        )
+        .order_by('-total')
+    )
+
+    # ----------- Daily Trend for Charts -----------
+    daily_data = (
+        attendances.values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    # ----------- Pie Chart Data (status distribution) -----------
+    status_pie = (
+        attendances.values('status')
+        .annotate(count=Count('id'))
+        .order_by('status')
+    )
+
+    # ----------- Subject Bar Chart Data -----------
+    subject_bar = (
+        attendances.values('enrollment__subject__name')
+        .annotate(present=Count('id', filter=Q(status="P")))
+        .order_by('enrollment__subject__name')
+    )
+
+    # Pagination
+    paginator = Paginator(attendances.order_by('-date', '-marked_at'), 50)
     page = request.GET.get('page')
     attendances_page = paginator.get_page(page)
-    
+
+    # Filter dropdowns
+    subjects = Subject.objects.filter(school=school).order_by('name')
+    grades = Grade.objects.filter(school=school).order_by('-id')
+    streams = Streams.objects.filter(school=school).order_by('name')
+
+    # Core context
     context = {
-        'attendances': attendances_page,
         'school': school,
+        'attendances': attendances_page,
+        'subjects': subjects,
+        'grades': grades,
+        'streams': streams,
+        'total_attendance': attendances.count(),
     }
+
+    # Add stats
+    context.update({
+        "stats": {
+            "P": count_P,
+            "ET": count_ET,
+            "UT": count_UT,
+            "EA": count_EA,
+            "UA": count_UA,
+            "IB": count_IB,
+            "SUSP": count_18,
+            "EXPEL": count_20,
+        },
+        "grade_stats": grade_attendance,
+        "subject_stats": subject_attendance,
+        "student_stats": student_attendance,
+        "daily_trend": daily_data,
+        "status_pie": status_pie,
+        "subject_bar": subject_bar,
+    })
+
     return render(request, 'school/attendance.html', context)
+
+
+
 
 @login_required
 def attendance_mark(request, lesson_id):
@@ -1872,7 +2325,7 @@ def teacher_attendance_mark(request, lesson_id):
     students = Enrollment.objects.filter(subject=lesson.subject, status='active')
     attendance_dict = {
         att.enrollment.id: att
-        for att in Attendance.objects.filter(lesson=lesson)
+        for att in Attendance.objects.filter(enrollment__subject=lesson.subject)
     }
 
     if request.method == 'POST':
@@ -1880,10 +2333,9 @@ def teacher_attendance_mark(request, lesson_id):
             status = request.POST.get(f'status_{enrollment.id}', 'P')
             Attendance.objects.update_or_create(
                 enrollment=enrollment,
-                lesson=lesson,
                 defaults={'status': status, 'marked_by': request.user.staffprofile}
             )
-        messages.success(request, f'Attendance marked for {lesson.subject} on {lesson.date}.')
+        messages.success(request, f'Attendance marked for {lesson.subject} on {lesson.lesson_date}.')
         return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
 
     context = {
@@ -1929,7 +2381,7 @@ def teacher_attendance_summary(request):
         period_start = timezone.now().date().replace(day=1)
         period_end = timezone.now().date()
     
-    lessons = Lesson.objects.filter(date__range=[period_start, period_end], teacher=request.user.staffprofile)
+    lessons = Lesson.objects.filter(lesson_date__range=[period_start, period_end], teacher=request.user.staffprofile)
     attendances = Attendance.objects.filter(lesson__in=lessons)
     
     summary = attendances.values('status').annotate(count=Count('status'))

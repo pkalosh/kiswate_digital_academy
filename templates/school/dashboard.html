@@ -96,12 +96,12 @@
                 <tbody>
                   {% for lesson in lessons %}
                   <tr>
-                    <td>{{ lesson.date|date:"M d, Y" }}</td>
-                    <td>{{ lesson.date|date:"l" }}</td>
+                    <td>{{ lesson.day_of_week }}</td>
+                    <td>{{ lesson.lesson_date|date:"M d Y" }}</td>
                     <td>{{ lesson.subject.name }}</td>
                     <td>{{ lesson.teacher.user.get_full_name }}</td>
-                    <td>{{ lesson.start_time|time:"H:i" }}</td>
-                    <td>{{ lesson.end_time|time:"H:i" }}</td>
+                    <td>{{ lesson.time_slot.start_time }}</td>
+                    <td>{{ lesson.time_slot.end_time}}</td>
                     <td>{{ lesson.room|default:"-" }}</td>
                     <td>{{ lesson.notes|default:"-" }}</td>
                   </tr>

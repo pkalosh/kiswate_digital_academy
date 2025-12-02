@@ -322,10 +322,30 @@ class Term(models.Model):
     is_active = models.BooleanField(default=False)
 
     class Meta:
+        unique_together = ('school', 'name')
+    class Meta:
         ordering = ['-start_date']
 
     def __str__(self):
         return f"{self.name} - {self.school.name}"
+    
+class TimeSlot(models.Model):
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    description = models.CharField(max_length=100, blank=True)
+    school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='time_slots')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('StaffProfile', on_delete=models.SET_NULL, null=True, related_name='created_time_slots')
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey('StaffProfile', on_delete=models.SET_NULL, null=True, related_name='updated_time_slots')
+
+    class Meta:
+        unique_together = ['school', 'start_time', 'end_time']
+        ordering = ['start_time']
+
+    def __str__(self):
+        return f"{self.start_time.strftime('%H:%M')} - {self.end_time.strftime('%H:%M')} ({self.description})"
+
 
 class Timetable(models.Model):
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='timetables', blank=True, null=True)
@@ -341,7 +361,7 @@ class Timetable(models.Model):
         unique_together = ['school', 'grade', 'stream', 'term', 'year']
 
     def __str__(self):
-        return f"{self.grade.name} {self.stream.name} - {self.term.name} {self.year}"
+        return f"{self.grade} {self.stream} - {self.term} {self.year}"
 
 
 WEEKDAY_CHOICES = [
@@ -360,19 +380,20 @@ class Lesson(models.Model):
     stream = models.ForeignKey('Streams', on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
     teacher = models.ForeignKey('StaffProfile', on_delete=models.CASCADE, related_name='lessons_taught')
     day_of_week = models.CharField(max_length=10, choices=WEEKDAY_CHOICES, blank=True, null=True)
-    date = models.DateField(db_index=True)
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
     room = models.CharField(max_length=50, blank=True)
     is_canceled = models.BooleanField(default=False)
+    lesson_date = models.DateField(blank=True, null=True)  # For one-off changes
     notes = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['date', 'start_time']
-        unique_together = ['timetable', 'subject', 'date', 'start_time', 'stream']
+        ordering = ['day_of_week','lesson_date', 'time_slot__start_time']
+        unique_together = ['timetable', 'subject', 'day_of_week', 'time_slot', 'stream']
 
     def __str__(self):
-        return f"{self.subject.name} - {self.stream.name} - {self.date} {self.start_time}"
+        if self.time_slot:
+            return f"{self.subject.name} - {self.stream} - {self.day_of_week} {self.time_slot.start_time}-{self.time_slot.end_time}"
+        return f"{self.subject.name} - {self.stream} - {self.day_of_week}"
 
 # VirtualClass 
 class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid
@@ -395,18 +416,26 @@ class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid
         return f"{self.title} - {self.scheduled_at}"
 
 # Attendance
-class Attendance(models.Model):
-    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE, related_name='attendance')
-    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, null=True, blank=True, related_name='attendance')  # New: Per-lesson
-    session = models.ForeignKey(Session, on_delete=models.CASCADE, null=True, blank=True, related_name='attendance')  # Optional hybrid
-    marked_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=2, choices=ATTENDANCE_STATUS_CHOICES, default='P')  # New: Core status field
-    notes = models.TextField(blank=True)  # e.g., reason for ET/EA
-    marked_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='marked_attendance')  # New: Who marked
 
-    class Meta:
-        unique_together = ['enrollment', 'lesson']  # One per student-lesson
-        indexes = [models.Index(fields=['status', 'marked_at'])]
+
+class Attendance(models.Model):
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.CASCADE,
+        related_name='attendances'
+    )
+    date = models.DateField()
+    status = models.CharField(
+        max_length=20,
+        choices=ATTENDANCE_STATUS_CHOICES,
+        default='present'
+    )
+    remarks = models.TextField(blank=True, null=True)
+    marked_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='marked_attendance')  # New: Who marked
+    marked_at = models.DateTimeField(auto_now_add=True)  # New: When it was marked
+    # class Meta:
+    #     unique_together = ['enrollment', 'date']  # One per student-lesson
+    #     indexes = [models.Index(fields=['status', 'marked_at'])]
 
     def clean(self):
         # Example validation: Only certain roles can mark '18'/'20'
@@ -415,9 +444,7 @@ class Attendance(models.Model):
         super().clean()
 
     def __str__(self):
-        return f"{self.enrollment.student} - {self.get_status_display()} on {self.lesson.date if self.lesson else 'N/A'}"
-
-
+        return f"{self.enrollment.student} - {self.enrollment.subject} on {self.date}"
 
 
 # DisciplineRecord

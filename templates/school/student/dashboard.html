@@ -1,5 +1,6 @@
 {% extends 'school/student/base.html' %}
-{% block title %}Student Dashboard | {{ school.name }}{% endblock %}
+{% load dict_filters %}
+{% block title %}Student Dashboard | {{ student.school.name }}{% endblock %}
 
 {% block content %}
 <section class="bg-light py-4">
@@ -13,7 +14,7 @@
                     <div class="card-body p-3 d-flex justify-content-between align-items-center">
                         <div>
                             <div class="text-secondary small">Today's Schedule</div>
-                            <div class="h4 m-0 fw-bold">{{ today_lessons.count|default:"0" }}</div>
+                            <div class="h4 m-0 fw-bold">{{ today_lessons.count }}</div>
                         </div>
                         <a href="{% url 'school:school-assignments' %}" class="k-pill"><i class="bi bi-eye"></i> View Full</a>
                     </div>
@@ -35,7 +36,7 @@
                     <div class="card-body p-3 d-flex justify-content-between align-items-center">
                         <div>
                             <div class="text-secondary small">Subjects</div>
-                            <div class="h4 m-0 fw-bold">{{ enrollments.count|default:"0" }}</div>
+                            <div class="h4 m-0 fw-bold">{{ enrollments.count }}</div>
                         </div>
                         <a href="{% url 'school:school-subjects' %}" class="k-pill"><i class="bi bi-eye"></i> My Subjects</a>
                     </div>
@@ -73,9 +74,7 @@
                         <select name="lesson" class="form-select form-select-sm">
                             <option value="">All Lessons</option>
                             {% for l in lessons_list %}
-                                <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ l.subject.name }}
-                                </option>
+                                <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>{{ l.subject.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -83,9 +82,7 @@
                         <select name="session" class="form-select form-select-sm">
                             <option value="">All Sessions</option>
                             {% for s in sessions_list %}
-                                <option value="{{ s.id }}" {% if request.GET.session == s.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ s.name }}
-                                </option>
+                                <option value="{{ s.id }}" {% if request.GET.session == s.id|stringformat:"s" %}selected{% endif %}>{{ s.platform }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -97,52 +94,77 @@
             </div>
         </div>
 
-        <!-- Lessons by Weekday -->
-        {% if lessons_by_weekday %}
-            {% for weekday, lessons in lessons_by_weekday.items %}
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <h5 class="fw-semibold">{{ weekday }}</h5>
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Date Time</th>
-                                        <th>Subject</th>
-                                        <th>Teacher</th>
-                                        <th>Room</th>
-                                        <th>Session</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for lesson in lessons %}
-                                    <tr>
-                                        <td>{{ lesson.date|date:"M d Y" }} : {{ lesson.start_time }} - {{ lesson.end_time }}</td>
-                                        <td>{{ lesson.subject.name }}</td>
-                                        <td>{{ lesson.teacher.user.get_full_name }}</td>
-                                        <td>{{ lesson.room.name|default:"Online" }}</td>
-                                        <td>
+        <!-- Timetable Grid -->
+        {% if timetable_grid %}
+        <div class="table-responsive">
+            <table class="table table-bordered timetable-table align-middle text-center">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 80px;">Time</th>
+                        {% for weekday in weekdays %}
+                        <th>{{ weekday }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slot in time_slots %}
+                    <tr>
+                        <td class="fw-semibold">{{ slot.start_time|time:"H:i" }} - {{ slot.end_time|time:"H:i" }}</td>
+                        {% for weekday in weekdays %}
+                        <td>
+                            {% with day_lessons=timetable_grid|get_item:weekday %}
+                                {% if day_lessons %}
+                                    {% with lesson=day_lessons|get_item:slot.id %}
+                                        {% if lesson %}
+                                        <div class="card mb-1 shadow-sm p-1">
+                                            <div class="fw-bold small">{{ lesson.subject.name }}</div>
+                                            <div class="small">Teacher: {{ lesson.teacher.user.get_full_name }}</div>
+                                            <div class="small">{{ lesson.room|default:"Online" }}</div>
                                             {% if lesson.sessions.exists %}
+                                            <div class="mt-1">
                                                 {% for session in lesson.sessions.all %}
-                                                    <a href="{{ session.meeting_link }}" target="_blank">{{ session.platform }}</a>{% if not forloop.last %}, {% endif %}
+                                                <a href="{{ session.meeting_link }}" target="_blank" class="badge bg-primary text-light small">{{ session.platform }}</a>
                                                 {% endfor %}
-                                            {% else %}
-                                                -
+                                            </div>
                                             {% endif %}
-                                        </td>                                    </tr>
-                                    {% empty %}
-                                    <tr><td colspan="5">No lessons.</td></tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            {% endfor %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                <span class="text-muted small">-</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
-            <p class="text-muted">No scheduled lessons found.</p>
+        <p class="text-muted">No scheduled lessons found.</p>
         {% endif %}
-
     </div>
 </section>
+
+<style>
+.timetable-table th, .timetable-table td {
+    vertical-align: top;
+    min-width: 120px;
+    padding: 0.5rem;
+}
+.timetable-table .card {
+    font-size: 0.85rem;
+}
+@media (max-width: 768px) {
+    .timetable-table, .timetable-table thead, .timetable-table tbody, .timetable-table th, .timetable-table td, .timetable-table tr {
+        display: block;
+    }
+    .timetable-table tr { margin-bottom: 1rem; }
+    .timetable-table td { margin-bottom: 0.5rem; border: none; }
+    .timetable-table th { display: none; }
+}
+</style>
 {% endblock %}
