@@ -43,12 +43,16 @@ INSTALLED_APPS = [
     'userauths',
     'school',
     'kiswate_digital_app',
-    'widget_tweaks',  # <- add this line
+    'api',
+    'widget_tweaks',
+    'rest_framework',  # Add this
+    'rest_framework_simplejwt', 
+     'corsheaders', # Optional: for JWT
 ]
-
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -187,3 +191,37 @@ LOGGING = {
     'handlers': {'console': {'class': 'logging.StreamHandler'}},
     'loggers': {'school': {'handlers': ['console'], 'level': 'INFO'}},
 }
+
+AUTHENTICATION_BACKENDS = [
+    'userauths.backends.EmailBackend',  # Custom email auth first
+    'django.contrib.auth.backends.ModelBackend',  # Fallback
+]
+
+from datetime import timedelta
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',  # Require auth for most endpoints
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}
+
+# JWT Settings (optional but recommended)
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+}
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # Your mobile dev server (e.g., React Native)
+    "https://your-mobile-app-domain.com",
+]
+CORS_ALLOW_CREDENTIALS = True
