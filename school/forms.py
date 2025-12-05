@@ -290,118 +290,250 @@ class SmartIDForm(BaseForm):
 
 
 # ------------------------------- PARENT FORMS -------------------------------
-class ParentCreationForm(BaseForm):
-    # Extra admin controls
+from .models import Student, Parent, Grade, GENDER_CHOICES  # Assuming GENDER_CHOICES defined
+
+class BaseForm(forms.ModelForm):
+    """Base form with common styling."""
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        # General styling for all fields
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+class StudentCreationForm(BaseForm):
     send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
     reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
+    first_name = forms.CharField(max_length=100, label="First name")
+    last_name = forms.CharField(max_length=100, label="Last name")
+    email = forms.EmailField(required=False, label="Email (optional)")
+    phone_number = forms.CharField(max_length=20, required=False, label="Phone (optional)")
 
-    email = forms.EmailField(required=True)
+    class Meta:
+        model = Student
+        fields = [
+            'student_id', 'date_of_birth', 'gender', 'enrollment_date',
+            'grade_level', 'bio', 'profile_picture', 'parents'
+        ]
+        widgets = {
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'enrollment_date': forms.DateInput(attrs={'type': 'date'}),
+            'bio': forms.Textarea(attrs={'rows': 2}),
+            'parents': forms.SelectMultiple(attrs={'class': 'form-control select2', 'multiple': True}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if self.school:
+            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
+            self.fields['parents'].queryset = Parent.objects.filter(school=self.school)
+
+    def generate_temp_password(self):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+    def save(self, commit=True):
+        temp_password = self.generate_temp_password()
+        user = User.objects.create_user(
+            email=self.cleaned_data.get('email') or f"{self.cleaned_data['student_id']}@example.com",
+            first_name=self.cleaned_data['first_name'],
+            last_name=self.cleaned_data['last_name'],
+            phone_number=self.cleaned_data.get('phone_number', ''),
+            password=temp_password,
+            is_student=True,
+            is_verified=True,
+        )
+        print(f"Created user {user.email} with temp password {temp_password}")
+        student = super().save(commit=False)
+        student.user = user
+        student.school = self.school
+        if commit:
+            student.save()
+            self.save_m2m()
+        if self.cleaned_data['send_email']:
+            self.send_welcome_email(student, temp_password)
+        return student, temp_password
+
+    def send_welcome_email(self, student, password):
+        pass  # TODO: Implement
+
+class ParentCreationForm(BaseForm):
+    send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
+    reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
     first_name = forms.CharField(max_length=100, required=True)
     last_name = forms.CharField(max_length=100, required=True)
+    email = forms.EmailField(required=True)
     phone_number = forms.CharField(max_length=20, required=True)
-    country = forms.CharField(max_length=50, required=False)
 
     class Meta:
         model = Parent
         fields = [
-            # Parent fields
-            'parent_id',
-            'date_of_birth',
-            'gender',
-            'address',
-            'bio',
-            'profile_picture',
+            'parent_id', 'date_of_birth', 'gender', 'address', 'bio', 'profile_picture'
         ]
         widgets = {
-            'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'address': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
-            'bio': forms.Textarea(attrs={'rows': 2, 'class': 'form-control'}),
-            'parent_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'address': forms.Textarea(attrs={'rows': 3}),
+            'bio': forms.Textarea(attrs={'rows': 2}),
         }
 
-
     def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
         super().__init__(*args, **kwargs)
-
-        for field_name, field in self.fields.items():
-            if not isinstance(field.widget, forms.CheckboxInput):
-                if 'class' not in field.widget.attrs:
-                    field.widget.attrs['class'] = 'form-control'
-
-        # Additional styling
-        self.fields['send_email'].widget.attrs['class'] = 'form-check-input'
-        self.fields['reset_password'].widget.attrs['class'] = 'form-check-input'
-
+        if self.school:
+            self.fields['parent_id'].queryset = Parent.objects.filter(school=self.school)
+    def generate_temp_password(self):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
     def save(self, commit=True):
-        # Create User object
         password = self.generate_temp_password()
-        print(password)
-
         user = User.objects.create_user(
             email=self.cleaned_data['email'],
             first_name=self.cleaned_data['first_name'],
             last_name=self.cleaned_data['last_name'],
             phone_number=self.cleaned_data['phone_number'],
-            country=self.cleaned_data.get('country', ''),
             password=password,
             is_parent=True,
-            is_verified=True,  # Assuming parents are verified by default
+            is_verified=True,
         )
-
-        # Create Parent object
+        print(f"Created user {user.email} with temp password {password}")
         parent = super().save(commit=False)
         parent.user = user
         parent.phone = self.cleaned_data['phone_number']
-        parent.school = self.school  # Set school if provided
-
+        parent.school = self.school
         if commit:
             parent.save()
-
-        # Send welcome email?
         if self.cleaned_data['send_email']:
             self.send_welcome_email(parent, password)
-
         return parent, password
+
+    def send_welcome_email(self, parent, password):
+        pass  # TODO: Implement
+
+class ParentStudentCreationForm(BaseForm):
+    # Parent fields
+    parent_first_name = forms.CharField(max_length=100, required=True, label="Parent First Name")
+    parent_last_name = forms.CharField(max_length=100, required=True, label="Parent Last Name")
+    parent_email = forms.EmailField(required=False, label="Parent Email")
+    parent_phone_number = forms.CharField(max_length=20, required=True, label="Parent Phone")
+    parent_id = forms.CharField(max_length=50, required=True)
+    parent_dob = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    parent_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
+    parent_address = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), required=False)
+    parent_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
+    parent_profile_picture = forms.ImageField(required=False)
+
+    # Student fields
+    student_first_name = forms.CharField(max_length=100, required=True, label="Student First Name")
+    student_last_name = forms.CharField(max_length=100, required=True, label="Student Last Name")
+    student_email = forms.EmailField(required=False, label="Student Email")
+    student_phone_number = forms.CharField(max_length=20, required=False, label="Student Phone")
+    student_id = forms.CharField(max_length=50, required=True)
+    student_dob = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
+    enrollment_date = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
+    student_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
+    grade_level = forms.ModelChoiceField(queryset=Grade.objects.none(), required=True)
+    student_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
+    student_profile_picture = forms.ImageField(required=False)
+
+    # Common
+    send_email = forms.BooleanField(required=False, initial=True)
+
+    class Meta:
+        model = User
+        fields = []
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        # Bootstrap
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-control'
+        self.fields['send_email'].widget.attrs['class'] = 'form-check-input'
+        if self.school:
+            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
 
     def generate_temp_password(self):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    def send_welcome_email(self, parent, password):
-        # TODO: integrate email system
-        pass
+    @transaction.atomic
+    def save(self, commit=True):
+        # Create Parent
+        parent_password = self.generate_temp_password()
+        parent_user = User.objects.create_user(
+            email=self.cleaned_data.get('parent_email') or f"{self.cleaned_data['parent_id']}@example.com",
+            first_name=self.cleaned_data['parent_first_name'],
+            last_name=self.cleaned_data['parent_last_name'],
+            phone_number=self.cleaned_data['parent_phone_number'],
+            password=parent_password,
+            is_verified=True,
+            is_parent=True,
+        )
+        print(f"Created parent user {parent_user.email} with temp password {parent_password}")
+        parent = Parent.objects.create(
+            user=parent_user,
+            parent_id=self.cleaned_data['parent_id'],
+            date_of_birth=self.cleaned_data['parent_dob'],
+            gender=self.cleaned_data['parent_gender'],
+            phone=self.cleaned_data['parent_phone_number'],
+            address=self.cleaned_data['parent_address'],
+            bio=self.cleaned_data['parent_bio'],
+            profile_picture=self.cleaned_data['parent_profile_picture'],
+            school=self.school,
+        )
 
-class ParentEditForm(ParentCreationForm):
+        # Create Student
+        student_password = self.generate_temp_password()
+        student_user = User.objects.create_user(
+            email=self.cleaned_data.get('student_email') or f"{self.cleaned_data['student_id']}@example.com",
+            first_name=self.cleaned_data['student_first_name'],
+            last_name=self.cleaned_data['student_last_name'],
+            phone_number=self.cleaned_data.get('student_phone_number', ''),
+            password=student_password,
+            is_verified=True,
+            is_student=True,
+        )
+        print(f"Created student user {student_user.email} with temp password {student_password}")
+        student = Student.objects.create(
+            user=student_user,
+            student_id=self.cleaned_data['student_id'],
+            date_of_birth=self.cleaned_data['student_dob'],
+            enrollment_date=self.cleaned_data['enrollment_date'],
+            gender=self.cleaned_data['student_gender'],
+            grade_level=self.cleaned_data['grade_level'],
+            bio=self.cleaned_data['student_bio'],
+            profile_picture=self.cleaned_data['student_profile_picture'],
+            school=self.school,
+        )
 
-    class Meta(ParentCreationForm.Meta):
-        exclude = ['parent_id']
+        # Link
+        student.parents.add(parent)
+
+        # Emails
+        if self.cleaned_data['send_email']:
+            self.send_welcome_email(parent, parent_password)
+            self.send_welcome_email(student, student_password)
+
+        return parent, student, parent_password, student_password
+
+    def send_welcome_email(self, instance, password):
+        pass  # TODO: Implement (generic for Parent/Student)
+
+class AssignParentStudentForm(forms.Form):
+    parent = forms.ModelChoiceField(queryset=Parent.objects.none(), label="Select Parent")
+    student = forms.ModelChoiceField(queryset=Student.objects.none(), label="Select Student")
 
     def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
         super().__init__(*args, **kwargs)
-
-        # Remove creation-only fields
-        creation_fields = ['send_email', 'reset_password', 'email',
-                           'first_name', 'last_name', 'phone_number', 'country']
-
-        for field in creation_fields:
-            if field in self.fields:
-                self.fields.pop(field)
-
-    def save(self, commit=True):
-        """
-        Edit parent WITHOUT re-running the user creation logic
-        present in ParentCreationForm.save().
-        """
-        # IMPORTANT: use ModelForm save(), not ParentCreationForm.save()
-        parent = super(ParentCreationForm, self).save(commit=False)
-
-        # You can update 'phone' or other fields if needed:
-        # parent.phone = parent.user.phone_number
-
-        if commit:
-            parent.save()
-
-        return parent
+        if self.school:
+            self.fields['parent'].queryset = Parent.objects.filter(school=self.school)
+            self.fields['student'].queryset = Student.objects.filter(school=self.school)
+        self.fields['parent'].widget.attrs['class'] = 'form-control select2'
+        self.fields['student'].widget.attrs['class'] = 'form-control select2'
 
 # ------------------------------- STAFF FORMS -------------------------------
 class StaffCreationForm(BaseForm):
@@ -486,101 +618,7 @@ class StaffCreationForm(BaseForm):
         # Implement your email logic here
         pass
 
-class StaffEditForm(StaffCreationForm):
-    class Meta(StaffCreationForm.Meta):
-        exclude = ['staff_id']
 
-# ------------------------------- STUDENT FORMS -------------------------------
-class StudentCreationForm(BaseForm):
-    # Extra fields (for creating User)
-    first_name = forms.CharField(max_length=100, label="First name")
-    last_name = forms.CharField(max_length=100, label="Last name")
-    email = forms.EmailField(required=False, label="Email (optional)")
-    phone_number = forms.CharField(required=False, label="Phone (optional)")
-
-    send_email = forms.BooleanField(required=False, initial=True, label="Send welcome email")
-    reset_password = forms.BooleanField(required=False, initial=False, label="Reset password")
-
-    class Meta:
-        model = Student
-        fields = [
-            'first_name', 'last_name', 'email', 'phone_number',
-            'student_id', 'date_of_birth', 'gender', 'enrollment_date',
-            'grade_level', 'bio', 'profile_picture', 'parents'
-        ]
-        widgets = {
-            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
-            'enrollment_date': forms.DateInput(attrs={'type': 'date'}),
-            'bio': forms.Textarea(attrs={'rows': 2}),
-            'parents': forms.SelectMultiple(),
-        }
-
-    def __init__(self, *args, **kwargs):
-        # Get school from view
-        self.school = kwargs.pop('school', None)
-        super().__init__(*args, **kwargs)
-
-        # ★ Add Bootstrap classes to all fields
-        for field in self.fields.values():
-            existing = field.widget.attrs.get('class', '')
-            field.widget.attrs['class'] = f"{existing} form-control".strip()
-
-        # Fix checkboxes (avoid applying form-control)
-        for name in ['send_email', 'reset_password']:
-            self.fields[name].widget.attrs['class'] = 'form-check-input'
-
-        # Filter queryset fields when school provided
-        if self.school:
-            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
-            self.fields['parents'].queryset = Parent.objects.filter(school=self.school)
-
-        # ★ Make parents multi-select work with select2
-        self.fields['parents'].widget.attrs.update({
-            'class': 'form-control select2',
-            'multiple': True,
-        })
-
-    def generate_temp_password(self):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-
-    def save(self, commit=True):
-        temp_password = self.generate_temp_password()
-        print(f"Generated temporary password: {temp_password}")
-
-        # Create user for student
-        user = User.objects.create_user(
-            email=self.cleaned_data.get('email') or f"{self.cleaned_data['student_id']}@example.com",
-            first_name=self.cleaned_data['first_name'],
-            last_name=self.cleaned_data['last_name'],
-            phone_number=self.cleaned_data.get('phone_number', ''),
-            password=temp_password,
-            is_student=True,
-            is_verified=True,  # Assuming students are verified by default
-        )
-
-        # Build Student instance
-        student = super().save(commit=False)
-        student.user = user
-        student.school = self.school
-        # student.parents = self.cleaned_data.get('parents', [])
-
-        if commit:
-            student.save()
-            self.save_m2m()  # save parents many-to-many
-
-        # Send welcome email
-        if self.cleaned_data['send_email']:
-            self.send_welcome_email(student, temp_password)
-
-        return student, temp_password
-
-    def send_welcome_email(self, student, password):
-        # Implement email logic
-        pass
-
-class StudentEditForm(StudentCreationForm):
-    class Meta(StudentCreationForm.Meta):
-        exclude = ['student_id']
 
 # ------------------------------- SUBJECT FORM -------------------------------
 class SubjectForm(BaseForm):
@@ -592,6 +630,20 @@ class SubjectForm(BaseForm):
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
         }
+
+
+class AssignParentStudentForm(forms.Form):
+    parent = forms.ModelChoiceField(queryset=Parent.objects.none(), label="Select Parent")
+    student = forms.ModelChoiceField(queryset=Student.objects.none(), label="Select Student")
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if self.school:
+            self.fields['parent'].queryset = Parent.objects.filter(school=self.school)
+            self.fields['student'].queryset = Student.objects.filter(school=self.school)
+        self.fields['parent'].widget.attrs['class'] = 'form-control select2'
+        self.fields['student'].widget.attrs['class'] = 'form-control select2'
 
 # ------------------------------- ENROLLMENT FORM -------------------------------
 class EnrollmentForm(BaseForm):
@@ -839,131 +891,63 @@ class ContactMessageForm(forms.ModelForm):
         }
 
 
-class ParentStudentCreationForm(forms.ModelForm):
-    # Common User fields for parent and student
-    parent_first_name = forms.CharField(max_length=100, required=True, label="Parent First Name")
-    parent_last_name = forms.CharField(max_length=100, required=True, label="Parent Last Name")
-    parent_email = forms.EmailField(required=False, label="Parent Email")
-    parent_phone_number = forms.CharField(max_length=20, required=True, label="Parent Phone")
-
-    student_first_name = forms.CharField(max_length=100, required=True, label="Student First Name")
-    student_last_name = forms.CharField(max_length=100, required=True, label="Student Last Name")
-    student_email = forms.EmailField(required=False, label="Student Email")
-    student_phone_number = forms.CharField(max_length=20, required=False, label="Student Phone")
-
-    # Extra options
-    send_email = forms.BooleanField(required=False, initial=True)
-    reset_password = forms.BooleanField(required=False, initial=False)
-
-    # Parent-specific fields
-    parent_id = forms.CharField(max_length=50, required=True)
-    parent_dob = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
-    parent_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
-    parent_address = forms.CharField(widget=forms.Textarea(attrs={'rows': 3}), required=False)
-    parent_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
-    parent_profile_picture = forms.ImageField(required=False)
-
-    # Student-specific fields
-    student_id = forms.CharField(max_length=50, required=True)
-    student_dob = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
-    enrollment_date = forms.DateField(required=True, widget=forms.DateInput(attrs={'type': 'date'}))
-    student_gender = forms.ChoiceField(choices=GENDER_CHOICES, required=True)
-    grade_level = forms.ModelChoiceField(queryset=Grade.objects.none(), required=True)
-    student_bio = forms.CharField(widget=forms.Textarea(attrs={'rows': 2}), required=False)
-    student_profile_picture = forms.ImageField(required=False)
-    # student_parents = forms.ModelMultipleChoiceField(queryset=Parent.objects.none(), required=False)
-
-    class Meta:
-        model = User  # We are creating related Parent and Student
-        fields = []
+class StudentUpdateForm(StudentCreationForm):
+    """Update form for Student - excludes creation-specific fields like send_email if not needed."""
+    class Meta(StudentCreationForm.Meta):
+        exclude = ['student_id']  # Assume ID not editable; adjust as needed
 
     def __init__(self, *args, **kwargs):
-        self.school = kwargs.pop('school', None)
         super().__init__(*args, **kwargs)
+        # Hide or remove temp password fields for update
+        self.fields.pop('send_email', None)
+        self.fields.pop('reset_password', None)
 
-        # Bootstrap styling
-        for field in self.fields.values():
-            if not isinstance(field.widget, forms.CheckboxInput):
-                field.widget.attrs['class'] = 'form-control'
-        for name in ['send_email', 'reset_password']:
-            self.fields[name].widget.attrs['class'] = 'form-check-input'
-
-        # Set queryset for related fields
-        if self.school:
-            self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
-            # self.fields['student_parents'].queryset = Parent.objects.filter(school=self.school)
-            # self.fields['student_parents'].widget.attrs.update({'class': 'form-control select2', 'multiple': True})
-
-    def generate_temp_password(self):
-        return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-
-    @transaction.atomic
     def save(self, commit=True):
-        # ----- CREATE PARENT USER -----
-        parent_temp_password = self.generate_temp_password()
-        parent_user = User.objects.create_user(
-            email=self.cleaned_data.get('parent_email') or f"{self.cleaned_data['parent_id']}@example.com",
-            first_name=self.cleaned_data['parent_first_name'],
-            last_name=self.cleaned_data['parent_last_name'],
-            phone_number=self.cleaned_data['parent_phone_number'],
-            password=parent_temp_password,
-            is_verified=True,
-            is_parent=True,
-        )
+        # No temp password generation for update
+        student = super().save(commit=commit)
+        # Update user fields if needed (e.g., first_name on user)
+        if hasattr(self.instance, 'user'):
+            self.instance.user.first_name = self.cleaned_data.get('first_name', self.instance.user.first_name)
+            self.instance.user.last_name = self.cleaned_data.get('last_name', self.instance.user.last_name)
+            self.instance.user.email = self.cleaned_data.get('email', self.instance.user.email)
+            self.instance.user.phone_number = self.cleaned_data.get('phone_number', self.instance.user.phone_number)
+            self.instance.user.save()
+        return student
 
-        parent = Parent.objects.create(
-            user=parent_user,
-            parent_id=self.cleaned_data['parent_id'],
-            date_of_birth=self.cleaned_data['parent_dob'],
-            gender=self.cleaned_data['parent_gender'],
-            phone=self.cleaned_data['parent_phone_number'],
-            address=self.cleaned_data['parent_address'],
-            bio=self.cleaned_data['parent_bio'],
-            profile_picture=self.cleaned_data['parent_profile_picture'],
-            school=self.school,
-        )
+class ParentUpdateForm(ParentCreationForm):
+    """Update form for Parent."""
+    class Meta(ParentCreationForm.Meta):
+        exclude = ['parent_id']
 
-        # ----- CREATE STUDENT USER -----
-        student_temp_password = self.generate_temp_password()
-        student_user = User.objects.create_user(
-            email=self.cleaned_data.get('student_email') or f"{self.cleaned_data['student_id']}@example.com",
-            first_name=self.cleaned_data['student_first_name'],
-            last_name=self.cleaned_data['student_last_name'],
-            phone_number=self.cleaned_data.get('student_phone_number', ''),
-            password=student_temp_password,
-            is_verified=True,
-            is_student=True,
-        )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop('send_email', None)
+        self.fields.pop('reset_password', None)
 
-        student = Student.objects.create(
-            user=student_user,
-            student_id=self.cleaned_data['student_id'],
-            date_of_birth=self.cleaned_data['student_dob'],
-            enrollment_date=self.cleaned_data['enrollment_date'],
-            gender=self.cleaned_data['student_gender'],
-            grade_level=self.cleaned_data['grade_level'],
-            bio=self.cleaned_data['student_bio'],
-            profile_picture=self.cleaned_data['student_profile_picture'],
-            school=self.school,
-        )
+    def save(self, commit=True):
+        parent = super().save(commit=commit)
+        if hasattr(self.instance, 'user'):
+            self.instance.user.first_name = self.cleaned_data.get('first_name', self.instance.user.first_name)
+            self.instance.user.last_name = self.cleaned_data.get('last_name', self.instance.user.last_name)
+            self.instance.user.email = self.cleaned_data.get('email', self.instance.user.email)
+            self.instance.user.phone_number = self.cleaned_data.get('phone_number', self.instance.user.phone_number)
+            self.instance.user.save()
+        return parent
 
-        # Link student to parent
-        student.parents.add(parent)
+class StaffUpdateForm(StaffCreationForm):  # Assuming StaffCreationForm exists, similar structure
+    """Update form for Staff."""
+    class Meta:
+        model = StaffProfile
+        fields = '__all__'  # Adjust to exclude non-editable
 
-        # Send welcome email if needed
-        if self.cleaned_data['send_email']:
-            self.send_welcome_email(parent, parent_temp_password)
-            self.send_welcome_email(student, student_temp_password)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields.pop('send_email', None)
+        self.fields.pop('reset_password', None)
 
-        return parent, student, parent_temp_password, student_temp_password
-
-    def send_welcome_email(self, instance, password):
-        # TODO: Implement email logic
-        pass
-
-# ------------------------------- SCHOLARSHIP FORMS (if needed, but per request exclude) -------------------------------
-# Skip LMS: ScholarshipForm, etc.
-
-# Note: For excluded LMS parts (library, scholarships, certificates), omit their forms.
-# Import random and string at top if used: import random; import string
-# Ensure choices are imported from models if not already.
+    def save(self, commit=True):
+        staff = super().save(commit=commit)
+        if hasattr(self.instance, 'user'):
+            # Update user fields similarly
+            pass
+        return staff

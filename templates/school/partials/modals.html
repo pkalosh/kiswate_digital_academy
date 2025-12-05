@@ -1,375 +1,352 @@
-{% load widget_tweaks %}
-{# ----------------------- CREATE STAFF ----------------------- #}
+<!-- templates/school/partials/modals.html (complete, streamlined with custom filter support) -->
+{% load widget_tweaks form_extras %}
+{# ----------------------- CREATE STAFF MODAL ----------------------- #}
 <div class="modal fade" id="createStaffModal">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
+<div class="modal-dialog modal-xl">
+<div class="modal-content">
+<form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
-                <input type="hidden" name="create_staff">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Staff</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="row">
+<input type="hidden" name="action" value="create_staff">
+<div class="modal-header">
+<h5 class="modal-title">Create Staff</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="row g-3">
                         {% for field in staff_form %}
                             {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
+<div class="col-md-12">
+<label class="form-label">{{ field.label }}</label>
                                     {{ field|add_class:"form-control" }}
                                     {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
-                                </div>
+</div>
                             {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
+<div class="col-md-6">
+<label class="form-label">{{ field.label }}</label>
                                     {{ field|add_class:"form-control" }}
                                     {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
-                                </div>
+</div>
                             {% endif %}
                         {% endfor %}
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
-
-{# ----------------------- EDIT STAFF ----------------------- #}
-{% for s in other_staff %}
-<div class="modal fade" id="editStaffModal{{ s.id }}">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="edit_staff" value="{{ s.id }}">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Staff: {{ s.user.full_name }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="row">
-                        {% for field in staff_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary">Update</button>
-                </div>
-            </form>
-        </div>
-    </div>
+                    {% if staff_form.errors %}
+<div class="alert alert-danger mt-3">{{ staff_form.non_field_errors }}</div>
+                    {% endif %}
 </div>
-{% endfor %}
-
-{# ----------------------- CREATE STUDENT ----------------------- #}
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-primary">Create Staff</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+{# ----------------------- CREATE STUDENT MODAL ----------------------- #}
 <div class="modal fade" id="createStudentModal">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="create_student">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Student</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="row">
-                        {% for field in student_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-success">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
+<div class="modal-dialog modal-xl">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Create Student</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 </div>
-
-{# ----------------------- EDIT STUDENT ----------------------- #}
-{% for st in students %}
-<div class="modal fade" id="editStudentModal{{ st.id }}">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
+<form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
-                <input type="hidden" name="edit_student" value="{{ st.id }}">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Student: {{ st.user.full_name }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="row">
-                        {% for field in student_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-success">Update</button>
-                </div>
-            </form>
-        </div>
-    </div>
+<input type="hidden" name="action" value="create_student">
+<div class="modal-body">
+<div class="row g-3">
+<div class="col-md-6 mb-3">
+<label class="form-label">First Name</label>
+                            {{ student_form.first_name|add_class:"form-control" }}
 </div>
-{% endfor %}
-
-{# ----------------------- CREATE PARENT + STUDENT ----------------------- #}
+<div class="col-md-6 mb-3">
+<label class="form-label">Last Name</label>
+                            {{ student_form.last_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Email (optional)</label>
+                            {{ student_form.email|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Phone (optional)</label>
+                            {{ student_form.phone_number|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student ID</label>
+                            {{ student_form.student_id|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Date of Birth</label>
+                            {{ student_form.date_of_birth|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Gender</label>
+                            {{ student_form.gender|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Enrollment Date</label>
+                            {{ student_form.enrollment_date|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Grade Level</label>
+                            {{ student_form.grade_level|add_class:"form-control select2" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Bio</label>
+                            {{ student_form.bio|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Parents</label>
+                            {{ student_form.parents|add_class:"form-control select2" }}
+<small class="text-muted">Hold Ctrl/Cmd to select multiple.</small>
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Profile Picture</label>
+                            {{ student_form.profile_picture|add_class:"form-control" }}
+</div>
+<div class="col-12 form-check mb-3">
+                            {{ student_form.send_email }}
+                            {{ student_form.send_email.label_tag }}
+</div>
+</div>
+                    {% if student_form.errors %}
+<div class="alert alert-danger">{{ student_form.errors }}</div>
+                    {% endif %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-success">Create Student</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+{# ----------------------- CREATE PARENT MODAL ----------------------- #}
+<div class="modal fade" id="createParentModal">
+<div class="modal-dialog modal-xl">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Create Parent</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+<input type="hidden" name="action" value="create_parent">
+<div class="modal-body">
+<div class="row g-3">
+<div class="col-md-6 mb-3">
+<label class="form-label">First Name</label>
+                            {{ parent_form.first_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Last Name</label>
+                            {{ parent_form.last_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Email</label>
+                            {{ parent_form.email|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Phone Number</label>
+                            {{ parent_form.phone_number|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent ID</label>
+                            {{ parent_form.parent_id|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Date of Birth</label>
+                            {{ parent_form.date_of_birth|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Gender</label>
+                            {{ parent_form.gender|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Address</label>
+                            {{ parent_form.address|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Bio</label>
+                            {{ parent_form.bio|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Profile Picture</label>
+                            {{ parent_form.profile_picture|add_class:"form-control" }}
+</div>
+<div class="col-12 form-check mb-3">
+                            {{ parent_form.send_email }}
+                            {{ parent_form.send_email.label_tag }}
+</div>
+</div>
+                    {% if parent_form.errors %}
+<div class="alert alert-danger">{{ parent_form.errors }}</div>
+                    {% endif %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-primary">Create Parent</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+{# ----------------------- CREATE PARENT + STUDENT MODAL ----------------------- #}
 <div class="modal fade" id="createParentStudentModal">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="create_parent_student">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Parent + Student</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-
-                    <!-- Parent Details -->
-                    <h5>Parent Details</h5>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_first_name.label_tag }}
-                            {{ parent_student_form.parent_first_name }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_last_name.label_tag }}
-                            {{ parent_student_form.parent_last_name }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_email.label_tag }}
-                            {{ parent_student_form.parent_email }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_phone_number.label_tag }}
-                            {{ parent_student_form.parent_phone_number }}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_id.label_tag }}
-                            {{ parent_student_form.parent_id }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_dob.label_tag }}
-                            {{ parent_student_form.parent_dob }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_gender.label_tag }}
-                            {{ parent_student_form.parent_gender }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ parent_student_form.parent_address.label_tag }}
-                            {{ parent_student_form.parent_address }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ parent_student_form.parent_bio.label_tag }}
-                            {{ parent_student_form.parent_bio }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.parent_profile_picture.label_tag }}
-                            {{ parent_student_form.parent_profile_picture }}
-                        </div>
-                    </div>
-
-                    <!-- Student Details -->
-                    <h5 class="mt-4">Student Details</h5>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_first_name.label_tag }}
-                            {{ parent_student_form.student_first_name }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_last_name.label_tag }}
-                            {{ parent_student_form.student_last_name }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_email.label_tag }}
-                            {{ parent_student_form.student_email }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_phone_number.label_tag }}
-                            {{ parent_student_form.student_phone_number }}
-                        </div>
-
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_id.label_tag }}
-                            {{ parent_student_form.student_id }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_dob.label_tag }}
-                            {{ parent_student_form.student_dob }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.enrollment_date.label_tag }}
-                            {{ parent_student_form.enrollment_date }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_gender.label_tag }}
-                            {{ parent_student_form.student_gender }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.grade_level.label_tag }}
-                            {{ parent_student_form.grade_level }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ parent_student_form.student_profile_picture.label_tag }}
-                            {{ parent_student_form.student_profile_picture }}
-                        </div>
-                        <div class="col-md-12 mb-3">
-                            {{ parent_student_form.student_bio.label_tag }}
-                            {{ parent_student_form.student_bio }}
-                        </div>
-                        <div class="col-md-12 mb-3">
-                            {{ parent_student_form.student_parents.label_tag }}
-                            {{ parent_student_form.student_parents }}
-                            <small class="text-muted">Hold Ctrl/Cmd to select multiple parents.</small>
-                        </div>
-                    </div>
-
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
+<div class="modal-dialog modal-xl">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Create Parent + Student</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 </div>
-
-
-{# ----------------------- EDIT PARENT ----------------------- #}
-{% for p in parents %}
-<div class="modal fade" id="editParentModal{{ p.id }}">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <form method="POST" enctype="multipart/form-data">
+<form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
-                <input type="hidden" name="edit_parent" value="{{ p.id }}">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit Parent: {{ p.user.full_name }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <h5>Parent Details</h5>
-                    <div class="row">
-                        {% for field in combined_parent_student_form.parent_form %}
-                            {% if field.field.widget.input_type == "textarea" %}
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% else %}
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">{{ field.label }}</label>
-                                    {{ field|add_class:"form-control" }}
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-primary">Update</button>
-                </div>
-            </form>
-        </div>
-    </div>
+<input type="hidden" name="action" value="create_parent_student">
+<div class="modal-body">
+<ul class="nav nav-tabs mb-3">
+<li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#parentTab">Parent</button></li>
+<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#studentTab">Student</button></li>
+</ul>
+<div class="tab-content">
+<div class="tab-pane fade show active" id="parentTab">
+<div class="row g-3">
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent First Name</label>
+                                    {{ parent_student_form.parent_first_name|add_class:"form-control" }}
 </div>
-{% endfor %}
-
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent Last Name</label>
+                                    {{ parent_student_form.parent_last_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent Email</label>
+                                    {{ parent_student_form.parent_email|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent Phone</label>
+                                    {{ parent_student_form.parent_phone_number|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent ID</label>
+                                    {{ parent_student_form.parent_id|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent DOB</label>
+                                    {{ parent_student_form.parent_dob|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Parent Gender</label>
+                                    {{ parent_student_form.parent_gender|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Parent Address</label>
+                                    {{ parent_student_form.parent_address|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Parent Bio</label>
+                                    {{ parent_student_form.parent_bio|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Parent Profile Picture</label>
+                                    {{ parent_student_form.parent_profile_picture|add_class:"form-control" }}
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="studentTab">
+<div class="row g-3">
+<div class="col-md-6 mb-3">
+<label class="form-label">Student First Name</label>
+                                    {{ parent_student_form.student_first_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student Last Name</label>
+                                    {{ parent_student_form.student_last_name|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student Email</label>
+                                    {{ parent_student_form.student_email|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student Phone</label>
+                                    {{ parent_student_form.student_phone_number|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student ID</label>
+                                    {{ parent_student_form.student_id|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student DOB</label>
+                                    {{ parent_student_form.student_dob|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Enrollment Date</label>
+                                    {{ parent_student_form.enrollment_date|add_class:"form-control" }}
+</div>
+<div class="col-md-6 mb-3">
+<label class="form-label">Student Gender</label>
+                                    {{ parent_student_form.student_gender|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Grade Level</label>
+                                    {{ parent_student_form.grade_level|add_class:"form-control select2" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Student Bio</label>
+                                    {{ parent_student_form.student_bio|add_class:"form-control" }}
+</div>
+<div class="col-12 mb-3">
+<label class="form-label">Student Profile Picture</label>
+                                    {{ parent_student_form.student_profile_picture|add_class:"form-control" }}
+</div>
+</div>
+</div>
+</div>
+<div class="row mt-3">
+<div class="col-12 form-check">
+                            {{ parent_student_form.send_email }}
+                            {{ parent_student_form.send_email.label_tag }}
+</div>
+</div>
+                    {% if parent_student_form.errors %}
+<div class="alert alert-danger mt-3">{{ parent_student_form.errors }}</div>
+                    {% endif %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-success">Create Both</button>
+</div>
+</form>
+</div>
+</div>
+</div>
 {# ----------------------- ASSIGN STUDENT MODAL ----------------------- #}
 <div class="modal fade" id="assignStudentModal">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Assign Student to Parent</h5>
+<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<form method="POST">
                 {% csrf_token %}
-                <input type="hidden" name="assign_student">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">Assign Student to Parent</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-
-                <div class="modal-body">
-                    <label class="form-label">Parent</label>
-                    <select name="parent_id" class="form-select mb-3">
-                        {% for p in parents %}
-                        <option value="{{ p.id }}">{{ p.user.full_name }}</option>
-                        {% endfor %}
-                    </select>
-
-                    <label class="form-label">Student</label>
-                    <select name="student_id" class="form-select">
-                        {% for st in students %}
-                        <option value="{{ st.id }}">{{ st.user.full_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button class="btn btn-success">Assign</button>
-                </div>
-            </form>
-        </div>
-    </div>
+<input type="hidden" name="action" value="assign_parent_student">
+<div class="modal-body">
+<div class="mb-3">
+<label class="form-label">Parent</label>
+                        {{ assign_form.parent|add_class:"form-control select2" }}
+</div>
+<div class="mb-3">
+<label class="form-label">Student</label>
+                        {{ assign_form.student|add_class:"form-control select2" }}
+</div>
+                    {% if assign_form.errors %}
+<div class="alert alert-danger">{{ assign_form.errors }}</div>
+                    {% endif %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+<button type="submit" class="btn btn-info">Assign</button>
+</div>
+</form>
+</div>
+</div>
 </div>

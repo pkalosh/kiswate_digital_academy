@@ -21,7 +21,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponseForbidden
 from datetime import timedelta
 import datetime
-
+from collections import defaultdict
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -55,12 +55,12 @@ from .models import (
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
-    GradeForm,ParentCreationForm, ParentEditForm,StaffCreationForm, StaffEditForm,
-    StudentCreationForm, StudentEditForm,SmartIDForm,GenerateTimetableForm,
+    GradeForm,ParentCreationForm, ParentUpdateForm,StaffCreationForm, StaffUpdateForm,
+    StudentCreationForm, StudentUpdateForm,SmartIDForm,GenerateTimetableForm,
     SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
-    ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm
+    ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm,AssignParentStudentForm
 )
 from kiswate_digital_app.forms import StreamForm
 
@@ -215,7 +215,7 @@ def create_term(request):
             Term.objects.filter(school=school).exclude(id=term.id).update(is_active=False)
 
         messages.success(request, "New term created successfully.")
-        return redirect("school:term-list", school_id=school.id)
+        return redirect("school:term-list")
 
     return render(request, "school/terms/create_term.html", {
         "form": form,
@@ -239,7 +239,7 @@ def edit_term(request, term_id):
             Term.objects.filter(school=school).exclude(id=updated_term.id).update(is_active=False)
 
         messages.success(request, "Term updated successfully.")
-        return redirect("school:term-list", school_id=school.id)
+        return redirect("school:term-list")
 
     return render(request, "school/terms/edit_term.html", {
         "form": form,
@@ -256,15 +256,132 @@ def delete_term(request, term_id):
     if request.method == "POST":
         term.delete()
         messages.success(request, "Term deleted successfully.")
-        return redirect("school:term-list", school_id=school_id)
+        return redirect("school:term-list")
 
     return render(request, "school/terms/delete_term_confirm.html", {
         "term": term
     })
 
 
+# @login_required
+# def school_users(request):
+#     school = None
+#     try:
+#         school = request.user.school_admin_profile
+#     except AttributeError:
+#         try:
+#             school = request.user.staffprofile.school
+#         except AttributeError as e:
+#             logger.warning(f"Permission denied for user {request.user.email}: {e}")
+#             messages.error(
+#                 request,
+#                 f"You do not have permission to access this page. (User: {request.user.email})"
+#             )
+#             return redirect('userauths:sign-in')
+
+#     # Querysets
+#     teachers = StaffProfile.objects.filter(school=school, position="teacher")
+#     other_staff = StaffProfile.objects.filter(school=school).exclude(position="teacher")
+#     students = Student.objects.filter(school=school)
+#     parents = Parent.objects.filter(school=school)
+
+#     # Forms
+#     staff_form = StaffCreationForm(school=school)
+#     student_form = StudentCreationForm(school=school)
+#     parent_form = ParentCreationForm(school=school)
+#     parent_student_form = ParentStudentCreationForm(school=school)
+
+#     combined_parent_student_form = {
+#         "parent_form": ParentCreationForm(school=school),
+#         "student_form": StudentCreationForm(school=school)
+#     }
+
+#     if request.method == "POST":
+
+#         # Create Staff
+#         if "create_staff" in request.POST:
+#             form = StaffCreationForm(request.POST, request.FILES, school=school)
+#             if form.is_valid():
+#                 staff, password = form.save()
+#                 messages.success(request, f"Staff created. Password: {password}")
+#                 return redirect("school:school-users")
+#             staff_form = form  
+
+#         # Create Student
+#         if "create_student" in request.POST:
+#             form = StudentCreationForm(request.POST, request.FILES, school=school)
+#             if form.is_valid():
+#                 student, password = form.save()
+#                 messages.success(request, "Student created successfully.")
+#                 return redirect("school:school-users")
+#             student_form = form
+
+#         # Create Parent
+#         if "create_parent" in request.POST:
+#             form = ParentCreationForm(request.POST, request.FILES, school=school)
+#             if form.is_valid():
+#                 parent, password = form.save()
+#                 messages.success(request, "Parent created successfully.")
+#                 return redirect("school:school-users")
+#             parent_form = form
+
+#         # Create Parent + Student
+#         if "create_parent_student" in request.POST:
+#             parent__student_form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
+
+#             if parent__student_form.is_valid():
+#                 parent, _ = parent_form.save()
+#                 student, _ = student_form.save()
+#                 student.parents.add(parent)
+
+#                 messages.success(request, "Parent + Student created successfully.")
+#                 return redirect("school:school-users")
+
+#             parent__student_form = parent__student_form
+
+#         # Assign Student
+#         if "assign_student" in request.POST:
+#             parent = Parent.objects.get(id=request.POST.get("parent_id"), school=school)
+#             student = Student.objects.get(id=request.POST.get("student_id"), school=school)
+#             student.parents.add(parent)
+
+#             messages.success(request, "Student assigned to parent.")
+#             return redirect("school:school-users")
+
+#     context = {
+#         "teachers": teachers,
+#         "other_staff": other_staff,
+#         "students": students,
+#         "parents": parents,
+
+#         "staff_form": staff_form,
+#         "student_form": student_form,
+#         "parent_form": parent_form,
+
+#         "combined_parent_student_form": combined_parent_student_form,
+#         "parent_student_form": parent_student_form,
+
+#         "assign_students": students,
+#         "assign_parents": parents,
+#     }
+
+#     return render(request, "school/staff.html", context)
+
+
+def paginate(request, queryset, per_page=10):
+    """Helper for pagination (implement as needed)."""
+    from django.core.paginator import Paginator
+    paginator = Paginator(queryset, per_page)
+    page_number = request.GET.get('page')
+    return paginator.get_page(page_number)
+
 @login_required
 def school_users(request):
+    """
+    Unified view for managing school members (teachers, staff, students, parents).
+    Handles listing with search/filter across tabs.
+    Handles creation via POST from modals (separate forms for flexibility).
+    """
     school = None
     try:
         school = request.user.school_admin_profile
@@ -279,94 +396,306 @@ def school_users(request):
             )
             return redirect('userauths:sign-in')
 
-    # Querysets
-    teachers = StaffProfile.objects.filter(school=school, position="teacher")
-    other_staff = StaffProfile.objects.filter(school=school).exclude(position="teacher")
-    students = Student.objects.filter(school=school)
-    parents = Parent.objects.filter(school=school)
+    # Common search query
+    query = request.GET.get('q', '')
 
-    # Forms
-    staff_form = StaffCreationForm(school=school)
-    student_form = StudentCreationForm(school=school)
-    parent_form = ParentCreationForm(school=school)
-    parent_student_form = ParentStudentCreationForm(school=school)
+    # Fetch teachers (StaffProfile with position='teacher')
+    teachers = StaffProfile.objects.filter(school=school, position='teacher').select_related('user').order_by('-user__created_at')
+    if query:
+        teachers = teachers.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query)
+        )
+    teachers_page = paginate(request, teachers)
 
-    combined_parent_student_form = {
-        "parent_form": ParentCreationForm(school=school),
-        "student_form": StudentCreationForm(school=school)
-    }
+    # Fetch other staff
+    other_staff = StaffProfile.objects.filter(school=school).exclude(position='teacher').select_related('user').order_by('-user__created_at')
+    if query:
+        other_staff = other_staff.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query)
+        )
+    staff_page = paginate(request, other_staff)
 
-    if request.method == "POST":
+    # Fetch students
+    students = Student.objects.filter(school=school).select_related('user', 'grade_level').order_by('-user__created_at')
+    if query:
+        students = students.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(student_id__icontains=query) |
+            Q(user__phone_number__icontains=query) |
+            Q(user__email__icontains=query) |
+            Q(grade_level__name__icontains=query)
+        )
+    students_page = paginate(request, students)
 
-        # Create Staff
-        if "create_staff" in request.POST:
-            form = StaffCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                staff, password = form.save()
-                messages.success(request, f"Staff created. Password: {password}")
-                return redirect("school:school-users")
-            staff_form = form  
+    # Fetch parents
+    parents = Parent.objects.filter(school=school).select_related('user').order_by('-user__created_at')
+    if query:
+        parents = parents.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(parent_id__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(user__email__icontains=query)
+        )
+    parents_page = paginate(request, parents)
 
-        # Create Student
-        if "create_student" in request.POST:
-            form = StudentCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                student, password = form.save()
-                messages.success(request, "Student created successfully.")
-                return redirect("school:school-users")
-            student_form = form
-
-        # Create Parent
-        if "create_parent" in request.POST:
-            form = ParentCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                parent, password = form.save()
-                messages.success(request, "Parent created successfully.")
-                return redirect("school:school-users")
-            parent_form = form
-
-        # Create Parent + Student
-        if "create_parent_student" in request.POST:
-            parent__student_form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
-
-            if parent__student_form.is_valid():
-                parent, _ = parent_form.save()
-                student, _ = student_form.save()
-                student.parents.add(parent)
-
-                messages.success(request, "Parent + Student created successfully.")
-                return redirect("school:school-users")
-
-            parent__student_form = parent__student_form
-
-        # Assign Student
-        if "assign_student" in request.POST:
-            parent = Parent.objects.get(id=request.POST.get("parent_id"), school=school)
-            student = Student.objects.get(id=request.POST.get("student_id"), school=school)
-            student.parents.add(parent)
-
-            messages.success(request, "Student assigned to parent.")
-            return redirect("school:school-users")
+    # Bound update forms for modals
+    student_update_forms = {}
+    for st in students:
+        student_update_forms[st.id] = StudentUpdateForm(instance=st)
+    parent_update_forms = {p.id: ParentUpdateForm(instance=p, school=school) for p in parents}
+    staff_update_forms = {s.id: StaffUpdateForm(instance=s, school=school) for s in list(other_staff) + list(teachers)}
 
     context = {
-        "teachers": teachers,
-        "other_staff": other_staff,
-        "students": students,
-        "parents": parents,
-
-        "staff_form": staff_form,
-        "student_form": student_form,
-        "parent_form": parent_form,
-
-        "combined_parent_student_form": combined_parent_student_form,
-        "parent_student_form": parent_student_form,
-
-        "assign_students": students,
-        "assign_parents": parents,
+        'school': school,
+        'query': query,
+        'teachers': teachers,
+        'teachers_page': teachers_page,
+        'other_staff': other_staff,
+        'staff_page': staff_page,
+        'students': students,
+        'students_page': students_page,
+        'parents': parents,
+        'parents_page': parents_page,
+        # Forms
+        'student_update_forms': student_update_forms,
+        'parent_update_forms': parent_update_forms,
+        'staff_update_forms': staff_update_forms,
+        'student_form': StudentCreationForm(school=school),
+        'parent_form': ParentCreationForm(school=school),
+        'parent_student_form': ParentStudentCreationForm(school=school),
+        'assign_form': AssignParentStudentForm(school=school),
+        'staff_form': StaffCreationForm(school=school),
     }
 
-    return render(request, "school/staff.html", context)
+    # Handle POST for creations
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+        if action == 'create_student':
+            form = StudentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        student, password = form.save()
+                    messages.success(
+                        request,
+                        f'Successfully created Student "{student.user.get_full_name()}" ({student.student_id}). '
+                        f'Grade: {student.grade_level}. '
+                        f'Temporary password: <strong>{password}</strong>. '
+                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
+                    )
+                    # Map parents if selected
+                    for parent in form.cleaned_data.get('parents', []):
+                        student.parents.add(parent)
+                except Exception as e:
+                    messages.error(request, f"Failed to create Student: {str(e)}")
+                else:
+                    return redirect('school:school-users')
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['student_form'] = form
 
+        elif action == 'create_parent':
+            form = ParentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        parent, password = form.save()
+                    messages.success(
+                        request,
+                        f'Successfully created Parent "{parent.user.get_full_name()}" ({parent.parent_id}). '
+                        f'Temporary password: <strong>{password}</strong>. '
+                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
+                    )
+                except Exception as e:
+                    messages.error(request, f"Failed to create Parent: {str(e)}")
+                else:
+                    return redirect('school:school-users')
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['parent_form'] = form
+
+        elif action == 'create_parent_student':
+            form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        parent, student, parent_password, student_password = form.save()
+                    messages.success(
+                        request,
+                        f'Successfully created Parent "{parent.user.get_full_name()}" and Student "{student.user.get_full_name()}". '
+                        f'They have been linked. Emails sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
+                    )
+                except Exception as e:
+                    messages.error(request, f"Failed to create Parent and Student: {str(e)}")
+                else:
+                    return redirect('school:school-users')
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['parent_student_form'] = form
+
+        elif action == 'create_staff':
+            form = StaffCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        staff, password = form.save()
+                    messages.success(
+                        request,
+                        f'Successfully created Staff "{staff.user.get_full_name()}". '
+                        f'Temporary password: <strong>{password}</strong>. '
+                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
+                    )
+                except Exception as e:
+                    messages.error(request, f"Failed to create Staff: {str(e)}")
+                else:
+                    return redirect('school:school-users')
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['staff_form'] = form
+
+        elif action == 'assign_parent_student':
+            form = AssignParentStudentForm(request.POST, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        parent = form.cleaned_data['parent']
+                        student = form.cleaned_data['student']
+                        student.parents.add(parent)
+                        messages.success(request, f'Successfully assigned student "{student.user.get_full_name()}" to parent "{parent.user.get_full_name()}".')
+                except Exception as e:
+                    messages.error(request, f"Failed to assign: {str(e)}")
+                else:
+                    return redirect('school:school-users')
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['assign_form'] = form
+
+    return render(request, 'school/staff.html', context)
+
+
+@login_required
+def update_student(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    student = get_object_or_404(Student, pk=pk, school=school)
+    if request.method == 'POST':
+        form = StudentUpdateForm(request.POST, request.FILES, instance=student, school=school)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    form.save()
+                messages.success(request, f'Successfully updated Student "{student.user.get_full_name()}".')
+                return redirect('school:members')
+            except Exception as e:
+                messages.error(request, f"Failed to update: {str(e)}")
+        else:
+            messages.error(request, "Please correct the form errors below.")
+    else:
+        form = StudentUpdateForm(instance=student, school=school)
+    context = {'form': form, 'student': student}
+    return render(request, 'school/modals/update_student.html', context)  # Or handle in main template
+
+# Similar for Parent Update
+@login_required
+def update_parent(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    parent = get_object_or_404(Parent, pk=pk, school=school)
+    if request.method == 'POST':
+        form = ParentUpdateForm(request.POST, request.FILES, instance=parent, school=school)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    form.save()
+                messages.success(request, f'Successfully updated Parent "{parent.user.get_full_name()}".')
+                return redirect('school:members')
+            except Exception as e:
+                messages.error(request, f"Failed to update: {str(e)}")
+        else:
+            messages.error(request, "Please correct the form errors below.")
+    else:
+        form = ParentUpdateForm(instance=parent, school=school)
+    context = {'form': form, 'parent': parent}
+    return render(request, 'school/modals/update_parent.html', context)
+
+# Similar for Staff Update
+@login_required
+def update_staff(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    staff = get_object_or_404(StaffProfile, pk=pk, school=school)
+    if request.method == 'POST':
+        form = StaffUpdateForm(request.POST, request.FILES, instance=staff, school=school)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    form.save()
+                messages.success(request, f'Successfully updated Staff "{staff.user.get_full_name()}".')
+                return redirect('school:members')
+            except Exception as e:
+                messages.error(request, f"Failed to update: {str(e)}")
+        else:
+            messages.error(request, "Please correct the form errors below.")
+    else:
+        form = StaffUpdateForm(instance=staff, school=school)
+    context = {'form': form, 'staff': staff}
+    return render(request, 'school/modals/update_staff.html', context)
+
+# Delete Views
+@login_required
+def delete_student(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    student = get_object_or_404(Student, pk=pk, school=school)
+    try:
+        with transaction.atomic():
+            student.user.delete()  # Cascade or handle as per model
+        messages.success(request, f'Successfully deleted Student "{student.user.get_full_name()}".')
+    except Exception as e:
+        messages.error(request, f"Failed to delete: {str(e)}")
+    return redirect('school:members')
+
+@login_required
+def delete_parent(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    parent = get_object_or_404(Parent, pk=pk, school=school)
+    try:
+        with transaction.atomic():
+            parent.user.delete()
+        messages.success(request, f'Successfully deleted Parent "{parent.user.get_full_name()}".')
+    except Exception as e:
+        messages.error(request, f"Failed to delete: {str(e)}")
+    return redirect('school:members')
+
+@login_required
+def delete_staff(request, pk):
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:members')
+    staff = get_object_or_404(StaffProfile, pk=pk, school=school)
+    try:
+        with transaction.atomic():
+            staff.user.delete()
+        messages.success(request, f'Successfully deleted Staff "{staff.user.get_full_name()}".')
+    except Exception as e:
+        messages.error(request, f"Failed to delete: {str(e)}")
+    return redirect('school:members')
 
 def is_school_admin(user):
     # adapt to your project's admin flag - either is_superuser or custom flag on user
@@ -1970,24 +2299,6 @@ def session_delete(request, session_id):
     return redirect('school:school-sessions')
 
 
-# Create/edit similar to above...
-
-# def auto_mark_attendance_from_scan(student, grade, scan_log, min_interval_sec=3000):
-#     recent = GradeAttendance.objects.filter(
-#         student=student,
-#         grade=grade,
-#         scan_log__scanned_at__gte=scan_log.scanned_at - timezone.timedelta(seconds=min_interval_sec)
-#     )
-#     if recent.exists():
-#         print(f"⚠️ Duplicate scan ignored for {student.user.get_full_name()} at {scan_log.scanned_at}")
-#         return
-
-#     GradeAttendance.objects.create(
-#         student=student,
-#         grade=grade,
-#         status='P',
-#         scan_log=scan_log
-#     )
 
 def auto_mark_attendance_from_scan(student, grade, scan_log=None):
     """
