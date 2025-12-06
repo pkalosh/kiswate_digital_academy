@@ -177,7 +177,7 @@ class AttendanceRecordsView(APIView):
         
         # Real query
         queryset = Attendance.objects.filter(  # Filter as in ViewSet
-            enrollment__school=request.user.staffprofile.school  # Assume user has school via profile
+            enrollment__school=request.user.school_admin_profile  # Assume user has school via profile
         ).select_related('enrollment__student', 'marked_by')
         
         if not queryset.exists():
@@ -225,7 +225,7 @@ class AttendanceDetailView(APIView):
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
         
         attendance = get_object_or_404(Attendance, pk=pk)
-        if attendance.enrollment.school != request.user.staffprofile.school:
+        if attendance.enrollment.school != request.user.:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = AttendanceUpdateSerializer(attendance, data=request.data, context={'request': request})

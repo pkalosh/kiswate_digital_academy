@@ -135,13 +135,13 @@ def dashboard(request):
 @login_required
 def time_slot_list(request):
     # Assuming staff belongs to a school
-    school = request.user.staffprofile.school
+    school = request.user.school_admin_profile
     slots = TimeSlot.objects.filter(school=school).order_by("start_time")
     return render(request, "school/time_slots.html", {"slots": slots, "school": school})
 
 @login_required
 def time_slot_create(request):
-    school = request.user.staffprofile.school
+    school = request.user.school_admin_profile
     form = TimeSlotForm(request.POST or None, school=school)
 
     if request.method == "POST" and form.is_valid():
@@ -171,7 +171,7 @@ def time_slot_edit(request, pk):
 
 @login_required
 def time_slot_delete(request, pk):
-    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.staffprofile.school)
+    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.school_admin_profile)
     if request.method == "POST":
         slot.delete()
         messages.success(request, "Time slot deleted successfully.")
