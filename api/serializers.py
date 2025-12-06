@@ -58,11 +58,15 @@ User = get_user_model()
 # User Serializers (unchanged)
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    
+    staff_details = serializers.SerializerMethodField()  # Combined staff profile fields
+
     class Meta:
         model = User
-        fields = ['id', 'email', 'phone_number', 'role', 'first_name', 'last_name', 'is_active', 'is_verified', 'created_at']
-    
+        fields = [
+            'id', 'email', 'phone_number', 'role', 'first_name', 'last_name', 
+            'is_active', 'is_verified', 'created_at', 'staff_details'
+        ]
+
     def get_role(self, obj):
         if obj.is_teacher:
             return 'teacher'
@@ -76,6 +80,22 @@ class UserSerializer(serializers.ModelSerializer):
             return 'staff'
         else:
             return 'user'
+
+    def get_staff_details(self, obj):
+        """
+        Returns dict with staff_id, tsc_number, position, school (name), roles (list of names)
+        for staff/teachers; None otherwise.
+        """
+        if hasattr(obj, 'staffprofile') and obj.staffprofile:
+            profile = obj.staffprofile
+            return {
+                'staff_id': profile.staff_id,
+                'tsc_number': profile.tsc_number,
+                'position': profile.position,
+                'school': profile.school.name if profile.school else None,
+                'roles': [role.name for role in profile.roles.all()]
+            }
+        return None
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
