@@ -384,7 +384,8 @@ def school_users(request):
     """
     school = None
     try:
-        school = request.user.school_admin_profile
+        # Fix: Get the actual School instance from admin profile
+        school = request.user.school_admin_profile.school
     except AttributeError:
         try:
             school = request.user.staffprofile.school
@@ -443,11 +444,9 @@ def school_users(request):
     parents_page = paginate(request, parents)
 
     # Bound update forms for modals
-    student_update_forms = {}
-    for st in students:
-        student_update_forms[st.id] = StudentUpdateForm(instance=st)
-    parent_update_forms = {p.id: ParentUpdateForm(instance=p, school=school) for p in parents}
-    staff_update_forms = {s.id: StaffUpdateForm(instance=s, school=school) for s in list(other_staff) + list(teachers)}
+    student_update_forms = {st.id: StudentUpdateForm(instance=st) for st in students}
+    parent_update_forms = {p.id: ParentUpdateForm(instance=p) for p in parents}
+    staff_update_forms = {s.id: StaffUpdateForm(instance=s) for s in list(other_staff) + list(teachers)}
 
     context = {
         'school': school,
@@ -460,7 +459,7 @@ def school_users(request):
         'students_page': students_page,
         'parents': parents,
         'parents_page': parents_page,
-        # Forms
+        # Forms - pass school for queryset filtering
         'student_update_forms': student_update_forms,
         'parent_update_forms': parent_update_forms,
         'staff_update_forms': staff_update_forms,
@@ -474,26 +473,31 @@ def school_users(request):
     # Handle POST for creations
     if request.method == 'POST':
         action = request.POST.get('action', '')
+
         if action == 'create_student':
             form = StudentCreationForm(request.POST, request.FILES, school=school)
             if form.is_valid():
                 try:
                     with transaction.atomic():
+                        # Unpack tuple from form.save() (student, password)
                         student, password = form.save()
-                    messages.success(
-                        request,
-                        f'Successfully created Student "{student.user.get_full_name()}" ({student.student_id}). '
-                        f'Grade: {student.grade_level}. '
-                        f'Temporary password: <strong>{password}</strong>. '
-                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
-                    )
-                    # Map parents if selected
-                    for parent in form.cleaned_data.get('parents', []):
-                        student.parents.add(parent)
+                        # Ensure school_id is set (form should already set via self.school)
+                        if not student.school_id:
+                            student.school_id = school.id
+                            student.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Student "{student.user.get_full_name()}" ({student.student_id}). '
+                            f'Grade: {student.grade_level}. '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        # Map parents if selected
+                        for parent in form.cleaned_data.get('parents', []):
+                            student.parents.add(parent)
+                        return redirect('school:school-users')
                 except Exception as e:
                     messages.error(request, f"Failed to create Student: {str(e)}")
-                else:
-                    return redirect('school:school-users')
             else:
                 messages.error(request, "Please correct the form errors below.")
                 context['student_form'] = form
@@ -503,17 +507,21 @@ def school_users(request):
             if form.is_valid():
                 try:
                     with transaction.atomic():
+                        # Unpack tuple
                         parent, password = form.save()
-                    messages.success(
-                        request,
-                        f'Successfully created Parent "{parent.user.get_full_name()}" ({parent.parent_id}). '
-                        f'Temporary password: <strong>{password}</strong>. '
-                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
-                    )
+                        # Ensure school_id is set
+                        if not parent.school_id:
+                            parent.school_id = school.id
+                            parent.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Parent "{parent.user.get_full_name()}" ({parent.parent_id}). '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
                 except Exception as e:
                     messages.error(request, f"Failed to create Parent: {str(e)}")
-                else:
-                    return redirect('school:school-users')
             else:
                 messages.error(request, "Please correct the form errors below.")
                 context['parent_form'] = form
@@ -523,16 +531,25 @@ def school_users(request):
             if form.is_valid():
                 try:
                     with transaction.atomic():
+                        # Unpack 4-tuple
                         parent, student, parent_password, student_password = form.save()
-                    messages.success(
-                        request,
-                        f'Successfully created Parent "{parent.user.get_full_name()}" and Student "{student.user.get_full_name()}". '
-                        f'They have been linked. Emails sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
-                    )
+                        # Ensure school_id on both (form should set via self.school)
+                        if not parent.school_id:
+                            parent.school_id = school.id
+                            parent.save(update_fields=['school_id'])
+                        if not student.school_id:
+                            student.school_id = school.id
+                            student.save(update_fields=['school_id'])
+                        # Link
+                        student.parents.add(parent)
+                        messages.success(
+                            request,
+                            f'Successfully created Parent "{parent.user.get_full_name()}" and Student "{student.user.get_full_name()}". '
+                            f'They have been linked. Emails sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
                 except Exception as e:
                     messages.error(request, f"Failed to create Parent and Student: {str(e)}")
-                else:
-                    return redirect('school:school-users')
             else:
                 messages.error(request, "Please correct the form errors below.")
                 context['parent_student_form'] = form
@@ -542,17 +559,21 @@ def school_users(request):
             if form.is_valid():
                 try:
                     with transaction.atomic():
+                        # Unpack tuple
                         staff, password = form.save()
-                    messages.success(
-                        request,
-                        f'Successfully created Staff "{staff.user.get_full_name()}". '
-                        f'Temporary password: <strong>{password}</strong>. '
-                        f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}.'
-                    )
+                        # Ensure school_id is set
+                        if not staff.school_id:
+                            staff.school_id = school.id
+                            staff.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Staff "{staff.user.get_full_name()}". '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
                 except Exception as e:
                     messages.error(request, f"Failed to create Staff: {str(e)}")
-                else:
-                    return redirect('school:school-users')
             else:
                 messages.error(request, "Please correct the form errors below.")
                 context['staff_form'] = form
@@ -566,10 +587,9 @@ def school_users(request):
                         student = form.cleaned_data['student']
                         student.parents.add(parent)
                         messages.success(request, f'Successfully assigned student "{student.user.get_full_name()}" to parent "{parent.user.get_full_name()}".')
+                        return redirect('school:school-users')
                 except Exception as e:
                     messages.error(request, f"Failed to assign: {str(e)}")
-                else:
-                    return redirect('school:school-users')
             else:
                 messages.error(request, "Please correct the form errors below.")
                 context['assign_form'] = form

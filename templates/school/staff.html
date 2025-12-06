@@ -21,7 +21,7 @@
         {% for message in messages %}
 <div class="col-12">
 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
+                {{ message|safe }}
 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 </div>
@@ -329,7 +329,7 @@
                             {% for st in students %}
 <tr>
 <td>{{ st.user.first_name }} {{ st.user.last_name }}</td>
-<td>{{ st.grade_level }}</td>
+<td>{{ st.grade_level|default:"N/A" }}</td>
 <td class="d-flex gap-1">
 <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewStudentModal{{ st.id }}">
 <i class="bi bi-eye"></i> View
@@ -361,10 +361,10 @@
 </div>
 <div class="modal-body">
 <p><strong>ID:</strong> {{ st.student_id }}</p>
-<p><strong>Grade:</strong> {{ st.grade_level.name }}</p>
-<p><strong>DOB:</strong> {{ st.date_of_birth|date:"Y-m-d" }}</p>
-<p><strong>Email:</strong> {{ st.user.email }}</p>
-<p><strong>Phone:</strong> {{ st.user.phone_number }}</p>
+<p><strong>Grade:</strong> {{ st.grade_level.name|default:"N/A" }}</p>
+<p><strong>DOB:</strong> {{ st.date_of_birth|date:"Y-m-d"|default:"N/A" }}</p>
+<p><strong>Email:</strong> {{ st.user.email|default:"N/A" }}</p>
+<p><strong>Phone:</strong> {{ st.user.phone_number|default:"N/A" }}</p>
 <p><strong>Bio:</strong> {{ st.bio|default:"N/A" }}</p>
                         {% if st.profile_picture %}
 <img src="{{ st.profile_picture.url }}" class="img-thumbnail" alt="Profile" style="max-width: 200px;">
@@ -484,7 +484,7 @@
                             {% for p in parents %}
 <tr>
 <td>{{ p.user.first_name }} {{ p.user.last_name }}</td>
-<td>{{ p.phone }}</td>
+<td>{{ p.phone|default:"N/A" }}</td>
 <td>
                                     {% for child in p.student_set.all %}
 <span class="badge bg-primary me-1 mb-1">{{ child.user.get_full_name }}</span>
@@ -522,11 +522,11 @@
 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 </div>
 <div class="modal-body">
-<p><strong>ID:</strong> {{ p.parent_id }}</p>
-<p><strong>DOB:</strong> {{ p.date_of_birth|date:"Y-m-d" }}</p>
-<p><strong>Gender:</strong> {{ p.gender }}</p>
-<p><strong>Email:</strong> {{ p.user.email }}</p>
-<p><strong>Phone:</strong> {{ p.phone_number }}</p>
+<p><strong>ID:</strong> {{ p.parent_id|default:"N/A" }}</p>
+<p><strong>DOB:</strong> {{ p.date_of_birth|date:"Y-m-d"|default:"N/A" }}</p>
+<p><strong>Gender:</strong> {{ p.gender|default:"N/A" }}</p>
+<p><strong>Email:</strong> {{ p.user.email|default:"N/A" }}</p>
+<p><strong>Phone:</strong> {{ p.phone_number|default:"N/A" }}</p>
 <p><strong>Address:</strong> {{ p.address|default:"N/A" }}</p>
 <p><strong>Bio:</strong> {{ p.bio|default:"N/A" }}</p>
 <p><strong>Students:</strong>
@@ -711,9 +711,10 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-$('.select2').select2({
-theme: 'bootstrap-5',
-width: '100%'
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: "Select options..."  // Helps if empty queryset
     });
 });
 </script>
