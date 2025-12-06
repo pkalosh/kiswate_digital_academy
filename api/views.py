@@ -225,7 +225,7 @@ class AttendanceDetailView(APIView):
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
         
         attendance = get_object_or_404(Attendance, pk=pk)
-        if attendance.enrollment.school != request.user.:
+        if attendance.enrollment.school != request.user.school_admin_profile:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = AttendanceUpdateSerializer(attendance, data=request.data, context={'request': request})
