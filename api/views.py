@@ -7,13 +7,15 @@ from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Q
+from rest_framework.parsers import JSONParser
+from rest_framework.renderers import JSONRenderer
 from django.utils import timezone
 from .serializers import (
     RegisterSerializer, LoginSerializer, TimeSlotSerializer,
     TeacherTimetableSerializer, StudentTimetableSerializer,AnnouncementSerializer,
     StudentStatsSerializer, ParentStatsSerializer, UserSerializer,AttendanceRecordSerializer, AttendanceModelSerializer,
     AttendanceCreateSerializer, AttendanceUpdateSerializer,DisciplineCreateSerializer,DisciplineUpdateSerializer,
-    AssignmentCreateSerializer,AssignmentUpdateSerializer,DisciplineRecordSerializer,AssignmentSerializer
+    AssignmentCreateSerializer,AssignmentUpdateSerializer,DisciplineRecordSerializer,AssignmentSerializer,SampleDisciplineSerializer
 )
 from school.models import (
     StaffProfile, Student, Parent, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
@@ -245,19 +247,25 @@ class AttendanceDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 class DisciplineRecordsView(APIView):
     permission_classes = [IsAuthenticated]
-    
+    parser_classes = [JSONParser]
+    renderer_classes = [JSONRenderer]
+
     def get(self, request):
+        """
+        GET: List discipline records (filtered by role/school).
+        Falls back to sample if no real data (uses custom dict serializer to avoid type errors).
+        """
         user_role = get_user_role(request.user)
         if user_role not in ['admin', 'teacher', 'parent', 'student']:
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Real query: Filter by school/role
+
+        # Get school for filtering
         school = get_user_school(request.user, user_role)
         if not school:
             return Response({'error': 'No school access'}, status=status.HTTP_403_FORBIDDEN)
-        
-        queryset = DisciplineRecord.objects.filter(school=school).select_related('student__user', 'teacher', 'reported_by')
-        
+
+        # Real query: Filter by school/role
+        queryset = DisciplineRecord.objects.filter(school=school).select_related('student__user', 'teacher', 'reported_by').prefetch_related('student__parents')
         if user_role == 'student':
             queryset = queryset.filter(student=request.user.student)
         elif user_role == 'parent':
@@ -265,35 +273,88 @@ class DisciplineRecordsView(APIView):
             queryset = queryset.filter(student__parents=parent)
         elif user_role == 'teacher':
             queryset = queryset.filter(teacher=request.user.staffprofile)
-        
-        if not queryset.exists():
-            # Fallback sample data
-            sample_data = [  # Your full sample
-                {
-                    "id": "disc_001",
-                    "studentName": "John Doe",
-                    "className": "Form 3A",
-                    "date": "2024-01-14",
-                    "reason": "Late to class",
-                    "action": "Warning",
-                    "severity": "Low"
-                },
-                # ... all 6 from sample
-            ]
-            serializer = DisciplineRecordSerializer(data=sample_data, many=True)  # Use custom for sample if needed
-            serializer.is_valid()
+
+        if queryset.exists():
+            # Use ModelSerializer for real data
+            serializer = DisciplineRecordSerializer(queryset, many=True)
             return Response(serializer.data)
-        
-        # Real data
-        serializer = DisciplineRecordSerializer(queryset, many=True)
-        return Response(serializer.data)
-    
+
+        # Fallback: Sample data (use custom dict serializer to handle string IDs)
+        sample_data = [
+            {
+                "id": "disc_001",
+                "studentName": "John Doe",
+                "className": "Form 3A",
+                "date": "2024-01-14",
+                "incident_type": "Late Arrival",
+                "description": "Arrived 15 minutes late without excuse",
+                "severity": "Low",
+                "action_taken": "Warning issued"
+            },
+            {
+                "id": "disc_002",
+                "studentName": "Jane Smith",
+                "className": "Form 2B",
+                "date": "2024-01-13",
+                "incident_type": "Uniform Violation",
+                "description": "Wore non-regulation shoes",
+                "severity": "Low",
+                "action_taken": "Verbal reminder"
+            },
+            {
+                "id": "disc_003",
+                "studentName": "Mike Johnson",
+                "className": "Form 4C",
+                "date": "2024-01-12",
+                "incident_type": "Disruption in Class",
+                "description": "Talking during lesson, distracting peers",
+                "severity": "Medium",
+                "action_taken": "Detention after school"
+            },
+            {
+                "id": "disc_004",
+                "studentName": "Sarah Lee",
+                "className": "Form 1A",
+                "date": "2024-01-11",
+                "incident_type": "Homework Not Submitted",
+                "description": "Failed to turn in assignment twice",
+                "severity": "Medium",
+                "action_taken": "Parent notified, extra work assigned"
+            },
+            {
+                "id": "disc_005",
+                "studentName": "Tom Wilson",
+                "className": "Form 3B",
+                "date": "2024-01-10",
+                "incident_type": "Bullying Incident",
+                "description": "Reported verbal harassment of classmate",
+                "severity": "High",
+                "action_taken": "Suspended for 2 days, counseling session"
+            },
+            {
+                "id": "disc_006",
+                "studentName": "Emily Brown",
+                "className": "Form 4A",
+                "date": "2024-01-09",
+                "incident_type": "Cheating on Test",
+                "description": "Caught copying from neighbor during math exam",
+                "severity": "High",
+                "action_taken": "Zero on test, parent meeting scheduled"
+            }
+        ]
+        # Use a simple dict serializer for samples (avoids ModelSerializer type issues)
+        sample_serializer = SampleDisciplineSerializer(sample_data, many=True)
+        return Response(sample_serializer.data)
+
     def post(self, request):
-        # POST: Create discipline record
+        """
+        POST: Create a new discipline record (teacher/admin only).
+        Expects: {"student": <id>, "incident_type": "...", "description": "...", "severity": "...", "action_taken": "..."}
+        """
         user_role = get_user_role(request.user)
         if user_role not in ['teacher', 'admin']:
             return Response({'error': 'Insufficient permissions to report discipline'}, status=status.HTTP_403_FORBIDDEN)
-        
+
         serializer = DisciplineCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             discipline = serializer.save()

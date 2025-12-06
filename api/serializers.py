@@ -440,7 +440,15 @@ class DisciplineRecordSerializer(serializers.ModelSerializer):
     
     def get_className(self, obj):
         return f"{obj.student.grade_level.name} {obj.student.stream.name}" if obj.student.stream else obj.student.grade_level.name
-
+class SampleDisciplineSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    studentName = serializers.CharField()
+    className = serializers.CharField()
+    date = serializers.DateField()
+    incident_type = serializers.CharField(source='reason')  # Map if keys differ
+    description = serializers.CharField(source='reason')  # Adjust mappings
+    severity = serializers.CharField()
+    action_taken = serializers.CharField(source='action')
 # Assignment Serializer (basic; add submission count via method if needed)
 # Assignment Serializer (basic; add submission count via method if needed)
 class AssignmentFileSerializer(serializers.Serializer):
