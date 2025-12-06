@@ -555,28 +555,26 @@ class AssignmentSerializer(serializers.ModelSerializer):
                 return submission
         return None
 class AnnouncementSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(source='id')
-    title = serializers.SerializerMethodField()  # Derive from message or add title field
+    id = serializers.UUIDField()  # No source needed
+    title = serializers.SerializerMethodField()
     content = serializers.CharField(source='message')
-    author = serializers.SerializerMethodField()  # Derive from email or add
+    author = serializers.SerializerMethodField()
     date = serializers.DateTimeField(source='created_at')
-    priority = serializers.SerializerMethodField()  # Default or compute
-    
+    priority = serializers.SerializerMethodField()
+
     class Meta:
         model = ContactMessage
         fields = ['id', 'title', 'content', 'author', 'date', 'priority']
-    
-    def get_title(self, obj):
-        # Derive title from message if no title field; e.g., first sentence
-        return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
-    
-    def get_author(self, obj):
-        return obj.email_address  # Or first_name + last_name
-    
-    def get_priority(self, obj):
-        # Default; compute based on is_read or add field
-        return 'medium' if obj.is_read else 'high'
 
+    def get_title(self, obj):
+        # obj is now a ContactMessage instance
+        return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
+
+    def get_author(self, obj):
+        return obj.email_address  # Or f"{obj.first_name} {obj.last_name}"
+
+    def get_priority(self, obj):
+        return 'medium' if obj.is_read else 'high'
 # Stats Serializers (unchanged; compute in views)
 class SubjectGradeSerializer(serializers.Serializer):
     subject = serializers.CharField()

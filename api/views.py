@@ -588,57 +588,15 @@ class AssignmentDetailView(APIView):  # For /assignments/<pk>/
 
 class AnnouncementsView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         user_role = get_user_role(request.user)
         if user_role not in ['admin', 'teacher', 'parent', 'student']:
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Placeholder data from sample
-        sample_data = [
-            {
-                "id": "announce_001",
-                "title": "School Holiday Notice",
-                "content": "The school will be closed from December 20th to January 5th for the holiday break.",
-                "author": "Principal",
-                "date": "2024-01-13",
-                "priority": "high"
-            },
-            {
-                "id": "announce_002",
-                "title": "Parent-Teacher Meeting",
-                "content": "The next parent-teacher meeting is scheduled for next Friday at 2:00 PM.",
-                "author": "Admin",
-                "date": "2024-01-10",
-                "priority": "medium"
-            },
-            {
-                "id": "announce_003",
-                "title": "Sports Day Event",
-                "content": "Annual sports day will be held on the last Friday of this month. All students are encouraged to participate.",
-                "author": "Sports Coordinator",
-                "date": "2024-01-08",
-                "priority": "medium"
-            },
-            {
-                "id": "announce_004",
-                "title": "Library Hours Extended",
-                "content": "The school library will now be open until 6:00 PM on weekdays to accommodate students who need extra study time.",
-                "author": "Librarian",
-                "date": "2024-01-11",
-                "priority": "low"
-            },
-            {
-                "id": "announce_005",
-                "title": "Science Fair Registration",
-                "content": "Registration for the annual science fair is now open. All interested students should submit their project proposals by January 25th.",
-                "author": "Science Department",
-                "date": "2024-01-12",
-                "priority": "high"
-            }
-        ]
-        serializer = AnnouncementSerializer(data=sample_data, many=True)
-        serializer.is_valid()
+
+        # Fetch real announcements from the model (limit to 5 recent for performance)
+        announcements = ContactMessage.objects.all().order_by('-created_at')[:5]
+        serializer = AnnouncementSerializer(announcements, many=True)
         return Response(serializer.data)
 
 class StudentStatsView(APIView):
