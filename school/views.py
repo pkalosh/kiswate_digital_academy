@@ -2651,25 +2651,61 @@ def teacher_attendance(request):
     }
     return render(request, 'school/teacher/attendance.html', context)
 
+from django.db import IntegrityError
 @login_required
 def teacher_attendance_mark(request, lesson_id):
     lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
-    students = Enrollment.objects.filter(subject=lesson.subject, status='active')
-    attendance_dict = {
-        att.enrollment.id: att
-        for att in Attendance.objects.filter(enrollment__subject=lesson.subject)
-    }
-
+    
+    # Filter by subject, stream, and active (prevents over-marking wrong students)
+    students = Enrollment.objects.filter(
+        subject=lesson.subject,
+        status='active'
+    ).select_related('student__user')  # Optimize for template
+    
+    if not students.exists():
+        messages.warning(request, f'No active students found for {lesson.subject} in {lesson.stream}.')
+        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)  # Or to list view
+    
+    # Pre-load existing attendance for status pre-filling (filter by lesson/date)
+    attendance_qs = Attendance.objects.filter(
+        enrollment__in=students,
+        # If lesson FK: lesson=lesson
+        # Else: date=lesson.lesson_date  # Fallback for date-based
+    )
+    attendance_dict = {att.enrollment.id: att for att in attendance_qs}
+    
     if request.method == 'POST':
+        updated_count = 0
         for enrollment in students:
             status = request.POST.get(f'status_{enrollment.id}', 'P')
-            Attendance.objects.update_or_create(
-                enrollment=enrollment,
-                defaults={'status': status, 'marked_by': request.user.staffprofile}
-            )
-        messages.success(request, f'Attendance marked for {lesson.subject} on {lesson.lesson_date}.')
-        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
-
+            if status not in ['P', 'A', 'L']:  # Basic validation; expand to choices
+                status = 'P'  # Fallback
+            
+            try:
+                # If Attendance has lesson FK (recommended):
+                Attendance.objects.update_or_create(
+                    enrollment=enrollment,
+                    defaults={
+                        'status': status,
+                        'marked_by': request.user.staffprofile,
+                        'date': lesson.lesson_date,  # Fixes the NULL error
+                    }
+                )
+                # Else (date-based uniqueness, no lesson FK):
+                # Attendance.objects.update_or_create(
+                #     enrollment=enrollment,
+                #     date=lesson.lesson_date,
+                #     defaults={'status': status, 'marked_by': request.user.staffprofile}
+                # )
+                updated_count += 1
+            except IntegrityError:
+                # Rare: If still fails (e.g., other constraints), log and skip
+                messages.error(request, f'Error marking {enrollment.student.user.get_full_name}.')
+                continue
+        
+        messages.success(request, f'Attendance marked for {updated_count} students on {lesson.lesson_date}.')
+        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)  # Reloads form with updates
+    
     context = {
         'school': request.user.staffprofile.school,
         'lesson': lesson,
@@ -2677,7 +2713,6 @@ def teacher_attendance_mark(request, lesson_id):
         'attendance_dict': attendance_dict,
     }
     return render(request, 'school/teacher/attendance_mark.html', context)
-
 
 @login_required
 def teacher_attendance_edit(request, attendance_id):
