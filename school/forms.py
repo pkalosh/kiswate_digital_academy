@@ -221,13 +221,15 @@ class TimeSlotForm(BaseForm):
         model = TimeSlot
         fields = ["start_time", "end_time", "description"]
         widgets = {
-            "start_time": forms.DateTimeInput(attrs={
+            "start_time": forms.TimeInput(attrs={
                 "class": "form-control",
-                "type": "datetime-local"
+                "type": "time",
+                "step": "900"  # 15-minute increments
             }),
-            "end_time": forms.DateTimeInput(attrs={
+            "end_time": forms.TimeInput(attrs={
                 "class": "form-control",
-                "type": "datetime-local"
+                "type": "time",
+                "step": "900"
             }),
             "description": forms.TextInput(attrs={
                 "class": "form-control",
@@ -235,24 +237,32 @@ class TimeSlotForm(BaseForm):
             }),
         }
 
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+
     def clean(self):
         cleaned_data = super().clean()
-        start = cleaned_data.get("start_time")
-        end = cleaned_data.get("end_time")
-
-        if start and end and end <= start:
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        if start_time and end_time and end_time <= start_time:
             raise forms.ValidationError("End time must be after start time.")
-
-        # Prevent overlapping times for the same school
-        if self.school and start and end:
-            qs = TimeSlot.objects.filter(school=self.school)
-            if self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.filter(start_time__lt=end, end_time__gt=start).exists():
-                raise forms.ValidationError("This time slot overlaps with an existing time slot.")
-
+        # Optional: Check for overlaps using self.school
+        if self.school and self.instance.pk:  # Edit
+            overlapping = TimeSlot.objects.filter(
+                school=self.school,
+                start_time__lt=end_time,
+                end_time__gt=start_time
+            ).exclude(pk=self.instance.pk).exists()
+        else:  # Create
+            overlapping = TimeSlot.objects.filter(
+                school=self.school,
+                start_time__lt=end_time,
+                end_time__gt=start_time
+            ).exists()
+        if overlapping:
+            raise forms.ValidationError("This time slot overlaps with an existing one.")
         return cleaned_data
-
 # ------------------------------- GRADE FORM -------------------------------
 class GradeForm(BaseForm):
     class Meta:

@@ -16,7 +16,7 @@ import string
 from datetime import timedelta, date
 from .services.timetable_generator import generate_for_stream
 from collections import defaultdict
-
+from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponseForbidden
 from datetime import timedelta
@@ -134,40 +134,91 @@ def dashboard(request):
 
 @login_required
 def time_slot_list(request):
-    # Assuming staff belongs to a school
-    school = request.user.school_admin_profile
-    slots = TimeSlot.objects.filter(school=school).order_by("start_time")
-    return render(request, "school/time_slots.html", {"slots": slots, "school": school})
+    school_profile = getattr(request.user, 'school_admin_profile', None)
+    if not school_profile:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+    school = school_profile
+    slots = TimeSlot.objects.filter(school=school)
+    form = TimeSlotForm(school=school)  # Empty form for modal
+    return render(request, "school/time_slots.html", {
+        "slots": slots,
+        "school": school,
+        "form": form,  # Enables {{ form.field }} in template
+    })
 
 @login_required
 def time_slot_create(request):
-    school = request.user.school_admin_profile
+    try:
+        school_profile = request.user.school_admin_profile
+        school = school_profile  # Fix: Get actual School instance
+    except ObjectDoesNotExist:
+        messages.error(request, "You must have a school admin profile to create time slots.")
+        return redirect("school:time-slot-list")  # Or dashboard
+
+    # Optional: Role check (from previous code)
+    # user_role = get_user_role(request.user)
+    # if user_role not in ['admin']:
+    #     messages.error(request, "Insufficient permissions.")
+    #     return redirect("school:time-slot-list")
+
     form = TimeSlotForm(request.POST or None, school=school)
-
     if request.method == "POST" and form.is_valid():
-        slot = form.save(commit=False)
-        slot.school = school
-        slot.created_by = request.user.staffprofile
-        slot.updated_by = request.user.staffprofile
-        slot.save()
-        messages.success(request, "Time slot created successfully.")
-        return redirect("school:time-slot-list")
-
-    return render(request, "school/time_slots.html", {"form": form, "school": school, "mode": "create"})
+        try:
+            slot = form.save(commit=False)
+            slot.school = school
+            try:
+                slot.created_by = request.user.staffprofile
+                slot.updated_by = request.user.staffprofile
+            except ObjectDoesNotExist:
+                messages.error(request, "Missing staff profile for audit trail.")
+                return redirect("school:time-slot-list")
+            slot.save()
+            messages.success(request, "Time slot created successfully.")
+            return redirect("school:time-slot-list")
+        except IntegrityError as e:
+            messages.error(request, f"Save failed: Time slot may overlap or violate constraints. Details: {str(e)}")
+        except Exception as e:
+            messages.error(request, f"An error occurred: {str(e)}")
+    return render(request, "school/time_slots.html", {
+        "form": form, "school": school, "mode": "create"
+    })
 
 @login_required
 def time_slot_edit(request, pk):
-    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.staffprofile.school)
-    form = TimeSlotForm(request.POST or None, instance=slot, school=slot.school)
-
-    if request.method == "POST" and form.is_valid():
-        slot = form.save(commit=False)
-        slot.updated_by = request.user.staffprofile
-        slot.save()
-        messages.success(request, "Time slot updated successfully.")
+    try:
+        school_profile = request.user.school_admin_profile
+        user_school = school_profile  # For permission check
+    except ObjectDoesNotExist:
+        messages.error(request, "You must have a school admin profile to edit time slots.")
         return redirect("school:time-slot-list")
 
-    return render(request, "school/time_slots.html", {"form": form, "school": slot.school, "mode": "edit", "slot": slot})
+    # Optional role check
+    # user_role = get_user_role(request.user)
+    # if user_role not in ['admin']:
+    #     messages.error(request, "Insufficient permissions.")
+    #     return redirect("school:time-slot-list")
+
+    slot = get_object_or_404(TimeSlot, pk=pk, school=user_school)
+    form = TimeSlotForm(request.POST or None, instance=slot, school=slot.school)
+    if request.method == "POST" and form.is_valid():
+        try:
+            slot = form.save(commit=False)
+            try:
+                slot.updated_by = request.user.staffprofile
+            except ObjectDoesNotExist:
+                messages.error(request, "Missing staff profile for audit trail.")
+                return redirect("school:time-slot-list")
+            slot.save()
+            messages.success(request, "Time slot updated successfully.")
+            return redirect("school:time-slot-list")
+        except IntegrityError as e:
+            messages.error(request, f"Save failed: Time slot may overlap or violate constraints. Details: {str(e)}")
+        except Exception as e:
+            messages.error(request, f"An error occurred: {str(e)}")
+    return render(request, "school/time_slots.html", {
+        "form": form, "school": slot.school, "mode": "edit", "slot": slot
+    })
 
 @login_required
 def time_slot_delete(request, pk):
