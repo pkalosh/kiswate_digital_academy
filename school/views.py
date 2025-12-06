@@ -602,24 +602,25 @@ def update_student(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     student = get_object_or_404(Student, pk=pk, school=school)
     if request.method == 'POST':
-        form = StudentUpdateForm(request.POST, request.FILES, instance=student, school=school)
+        form = StudentUpdateForm(request.POST, request.FILES, instance=student, school=school)  # Fixed: school=school
         if form.is_valid():
             try:
                 with transaction.atomic():
                     form.save()
                 messages.success(request, f'Successfully updated Student "{student.user.get_full_name()}".')
-                return redirect('school:members')
+                return redirect('school:school-users')
             except Exception as e:
                 messages.error(request, f"Failed to update: {str(e)}")
         else:
+            print(form.errors)
             messages.error(request, "Please correct the form errors below.")
     else:
         form = StudentUpdateForm(instance=student, school=school)
     context = {'form': form, 'student': student}
-    return render(request, 'school/modals/update_student.html', context)  # Or handle in main template
+    return render(request, 'school/staff.html', context)
 
 # Similar for Parent Update
 @login_required
@@ -627,7 +628,7 @@ def update_parent(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     parent = get_object_or_404(Parent, pk=pk, school=school)
     if request.method == 'POST':
         form = ParentUpdateForm(request.POST, request.FILES, instance=parent, school=school)
@@ -636,7 +637,7 @@ def update_parent(request, pk):
                 with transaction.atomic():
                     form.save()
                 messages.success(request, f'Successfully updated Parent "{parent.user.get_full_name()}".')
-                return redirect('school:members')
+                return redirect('school:school-users')
             except Exception as e:
                 messages.error(request, f"Failed to update: {str(e)}")
         else:
@@ -644,7 +645,7 @@ def update_parent(request, pk):
     else:
         form = ParentUpdateForm(instance=parent, school=school)
     context = {'form': form, 'parent': parent}
-    return render(request, 'school/modals/update_parent.html', context)
+    return render(request, 'school/staff.html', context)
 
 # Similar for Staff Update
 @login_required
@@ -652,7 +653,7 @@ def update_staff(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     staff = get_object_or_404(StaffProfile, pk=pk, school=school)
     if request.method == 'POST':
         form = StaffUpdateForm(request.POST, request.FILES, instance=staff, school=school)
@@ -661,7 +662,7 @@ def update_staff(request, pk):
                 with transaction.atomic():
                     form.save()
                 messages.success(request, f'Successfully updated Staff "{staff.user.get_full_name()}".')
-                return redirect('school:members')
+                return redirect('school:school-users')
             except Exception as e:
                 messages.error(request, f"Failed to update: {str(e)}")
         else:
@@ -669,7 +670,7 @@ def update_staff(request, pk):
     else:
         form = StaffUpdateForm(instance=staff, school=school)
     context = {'form': form, 'staff': staff}
-    return render(request, 'school/modals/update_staff.html', context)
+    return render(request, 'school/staff.html', context)
 
 # Delete Views
 @login_required
@@ -677,7 +678,7 @@ def delete_student(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     student = get_object_or_404(Student, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -685,14 +686,14 @@ def delete_student(request, pk):
         messages.success(request, f'Successfully deleted Student "{student.user.get_full_name()}".')
     except Exception as e:
         messages.error(request, f"Failed to delete: {str(e)}")
-    return redirect('school:members')
+    return redirect('school:school-users')
 
 @login_required
 def delete_parent(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     parent = get_object_or_404(Parent, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -700,14 +701,14 @@ def delete_parent(request, pk):
         messages.success(request, f'Successfully deleted Parent "{parent.user.get_full_name()}".')
     except Exception as e:
         messages.error(request, f"Failed to delete: {str(e)}")
-    return redirect('school:members')
+    return redirect('school:school-users')
 
 @login_required
 def delete_staff(request, pk):
     school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
     if not school:
         messages.error(request, "Access denied.")
-        return redirect('school:members')
+        return redirect('school:school-users')
     staff = get_object_or_404(StaffProfile, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -715,7 +716,7 @@ def delete_staff(request, pk):
         messages.success(request, f'Successfully deleted Staff "{staff.user.get_full_name()}".')
     except Exception as e:
         messages.error(request, f"Failed to delete: {str(e)}")
-    return redirect('school:members')
+    return redirect('school:school-users')
 
 def is_school_admin(user):
     # adapt to your project's admin flag - either is_superuser or custom flag on user

@@ -253,7 +253,7 @@ class DisciplineRecordsView(APIView):
     def get(self, request):
         """
         GET: List discipline records (filtered by role/school).
-        Falls back to sample if no real data (uses custom dict serializer to avoid type errors).
+        Returns empty list if no records match filters.
         """
         user_role = get_user_role(request.user)
         if user_role not in ['admin', 'teacher', 'parent', 'student']:
@@ -274,77 +274,9 @@ class DisciplineRecordsView(APIView):
         elif user_role == 'teacher':
             queryset = queryset.filter(teacher=request.user.staffprofile)
 
-        if queryset.exists():
-            # Use ModelSerializer for real data
-            serializer = DisciplineRecordSerializer(queryset, many=True)
-            return Response(serializer.data)
-
-        # Fallback: Sample data (use custom dict serializer to handle string IDs)
-        sample_data = [
-            {
-                "id": "disc_001",
-                "studentName": "John Doe",
-                "className": "Form 3A",
-                "date": "2024-01-14",
-                "incident_type": "Late Arrival",
-                "description": "Arrived 15 minutes late without excuse",
-                "severity": "Low",
-                "action_taken": "Warning issued"
-            },
-            {
-                "id": "disc_002",
-                "studentName": "Jane Smith",
-                "className": "Form 2B",
-                "date": "2024-01-13",
-                "incident_type": "Uniform Violation",
-                "description": "Wore non-regulation shoes",
-                "severity": "Low",
-                "action_taken": "Verbal reminder"
-            },
-            {
-                "id": "disc_003",
-                "studentName": "Mike Johnson",
-                "className": "Form 4C",
-                "date": "2024-01-12",
-                "incident_type": "Disruption in Class",
-                "description": "Talking during lesson, distracting peers",
-                "severity": "Medium",
-                "action_taken": "Detention after school"
-            },
-            {
-                "id": "disc_004",
-                "studentName": "Sarah Lee",
-                "className": "Form 1A",
-                "date": "2024-01-11",
-                "incident_type": "Homework Not Submitted",
-                "description": "Failed to turn in assignment twice",
-                "severity": "Medium",
-                "action_taken": "Parent notified, extra work assigned"
-            },
-            {
-                "id": "disc_005",
-                "studentName": "Tom Wilson",
-                "className": "Form 3B",
-                "date": "2024-01-10",
-                "incident_type": "Bullying Incident",
-                "description": "Reported verbal harassment of classmate",
-                "severity": "High",
-                "action_taken": "Suspended for 2 days, counseling session"
-            },
-            {
-                "id": "disc_006",
-                "studentName": "Emily Brown",
-                "className": "Form 4A",
-                "date": "2024-01-09",
-                "incident_type": "Cheating on Test",
-                "description": "Caught copying from neighbor during math exam",
-                "severity": "High",
-                "action_taken": "Zero on test, parent meeting scheduled"
-            }
-        ]
-        # Use a simple dict serializer for samples (avoids ModelSerializer type issues)
-        sample_serializer = SampleDisciplineSerializer(sample_data, many=True)
-        return Response(sample_serializer.data)
+        # Always use ModelSerializer for real data (or empty)
+        serializer = DisciplineRecordSerializer(queryset, many=True)
+        return Response(serializer.data)  # Empty list [] if no records
 
     def post(self, request):
         """

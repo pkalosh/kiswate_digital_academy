@@ -30,17 +30,17 @@ urlpatterns = [
     path("school-users/", views.school_users, name="school-users"),
 
     # Student
-    path("student/<int:student_id>/details/", views.student_details, name="student_details"),
-    path("student/<int:student_id>/edit/", views.update_student, name="update_student"),
-    path("student/<int:student_id>/delete/", views.delete_student, name="delete_student"),
+    path("student/<int:pk>/details/", views.student_details, name="student_details"),
+    path("student/<int:pk>/edit/", views.update_student, name="update_student"),
+    path("student/<int:pk>/delete/", views.delete_student, name="delete_student"),
 
     # Staff
-    path("staff/<int:staff_id>/edit/", views.update_staff, name="update_staff"),
-    path("staff/<int:staff_id>/delete/", views.delete_staff, name="delete_staff"),
+    path("staff/<int:pk>/edit/", views.update_staff, name="update_staff"),
+    path("staff/<int:pk>/delete/", views.delete_staff, name="delete_staff"),
 
     # Parents
-    path("parent/<int:parent_id>/edit/", views.update_parent, name="update_parent"),
-    path("parent/<int:parent_id>/delete/", views.delete_parent, name="delete_parent"),
+    path("parent/<int:pk>/edit/", views.update_parent, name="update_parent"),
+    path("parent/<int:pk>/delete/", views.delete_parent, name="delete_parent"),
 
 
     # # Parents Management
