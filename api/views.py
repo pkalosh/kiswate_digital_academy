@@ -15,7 +15,8 @@ from .serializers import (
     TeacherTimetableSerializer, StudentTimetableSerializer,AnnouncementSerializer,
     StudentStatsSerializer, ParentStatsSerializer, UserSerializer,AttendanceRecordSerializer, AttendanceModelSerializer,
     AttendanceCreateSerializer, AttendanceUpdateSerializer,DisciplineCreateSerializer,DisciplineUpdateSerializer,
-    AssignmentCreateSerializer,AssignmentUpdateSerializer,DisciplineRecordSerializer,AssignmentSerializer,SampleDisciplineSerializer
+    AssignmentCreateSerializer,AssignmentUpdateSerializer,DisciplineRecordSerializer,AssignmentSerializer,SampleDisciplineSerializer,
+    TeacherStatsSerializer,ParentChildrenSerializer,TeacherLessonSerializer
 )
 from school.models import (
     StaffProfile, Student, Parent, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
@@ -144,6 +145,42 @@ class TeacherTimetableView(APIView):
         serializer = TeacherTimetableSerializer(teacher)
         return Response(serializer.data)
 
+
+class TeacherLessonsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, teacher_id):
+        print(f"Fetching lessons for teacher ID: {teacher_id}")
+        teacher = get_object_or_404(StaffProfile, staff_id=teacher_id)
+        print(f"Found teacher: {teacher.user.get_full_name()}")
+
+        user_role = get_user_role(request.user)
+        # Authorization: Allow teacher themselves, admins, or same-school staff
+        if user_role != 'teacher' or request.user != teacher.user:
+            if user_role != 'admin' and (not hasattr(request.user, 'school') or request.user.school != teacher.school):
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Get active term
+        active_term = Term.objects.filter(school=teacher.school, is_active=True).first()
+        if not active_term:
+            return Response([])
+
+        # Fetch lessons
+        lessons = Lesson.objects.filter(
+            teacher=teacher,
+            timetable__term=active_term,
+            timetable__school=teacher.school
+        ).select_related(
+            'subject', 'time_slot', 'stream', 'stream__grade_level', 'timetable__term'
+        ).order_by(
+            'stream__grade_level__name',
+            'day_of_week',
+            'time_slot__start_time'
+        )
+
+        serializer = TeacherLessonSerializer(lessons, many=True)
+        return Response(serializer.data)
+
 class StudentTimetableView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -177,7 +214,7 @@ class AttendanceRecordsView(APIView):
         
         # Real query
         queryset = Attendance.objects.filter(  # Filter as in ViewSet
-            enrollment__school=request.user.school_admin_profile  # Assume user has school via profile
+            enrollment__school=request.user.staffprofile.school  # Assume user has school via profile
         ).select_related('enrollment__student', 'marked_by')
         
         if not queryset.exists():
@@ -225,7 +262,7 @@ class AttendanceDetailView(APIView):
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
         
         attendance = get_object_or_404(Attendance, pk=pk)
-        if attendance.enrollment.school != request.user.school_admin_profile:
+        if attendance.enrollment.school != request.user.staffprofile.school:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = AttendanceUpdateSerializer(attendance, data=request.data, context={'request': request})
@@ -584,14 +621,19 @@ class AnnouncementsView(APIView):
 
     def get(self, request):
         user_role = get_user_role(request.user)
+        # Restrict to relevant roles that can receive/view announcements
         if user_role not in ['admin', 'teacher', 'parent', 'student']:
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Fetch real announcements from the model (limit to 5 recent for performance)
-        announcements = ContactMessage.objects.all().order_by('-created_at')[:5]
+        # Fetch only notifications for the logged-in user, ordered by sent_at (recent first)
+        # Limit to 10 recent for performance; adjust or add pagination as needed
+        announcements = Notification.objects.filter(
+            recipient=request.user,
+            school=request.user.school  # Assuming User has school; adjust if via profile
+        ).order_by('-sent_at')[:10]
+
         serializer = AnnouncementSerializer(announcements, many=True)
         return Response(serializer.data)
-
 class StudentStatsView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -838,4 +880,56 @@ class ParentStatsView(APIView):
         }
         serializer = ParentStatsSerializer(data=data)
         serializer.is_valid()
+        return Response(serializer.data)
+
+
+class TeacherStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user_role = get_user_role(request.user)
+        if user_role != 'teacher':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        teacher = get_object_or_404(StaffProfile, user=request.user)
+        
+        # Placeholder data for teacher stats (full sample)
+        stats_data = {
+            'teacherId': teacher.staff_id,
+            'teacherName': teacher.user.get_full_name(),
+            'classesTaught': [
+                {
+                    'className': 'Form 3A',
+                    'subject': 'Mathematics',
+                    'studentsCount': 25,
+                    'averageAttendance': 92.5,
+                    'averageAssignmentCompletion': 85.0
+                },
+                {
+                    'className': 'Form 2B',
+                    'subject': 'English',
+                    'studentsCount': 30,
+                    'averageAttendance': 90.0,
+                    'averageAssignmentCompletion': 80.0
+                }
+            ]
+        }
+        
+        serializer = TeacherStatsSerializer(data=stats_data)
+        serializer.is_valid()
+        return Response(serializer.data)
+
+
+class ParentChildrenView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user_role = get_user_role(request.user)
+        if user_role != 'parent':
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        parent = get_object_or_404(Parent, user=request.user)
+        children = parent.children.all()
+        
+        serializer = ParentChildrenSerializer(children, many=True)
         return Response(serializer.data)

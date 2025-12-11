@@ -7,7 +7,7 @@ from .views import (
     TeacherTimetableView, StudentTimetableView,
     AttendanceRecordsView, DisciplineRecordsView,
     AssignmentsView, AnnouncementsView,
-    StudentStatsView, ParentStatsView,AttendanceDetailView
+    StudentStatsView, ParentStatsView,AttendanceDetailView,TeacherStatsView,ParentChildrenView
 )
 
 urlpatterns = [
@@ -23,6 +23,9 @@ urlpatterns = [
     # Timetables
     path('timetable/teacher/<str:teacher_id>/', TeacherTimetableView.as_view(), name='teacher_timetable'),
     path('timetable/student/<str:student_id>/', StudentTimetableView.as_view(), name='student_timetable'),
+
+    #Lessons
+    path('lessons/teacher/<str:teacher_id>/', TeacherTimetableView.as_view(), name='teacher_lessons'),
     
     # Records
     path('attendance/', AttendanceRecordsView.as_view(), name='attendance_records'),
@@ -38,4 +41,8 @@ urlpatterns = [
     # Stats
     path('stats/student/<str:student_id>/', StudentStatsView.as_view(), name='student_stats'),
     path('stats/parent/', ParentStatsView.as_view(), name='parent_stats'),
+    path('stats/teacher/', TeacherStatsView.as_view(), name='teacher_stats'),
+    path('parent/children/', ParentChildrenView.as_view(), name='parent_children'),
+
+
 ]

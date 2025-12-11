@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from school.models import (
     School, Grade, Streams, Role, Subject, StaffProfile, Parent, Student,
     Enrollment, Term, TimeSlot, Timetable, Lesson, Attendance, DisciplineRecord,
-    Assignment, Submission, Payment, SmartID, ScanLog, GradeAttendance, ContactMessage
+    Assignment, Submission, Payment, SmartID, ScanLog, GradeAttendance, ContactMessage, Notification
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -219,6 +219,34 @@ class TeacherTimetableSerializer(serializers.Serializer):
             schedule[day_name] = sorted(day_slots, key=lambda x: x['timeSlot'])
         return schedule
 
+
+class TeacherLessonSerializer(serializers.Serializer):
+    lessonId = serializers.IntegerField(source='id')
+    subjectName = serializers.CharField(source='subject.name')
+    subjectCode = serializers.CharField(source='subject.code')
+    className = serializers.SerializerMethodField()
+    dayOfWeek = serializers.CharField(source='day_of_week')
+    startTime = serializers.SerializerMethodField()
+    endTime = serializers.SerializerMethodField()
+    timeSlot = serializers.SerializerMethodField()
+
+    def get_className(self, obj):
+        if obj.stream:
+            grade = obj.stream.grade_level.name if obj.stream.grade_level else ''
+            stream = obj.stream.name if obj.stream.name else ''
+            return f"{grade} {stream}".strip()
+        return ''
+
+    def get_startTime(self, obj):
+        return obj.time_slot.start_time.strftime('%H:%M') if obj.time_slot else ''
+
+    def get_endTime(self, obj):
+        return obj.time_slot.end_time.strftime('%H:%M') if obj.time_slot else ''
+
+    def get_timeSlot(self, obj):
+        start = self.get_startTime(obj)
+        end = self.get_endTime(obj)
+        return f"{start}-{end}" if start and end else ''
 # Student Timetable Serializer (custom for Student instance)
 class StudentTimetableSerializer(serializers.Serializer):
     studentId = serializers.CharField(source='student_id')  # FIXED: Use actual field
@@ -563,26 +591,30 @@ class AssignmentSerializer(serializers.ModelSerializer):
                 return submission
         return None
 class AnnouncementSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField()  # No source needed
-    title = serializers.SerializerMethodField()
+    id = serializers.UUIDField()  # Assuming UUID primary key; adjust if it's IntegerField
+    title = serializers.CharField()
     content = serializers.CharField(source='message')
     author = serializers.SerializerMethodField()
-    date = serializers.DateTimeField(source='created_at')
+    date = serializers.DateTimeField(source='sent_at')
     priority = serializers.SerializerMethodField()
+    isRead = serializers.BooleanField(source='is_read')
 
     class Meta:
-        model = ContactMessage
-        fields = ['id', 'title', 'content', 'author', 'date', 'priority']
-
-    def get_title(self, obj):
-        # obj is now a ContactMessage instance
-        return obj.message[:50] + '...' if len(obj.message) > 50 else obj.message
+        model = Notification
+        fields = ['id', 'title', 'content', 'author', 'date', 'priority', 'isRead']
 
     def get_author(self, obj):
-        return obj.email_address  # Or f"{obj.first_name} {obj.last_name}"
+        # Since model lacks explicit author, derive from context (e.g., system or related record)
+        # For simplicity, default to "School System"; customize based on related_attendance/discipline if needed
+        if obj.related_attendance:
+            return f"Attendance System ({obj.related_attendance.student.user.get_full_name()})"
+        elif obj.related_discipline:
+            return f"Discipline System ({obj.related_discipline.student.user.get_full_name()})"
+        return "School Administration"
 
     def get_priority(self, obj):
-        return 'medium' if obj.is_read else 'high'
+        # High for unread, low for read
+        return 'high' if not obj.is_read else 'low'
 # Stats Serializers (unchanged; compute in views)
 class SubjectGradeSerializer(serializers.Serializer):
     subject = serializers.CharField()
@@ -657,3 +689,90 @@ class ParentStatsSerializer(serializers.Serializer):
     
     def get_parentName(self, obj):
         return obj.user.get_full_name()
+    
+class TeacherStatsSerializer(serializers.Serializer):
+    teacherName = serializers.SerializerMethodField()
+    lessons = serializers.IntegerField()
+    assignments = serializers.IntegerField()
+    discipline = serializers.IntegerField()
+    announcements = serializers.IntegerField()
+    teacherId = serializers.CharField(source='teacher_id')
+    subjects = SubjectGradeSerializer(many=True)
+    
+    def get_teacherName(self, obj):
+        return obj.user.get_full_name()
+
+class ParentChildrenSerializer(serializers.Serializer):
+    childId = serializers.CharField(source='student_id')
+    childName = serializers.SerializerMethodField()
+    className = serializers.SerializerMethodField()
+    classAttendanceStats = serializers.SerializerMethodField()
+    lessonAttendanceStats = serializers.SerializerMethodField()
+    disciplineStats = serializers.SerializerMethodField()
+
+    def get_childName(self, obj):
+        return obj.user.get_full_name()
+
+    def get_className(self, obj):
+        if obj.stream:
+            return f"{obj.grade_level.name} {obj.stream.name}"
+        return obj.grade_level.name
+
+    def get_classAttendanceStats(self, obj):
+        # Class attendance from GradeAttendance for current grade, last 30 days
+        recent_date = timezone.now().date() - timedelta(days=30)
+        attendances = obj.recent_grade_attendances  # Prefetched; filter in code if needed
+        filtered_attendances = [a for a in attendances if a.recorded_at.date() >= recent_date and a.grade == obj.grade_level]
+        
+        total = len(filtered_attendances)
+        present = len([a for a in filtered_attendances if a.status == 'P'])
+        absent = total - present
+        percentage = (present / total * 100) if total > 0 else 0
+        
+        return {
+            'total': total,
+            'present': present,
+            'absent': absent,
+            'percentage': round(percentage, 2)
+        }
+
+    def get_lessonAttendanceStats(self, obj):
+        # Lesson attendance from Attendance for current grade enrollments, last 30 days
+        recent_date = timezone.now().date() - timedelta(days=30)
+        enrollments = [e for e in getattr(obj, 'current_enrollments', []) if e.grade_level == obj.grade_level]
+        enrollment_ids = [e.id for e in enrollments]
+        
+        attendances = Attendance.objects.filter(
+            enrollment__id__in=enrollment_ids,
+            date__gte=recent_date
+        )
+        
+        total = attendances.count()
+        present = attendances.filter(status='present').count()  # Assuming 'present' is the choice value
+        absent = total - present
+        percentage = (present / total * 100) if total > 0 else 0
+        
+        return {
+            'total': total,
+            'present': present,
+            'absent': absent,
+            'percentage': round(percentage, 2)
+        }
+
+    def get_disciplineStats(self, obj):
+        # Discipline stats from DisciplineRecord, last 30 days
+        recent_date = timezone.now().date() - timedelta(days=30)
+        records = obj.recent_discipline_records  # Prefetched; filter in code
+        filtered_records = [r for r in records if r.date >= recent_date]
+        
+        total = len(filtered_records)
+        # Assuming SEVERITY_CHOICES has 'minor', 'major'; adjust as needed
+        minor = len([r for r in filtered_records if r.severity == 'minor'])
+        major = len([r for r in filtered_records if r.severity == 'major'])
+        
+        return {
+            'total': total,
+            'minor': minor,
+            'major': major,
+            'recent_incidents': total  # Or list summaries if needed
+        }
