@@ -920,16 +920,35 @@ class TeacherStatsView(APIView):
         return Response(serializer.data)
 
 
+from django.db.models import Prefetch
+
 class ParentChildrenView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         user_role = get_user_role(request.user)
         if user_role != 'parent':
-            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
+            return Response({'error': 'Unauthorized'}, status=403)
+
         parent = get_object_or_404(Parent, user=request.user)
-        children = parent.children.all()
-        
+
+        children = parent.children.all().prefetch_related(
+            Prefetch(
+                'grade_attendance',   # <-- correct related name
+                queryset=GradeAttendance.objects.select_related('grade'),
+                to_attr='recent_grade_attendances'   # <-- what serializer expects
+            ),
+            Prefetch(
+                'discipline_records',  # <-- correct related name
+                queryset=DisciplineRecord.objects.all(),
+                to_attr='recent_discipline_records'  # <-- expected by serializer
+            ),
+            Prefetch(
+                'enrollments',       # <-- correct related name
+                queryset=Enrollment.objects.select_related('subject', 'school', 'student'),
+                to_attr='current_enrollments'  # <-- expected by serializer
+            )
+        )
+
         serializer = ParentChildrenSerializer(children, many=True)
         return Response(serializer.data)
