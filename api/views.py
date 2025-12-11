@@ -20,7 +20,7 @@ from .serializers import (
 )
 from school.models import (
     StaffProfile, Student, Parent, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
-    ContactMessage,Submission,Term, Subject, Notification
+    ContactMessage,Submission,Term, Subject, Notification,GradeAttendance
 )
 from rest_framework.decorators import action
 from django.db.models import Count, Case, When, IntegerField
