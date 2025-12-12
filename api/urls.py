@@ -7,7 +7,8 @@ from .views import (
     TeacherTimetableView, StudentTimetableView,
     AttendanceRecordsView, DisciplineRecordsView,
     AssignmentsView, AnnouncementsView,
-    StudentStatsView, ParentStatsView,AttendanceDetailView,TeacherStatsView,ParentChildrenView
+    StudentStatsView, ParentStatsView,AttendanceDetailView,TeacherStatsView,ParentChildrenView,TeacherLessonsView,
+    StudentsListView,StreamAttendanceRecordsView
 )
 
 urlpatterns = [
@@ -25,12 +26,16 @@ urlpatterns = [
     path('timetable/student/<str:student_id>/', StudentTimetableView.as_view(), name='student_timetable'),
 
     #Lessons
-    path('lessons/teacher/<str:teacher_id>/', TeacherTimetableView.as_view(), name='teacher_lessons'),
+    path('lessons/teacher/<str:teacher_id>/', TeacherLessonsView.as_view(), name='teacher_lessons'),
     
     # Records
     path('attendance/', AttendanceRecordsView.as_view(), name='attendance_records'),
     path('attendance/<int:pk>/', AttendanceDetailView.as_view(), name='attendance_detail'),
 
+    #class attendance
+    path('stream/<int:pk>/attendance/', StreamAttendanceRecordsView.as_view(), name='stream_attendance'),
+
+    path('school/students/', StudentsListView.as_view(), name='school_students'),
     path('discipline/', DisciplineRecordsView.as_view(), name='discipline_records'),
     path('discipline/<int:pk>/', DisciplineRecordsView.as_view(), name='discipline_detail'),
     path('assignments/', AssignmentsView.as_view(), name='assignments'),

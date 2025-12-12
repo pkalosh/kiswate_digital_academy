@@ -257,7 +257,7 @@ class StaffProfile(models.Model):
     position = models.CharField(max_length=100, choices=POSITION_CHOICES)
     tsc_number = models.CharField(max_length=50, unique=True, blank=True, null=True)
     qualification = models.TextField(blank=True, null=True)
-    subjects = models.ManyToManyField(Subject, related_name='teachers_subjects')  # Changed(max_length=255, blank=True, null=True)
+    subjects = models.ManyToManyField(Subject, related_name='teachers_subjects', blank=True, null=True)  # Changed(max_length=255, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='teachers/', blank=True, null=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)    
@@ -533,7 +533,7 @@ class ScanLog(models.Model):
 
 class GradeAttendance(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='grade_attendance')
-    grade = models.ForeignKey(Grade, on_delete=models.CASCADE)
+    stream = models.ForeignKey(Streams, on_delete=models.CASCADE,blank=True, null=True)
     status = models.CharField(max_length=5, choices=ATTENDANCE_STATUS_CHOICES, default='P')
     recorded_at = models.DateTimeField(auto_now_add=True)
     scan_log = models.ForeignKey(ScanLog, null=True, blank=True, on_delete=models.SET_NULL)

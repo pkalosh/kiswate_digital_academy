@@ -5,6 +5,7 @@ from school.models import (
     Enrollment, Term, TimeSlot, Timetable, Lesson, Attendance, DisciplineRecord,
     Assignment, Submission, Payment, SmartID, ScanLog, GradeAttendance, ContactMessage, Notification
 )
+from datetime import date
 from django.utils import timezone
 from datetime import timedelta
 def get_user_role(user):
@@ -54,6 +55,33 @@ SEVERITY_CHOICES = [
     ('critical', 'Critical'),
 ]
 User = get_user_model()
+
+def get_user_role(user):
+    if hasattr(user, 'is_teacher') and user.is_teacher:
+        return 'teacher'
+    elif hasattr(user, 'is_parent') and user.is_parent:
+        return 'parent'
+    elif hasattr(user, 'is_student') and user.is_student:
+        return 'student'
+    elif hasattr(user, 'is_admin') and user.is_admin:
+        return 'admin'
+    elif hasattr(user, 'school_staff') and user.school_staff:
+        return 'staff'
+    return 'user'
+
+def get_user_school(user, user_role=None):
+    if user_role is None:
+        user_role = get_user_role(user)
+    if user_role == 'teacher':
+        return getattr(user, 'staffprofile', None).school if hasattr(user, 'staffprofile') else None
+    elif user_role == 'parent':
+        return getattr(user, 'parent', None).school if hasattr(user, 'parent') else None
+    elif user_role == 'student':
+        return getattr(user, 'student', None).school if hasattr(user, 'student') else None
+    elif user_role == 'admin':
+        # Admins might have access to multiple schools; for simplicity, assume they have a school or return None
+        return None  # Or implement multi-school logic if needed
+    return None
 
 # User Serializers (unchanged)
 class UserSerializer(serializers.ModelSerializer):
@@ -357,117 +385,174 @@ class AttendanceModelSerializer(serializers.ModelSerializer):
         return obj.get_status_display()  # Full display name, e.g., 'Present'
 
 # For POST: Input serializer with status mapping
+
+class AttendanceItemSerializer(serializers.Serializer):
+    student_id = serializers.IntegerField()  # Student ID
+    status = AttendanceStatusField()  # Present/absent/etc. from model choices
+    remarks = serializers.CharField(max_length=255, required=False, default='')  # Optional remarks
+
 class AttendanceCreateSerializer(serializers.ModelSerializer):
-    enrollment_id = serializers.IntegerField(write_only=True)  # Input enrollment ID
-    status = AttendanceStatusField()  # FIXED: Use custom field for mapping
-    
+    lesson_id = serializers.IntegerField(write_only=True)  # Input lesson ID to determine subject/date
+    attendances = serializers.ListField(
+        child=AttendanceItemSerializer(),
+        write_only=True
+    )  # List of {student_id, status, remarks}
+
     class Meta:
         model = Attendance
-        fields = ['enrollment_id', 'date', 'status', 'remarks']
-    
+        fields = ['lesson_id', 'attendances']  # No direct fields; bulk via attendances
+
     def create(self, validated_data):
-        enrollment_id = validated_data.pop('enrollment_id')
-        enrollment = Enrollment.objects.get(id=enrollment_id)
-        # Ensure marked_by is current user if teacher
+        lesson_id = validated_data.pop('lesson_id')
+        attendances_data = validated_data.pop('attendances')
+        lesson = Lesson.objects.get(id=lesson_id)
+        
         request = self.context.get('request')
+        user_school = get_user_school(request.user) if request else None
+        if user_school and lesson.subject.school != user_school:
+            raise serializers.ValidationError("Lesson not in your school")
+        
+        # Auto-set marked_by if teacher
+        marked_by = None
         if request and get_user_role(request.user) == 'teacher':
-            validated_data['marked_by'] = request.user.staffprofile
-        return Attendance.objects.create(enrollment=enrollment, **validated_data)
+            marked_by = request.user.staffprofile
+        
+        created_attendances = []
+        for item_data in attendances_data:
+            student_id = item_data.pop('student_id')
+            student = Student.objects.get(id=student_id)
+            # Find enrollment for this student-subject
+            enrollment = Enrollment.objects.get(
+                student=student,
+                subject=lesson.subject,
+                school=lesson.subject.school  # Ensure school match
+            )
+            # Create attendance
+            attendance = Attendance.objects.create(
+                enrollment=enrollment,
+                date=lesson.lesson_date,  # Use lesson date
+                status=item_data['status'],
+                remarks=item_data.get('remarks', ''),
+                marked_by=marked_by
+            )
+            created_attendances.append(attendance)
+        
+        return created_attendances  # Return list for bulk response
 
 # For Update: Similar to create, but with PK
 class AttendanceUpdateSerializer(AttendanceCreateSerializer):
     class Meta(AttendanceCreateSerializer.Meta):
         fields = ['date', 'status', 'remarks']  # No enrollment_id for update
-# Discipline Serializer (derive studentName, className)
-class DisciplineRecordSerializer(serializers.ModelSerializer):
-    studentName = serializers.SerializerMethodField()
-    className = serializers.SerializerMethodField()
-    
+
+class StudentListSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    grade_level_name = serializers.CharField(source='grade_level.name', read_only=True)
+    stream_name = serializers.CharField(source='stream.name', default='', allow_blank=True, read_only=True)
+
     class Meta:
-        model = DisciplineRecord
-        fields = ['id', 'studentName', 'className', 'date', 'incident_type', 'description', 'severity', 'action_taken']
-    
+        model = Student
+        fields = ['id', 'full_name', 'grade_level_name', 'stream_name']
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name()
+
+ATTENDANCE_STATUS_CHOICES = [
+    ('P', 'Present'),
+    ('A', 'Absent'),
+    ('L', 'Late'),
+    ('I', 'Illness'),
+    ('O', 'Other'),
+]
+
+class GradeAttendanceItemSerializer(serializers.Serializer):
+    student_id = serializers.IntegerField()  # Student ID
+    status = serializers.ChoiceField(choices=ATTENDANCE_STATUS_CHOICES)  # Status from model choices
+
+class GradeAttendanceCreateSerializer(serializers.Serializer):
+    attendances = serializers.ListField(
+        child=GradeAttendanceItemSerializer(),
+        write_only=True
+    )  # List of {student_id, status}
+
+    def create(self, validated_data):
+        attendances_data = validated_data.pop('attendances')
+        stream = self.context['stream']
+        created_attendances = []
+        for item_data in attendances_data:
+            student_id = item_data.pop('student_id')
+            student = Student.objects.get(id=student_id)
+            if student.stream != stream:
+                raise serializers.ValidationError(f"Student {student_id} not in stream {stream.name}")
+            # Create GradeAttendance (recorded_at auto_now_add=True)
+            attendance = GradeAttendance.objects.create(
+                student=student,
+                stream=stream,
+                status=item_data['status']
+            )
+            created_attendances.append(attendance)
+        return created_attendances
+
+class GradeAttendanceSerializer(serializers.ModelSerializer):
+    studentName = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GradeAttendance
+        fields = ['id', 'studentName', 'status', 'recorded_at']
+
     def get_studentName(self, obj):
         return obj.student.user.get_full_name()
-    
-    def get_className(self, obj):
-        return f"{obj.student.grade_level.name} {obj.student.stream.name}" if obj.student.stream else obj.student.grade_level.name
+
+# Updated existing serializers (minor adjustments for consistency; add imports if needed)
 class DisciplineCreateSerializer(serializers.ModelSerializer):
     student_id = serializers.IntegerField(write_only=True)  # Input student ID
     teacher_id = serializers.IntegerField(write_only=True, required=False)  # Optional; auto-set if teacher
     severity = serializers.ChoiceField(choices=SEVERITY_CHOICES)  # Ensure choices imported
     incident_type = serializers.ChoiceField(choices=INCIDENT_TYPE_CHOICES)
-    
+
     class Meta:
         model = DisciplineRecord
         fields = ['student_id', 'teacher_id', 'incident_type', 'description', 'date', 'severity', 'action_taken', 'reported_by']
-    
-    @staticmethod
-    def get_user_role(user):
-        if user.is_teacher:
-            return 'teacher'
-        elif user.is_parent:
-            return 'parent'
-        elif user.is_student:
-            return 'student'
-        elif user.is_admin:
-            return 'admin'
-        elif user.school_staff:
-            return 'staff'
-        return 'user'
-    
-    @staticmethod
-    def get_user_school(user):
-        role = DisciplineCreateSerializer.get_user_role(user)
-        if role == 'teacher':
-            return getattr(user, 'staffprofile', None).school if hasattr(user, 'staffprofile') else None
-        elif role == 'parent':
-            return getattr(user, 'parent', None).school if hasattr(user, 'parent') else None
-        elif role == 'student':
-            return getattr(user, 'student', None).school if hasattr(user, 'student') else None
-        return None
-    
+
     def create(self, validated_data):
         student_id = validated_data.pop('student_id')
         teacher_id = validated_data.pop('teacher_id', None)
         student = Student.objects.get(id=student_id)
         request = self.context.get('request')
-        school = self.get_user_school(request.user) if request else None
-        
+        school = get_user_school(request.user) if request else None
         if school and student.school != school:
             raise serializers.ValidationError("Student not in your school")
-        
         # Auto-set teacher if current user is teacher
-        if request and self.get_user_role(request.user) == 'teacher' and not teacher_id:
+        if request and get_user_role(request.user) == 'teacher' and not teacher_id:
             validated_data['teacher'] = request.user.staffprofile
-        
         if teacher_id:
             validated_data['teacher'] = StaffProfile.objects.get(id=teacher_id)
-        
         # Auto-set reported_by to current user
         if request:
             validated_data['reported_by'] = request.user
         validated_data['school'] = school
-        
         return DisciplineRecord.objects.create(student=student, **validated_data)
 
 class DisciplineUpdateSerializer(DisciplineCreateSerializer):
     class Meta(DisciplineCreateSerializer.Meta):
         fields = ['incident_type', 'description', 'date', 'severity', 'action_taken', 'resolved']  # No student/teacher for update
         read_only_fields = ['student', 'teacher', 'reported_by', 'school']
+
 class DisciplineRecordSerializer(serializers.ModelSerializer):
     studentName = serializers.SerializerMethodField()
     className = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = DisciplineRecord
         fields = ['id', 'studentName', 'className', 'date', 'incident_type', 'description', 'severity', 'action_taken']
-    
+
     def get_studentName(self, obj):
         return obj.student.user.get_full_name()
-    
+
     def get_className(self, obj):
-        return f"{obj.student.grade_level.name} {obj.student.stream.name}" if obj.student.stream else obj.student.grade_level.name
+        if hasattr(obj.student, 'stream') and obj.student.stream:
+            return f"{obj.student.grade_level.name} {obj.student.stream.name}"
+        return obj.student.grade_level.name
+
 class SampleDisciplineSerializer(serializers.Serializer):
     id = serializers.CharField()
     studentName = serializers.CharField()
@@ -690,18 +775,49 @@ class ParentStatsSerializer(serializers.Serializer):
     def get_parentName(self, obj):
         return obj.user.get_full_name()
     
-class TeacherStatsSerializer(serializers.Serializer):
+class SubjectSerializer(serializers.ModelSerializer):
+    """
+    Simple serializer for assigned subjects (name only).
+    """
+    class Meta:
+        model = Subject
+        fields = ['id', 'name']
+
+class TeacherStatsSerializer(serializers.ModelSerializer):
     teacherName = serializers.SerializerMethodField()
-    lessons = serializers.IntegerField()
-    assignments = serializers.IntegerField()
-    discipline = serializers.IntegerField()
-    announcements = serializers.IntegerField()
-    teacherId = serializers.CharField(source='teacher_id')
-    subjects = SubjectGradeSerializer(many=True)
-    
+    lessons = serializers.SerializerMethodField()  # Lessons today
+    assignments = serializers.SerializerMethodField()  # Total assignments created
+    discipline = serializers.SerializerMethodField()  # Discipline records captured so far
+    announcements = serializers.SerializerMethodField()  # Total announcements posted
+    staffId = serializers.CharField(source='staff_id')
+    subjects = SubjectSerializer(many=True)  # List of assigned subjects (assuming M2M field 'subjects' on StaffProfile)
+
+    class Meta:
+        model = StaffProfile
+        fields = [
+            'staffId', 'teacherName', 'lessons', 'assignments', 
+            'discipline', 'announcements', 'subjects'
+        ]
+
     def get_teacherName(self, obj):
         return obj.user.get_full_name()
 
+    def get_lessons(self, obj):
+        today = date.today()
+        return Lesson.objects.filter(teacher=obj, lesson_date=today).count()
+
+    def get_assignments(self, obj):
+        return Assignment.objects.filter(
+            school=obj.school,
+            subject__in=obj.subjects.all()
+        ).count()
+
+    def get_discipline(self, obj):
+        return DisciplineRecord.objects.filter(teacher=obj).count()
+
+    def get_announcements(self, obj):
+        # Assuming Announcement has 'posted_by' as ForeignKey to StaffProfile or User; adjust as needed
+        return Notification.objects.filter(recipient=obj.user).count()  # Or filter(posted_by=obj.user) if to User
 class ParentChildrenSerializer(serializers.Serializer):
     childId = serializers.CharField(source='student_id')
     childName = serializers.SerializerMethodField()
@@ -737,21 +853,22 @@ class ParentChildrenSerializer(serializers.Serializer):
         }
 
     def get_lessonAttendanceStats(self, obj):
-        # Lesson attendance from Attendance for current grade enrollments, last 30 days
         recent_date = timezone.now().date() - timedelta(days=30)
-        enrollments = [e for e in getattr(obj, 'current_enrollments', []) if e.grade_level == obj.grade_level]
+
+        # no grade_level on enrollment → just use all current enrollments
+        enrollments = getattr(obj, 'current_enrollments', [])
         enrollment_ids = [e.id for e in enrollments]
-        
+
         attendances = Attendance.objects.filter(
             enrollment__id__in=enrollment_ids,
             date__gte=recent_date
         )
-        
+
         total = attendances.count()
-        present = attendances.filter(status='present').count()  # Assuming 'present' is the choice value
+        present = attendances.filter(status='present').count()
         absent = total - present
         percentage = (present / total * 100) if total > 0 else 0
-        
+
         return {
             'total': total,
             'present': present,

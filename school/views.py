@@ -2372,7 +2372,7 @@ def session_delete(request, session_id):
 
 
 
-def auto_mark_attendance_from_scan(student, grade, scan_log=None):
+def auto_mark_attendance_from_scan(student, stream, scan_log=None):
     """
     Auto-mark attendance using the given scan log.
     Only creates GradeAttendance if the scan came from a device ID starting with 'grade'.
@@ -2381,7 +2381,7 @@ def auto_mark_attendance_from_scan(student, grade, scan_log=None):
     if not scan_log:
         scan_log = ScanLog.objects.filter(
             smart_id__profile=student.user,
-            smart_id__school=grade.school
+            smart_id__school=stream.school
         ).order_by('-scanned_at').first()
 
     if not scan_log:
@@ -2392,7 +2392,7 @@ def auto_mark_attendance_from_scan(student, grade, scan_log=None):
     if scan_log.device_id.lower().startswith('grade'):
         GradeAttendance.objects.create(
             student=student,
-            grade=grade,
+            stream=stream,
             status='P',
             scan_log=scan_log
         )
@@ -2403,11 +2403,11 @@ def auto_mark_attendance_from_scan(student, grade, scan_log=None):
 
 
 @login_required
-def teacher_class_attendance_report(request, grade_id):
+def teacher_class_attendance_report(request, stream_id):
     school = request.user.staffprofile.school
-    grade = get_object_or_404(Grade, id=grade_id, school=school)
-
-    students = grade.students.all()
+    stream = get_object_or_404(Streams, id=stream_id, school=school)
+    grade = stream.grade
+    students = stream.students.all()
     attendance_summary = []
 
     # Handle POST save
@@ -2418,12 +2418,12 @@ def teacher_class_attendance_report(request, grade_id):
 
             if status:
                 # Update latest attendance OR create new if none exists
-                latest = GradeAttendance.objects.filter(student=student, grade=grade).order_by('-recorded_at').first()
+                latest = GradeAttendance.objects.filter(student=student, stream=stream).order_by('-recorded_at').first()
                 if latest:
                     latest.status = status
                     latest.save()
                 else:
-                    GradeAttendance.objects.create(student=student, grade=grade, status=status)
+                    GradeAttendance.objects.create(student=student, stream=stream, status=status)
         
         messages.success(request, "Attendance saved successfully!")
         return redirect(request.path)
@@ -2432,10 +2432,10 @@ def teacher_class_attendance_report(request, grade_id):
     for student in students:
 
         # Auto-mark using ScanLog (creates new records for each scan)
-        auto_mark_attendance_from_scan(student, grade)
+        auto_mark_attendance_from_scan(student, stream)
 
         # Get latest attendance for display
-        latest = GradeAttendance.objects.filter(student=student, grade=grade).order_by('-recorded_at').first()
+        latest = GradeAttendance.objects.filter(student=student, stream=stream).order_by('-recorded_at').first()
 
         attendance_summary.append({
             'student': student,
@@ -2447,6 +2447,7 @@ def teacher_class_attendance_report(request, grade_id):
     attendance_summary = paginator.get_page(page)
 
     context = {
+        'stream': stream,
         'grade': grade,
         'attendance_summary': attendance_summary,
         'school': school,

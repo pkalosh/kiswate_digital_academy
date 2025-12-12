@@ -9,6 +9,9 @@ from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Q
 from rest_framework.parsers import JSONParser
 from rest_framework.renderers import JSONRenderer
+from django.db.models.functions import TruncHour
+from django.db.models import Count
+from datetime import date
 from django.utils import timezone
 from .serializers import (
     RegisterSerializer, LoginSerializer, TimeSlotSerializer,
@@ -16,7 +19,7 @@ from .serializers import (
     StudentStatsSerializer, ParentStatsSerializer, UserSerializer,AttendanceRecordSerializer, AttendanceModelSerializer,
     AttendanceCreateSerializer, AttendanceUpdateSerializer,DisciplineCreateSerializer,DisciplineUpdateSerializer,
     AssignmentCreateSerializer,AssignmentUpdateSerializer,DisciplineRecordSerializer,AssignmentSerializer,SampleDisciplineSerializer,
-    TeacherStatsSerializer,ParentChildrenSerializer,TeacherLessonSerializer
+    TeacherStatsSerializer,ParentChildrenSerializer,TeacherLessonSerializer,StudentListSerializer,GradeAttendanceCreateSerializer,GradeAttendanceSerializer
 )
 from school.models import (
     StaffProfile, Student, Parent, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
@@ -181,6 +184,30 @@ class TeacherLessonsView(APIView):
         serializer = TeacherLessonSerializer(lessons, many=True)
         return Response(serializer.data)
 
+
+class StudentsListView(APIView):
+    """
+    GET: List all students in the user's school (for teachers/admins).
+    Returns serialized list of students with id, full_name, grade_level_name, stream_name.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user_role = get_user_role(request.user)
+        if user_role not in ['admin', 'teacher']:
+            return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
+        
+        school = get_user_school(request.user, user_role)
+        if not school:
+            return Response({'error': 'No school access'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Query students in the school, optimized with select_related and ordering
+        queryset = Student.objects.filter(school=school).select_related(
+            'user', 'grade_level', 'stream'
+        ).order_by('user__last_name', 'user__first_name')
+        
+        serializer = StudentListSerializer(queryset, many=True)
+        return Response(serializer.data)  # Empty list [] if no students
 class StudentTimetableView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -241,15 +268,18 @@ class AttendanceRecordsView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        # POST create
+        """
+        POST: Bulk create attendance for a lesson (teacher/admin only).
+        """
         user_role = get_user_role(request.user)
         if user_role not in ['teacher', 'admin']:
             return Response({'error': 'Insufficient permissions to mark attendance'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = AttendanceCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            attendance = serializer.save()
-            return Response(AttendanceModelSerializer(attendance).data, status=status.HTTP_201_CREATED)
+            attendances = serializer.save()  # List of created instances
+            response_serializer = AttendanceModelSerializer(attendances, many=True)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AttendanceDetailView(APIView):
@@ -282,6 +312,87 @@ class AttendanceDetailView(APIView):
         attendance = get_object_or_404(Attendance, pk=pk)
         attendance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StreamAttendanceRecordsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        """
+        GET: List attendance records for the stream (filtered by role/school).
+        """
+        user_role = get_user_role(request.user)
+        if user_role not in ['admin', 'teacher', 'parent', 'student']:
+            return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
+        
+        stream = get_object_or_404(Streams, pk=pk)
+        school = get_user_school(request.user, user_role)
+        if not school or stream.school != school:
+            return Response({'error': 'No school access or unauthorized stream'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Base queryset
+        queryset = GradeAttendance.objects.filter(stream=stream).select_related('student__user').order_by('-recorded_at')
+        
+        # Role-specific filtering
+        if user_role == 'student':
+            student_profile = getattr(request.user, 'student', None)
+            if student_profile and student_profile.stream == stream:
+                queryset = queryset.filter(student=student_profile)
+            else:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        elif user_role == 'parent':
+            parent_profile = getattr(request.user, 'parent', None)
+            if parent_profile:
+                queryset = queryset.filter(student__parents=parent_profile)
+            else:
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        # For teacher/admin: all records in stream
+        
+        serializer = GradeAttendanceSerializer(queryset, many=True)
+        return Response(serializer.data)  # Empty list [] if no records
+
+    def post(self, request, pk):
+        """
+        POST: Bulk create attendance records for the stream (class teacher only, max 3 sessions/day).
+        Expects: {
+            "attendances": [
+                {"student_id": <id>, "status": "P"},
+                ...
+            ]
+        }
+        Sessions limited to 3 per day (grouped by hour).
+        """
+        user_role = get_user_role(request.user)
+        if user_role != 'teacher':
+            return Response({'error': 'Only teachers can mark attendance'}, status=status.HTTP_403_FORBIDDEN)
+        
+        stream = get_object_or_404(Streams, pk=pk)
+        school = get_user_school(request.user, user_role)
+        if not school or stream.school != school:
+            return Response({'error': 'No school access or unauthorized stream'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if class teacher (assuming position check; adjust if you have assigned_stream/grade field)
+        teacher = request.user.staffprofile
+        if not teacher or teacher.position != 'Class Teacher':  # Adjust 'Class Teacher' to your POSITION_CHOICES value
+            return Response({'error': 'Only class teachers can mark attendance for this stream'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Limit to max 3 sessions per day (grouped by hour via TruncHour)
+        today = date.today()
+        sessions_today = GradeAttendance.objects.filter(
+            stream=stream,
+            recorded_at__date=today
+        ).annotate(hour=TruncHour('recorded_at')).values('hour').annotate(c=Count('id')).count()
+        if sessions_today >= 3:
+            return Response({'error': 'Maximum 3 attendance sessions allowed per day for this stream'}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = GradeAttendanceCreateSerializer(data=request.data, context={'stream': stream})
+        if serializer.is_valid():
+            attendances = serializer.save()  # List of created instances
+            response_serializer = GradeAttendanceSerializer(attendances, many=True)
+            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class DisciplineRecordsView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser]
@@ -332,59 +443,52 @@ class DisciplineRecordsView(APIView):
 
 class DisciplineDetailView(APIView):  # For /discipline/<pk>/
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request, pk):
         user_role = get_user_role(request.user)
         if user_role not in ['admin', 'teacher', 'parent', 'student']:
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
-        
         discipline = get_object_or_404(DisciplineRecord, pk=pk)
         school = get_user_school(request.user, user_role)
         if discipline.school != school:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
         # Role-specific access
         if user_role == 'student' and discipline.student != request.user.student:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         elif user_role == 'parent':
             parent = request.user.parent
-            if discipline.student not in parent.children.all():
+            if discipline.student not in parent.children.all():  # Assuming 'children' is a related_name for parents
                 return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         elif user_role == 'teacher' and discipline.teacher != request.user.staffprofile:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
         serializer = DisciplineRecordSerializer(discipline)
         return Response(serializer.data)
-    
+
     def put(self, request, pk):
         # Full update
         user_role = get_user_role(request.user)
         if user_role not in ['admin', 'teacher']:
             return Response({'error': 'Insufficient permissions to edit'}, status=status.HTTP_403_FORBIDDEN)
-        
         discipline = get_object_or_404(DisciplineRecord, pk=pk)
         if discipline.school != get_user_school(request.user, user_role):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
         serializer = DisciplineUpdateSerializer(discipline, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(DisciplineRecordSerializer(discipline).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+
     def patch(self, request, pk):
         # Partial update (same as put)
         return self.put(request, pk)
-    
+
     def delete(self, request, pk):
         user_role = get_user_role(request.user)
         if user_role != 'admin':
             return Response({'error': 'Insufficient permissions to delete'}, status=status.HTTP_403_FORBIDDEN)
-        
         discipline = get_object_or_404(DisciplineRecord, pk=pk)
         if discipline.school != get_user_school(request.user, user_role):
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
-        
         discipline.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -885,7 +989,7 @@ class ParentStatsView(APIView):
 
 class TeacherStatsView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         user_role = get_user_role(request.user)
         if user_role != 'teacher':
@@ -893,30 +997,8 @@ class TeacherStatsView(APIView):
         
         teacher = get_object_or_404(StaffProfile, user=request.user)
         
-        # Placeholder data for teacher stats (full sample)
-        stats_data = {
-            'teacherId': teacher.staff_id,
-            'teacherName': teacher.user.get_full_name(),
-            'classesTaught': [
-                {
-                    'className': 'Form 3A',
-                    'subject': 'Mathematics',
-                    'studentsCount': 25,
-                    'averageAttendance': 92.5,
-                    'averageAssignmentCompletion': 85.0
-                },
-                {
-                    'className': 'Form 2B',
-                    'subject': 'English',
-                    'studentsCount': 30,
-                    'averageAttendance': 90.0,
-                    'averageAssignmentCompletion': 80.0
-                }
-            ]
-        }
-        
-        serializer = TeacherStatsSerializer(data=stats_data)
-        serializer.is_valid()
+        # Serialize the teacher instance directly (computes stats via methods)
+        serializer = TeacherStatsSerializer(teacher)
         return Response(serializer.data)
 
 
