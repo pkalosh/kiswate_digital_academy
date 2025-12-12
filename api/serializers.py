@@ -84,15 +84,36 @@ def get_user_school(user, user_role=None):
     return None
 
 # User Serializers (unchanged)
+class ParentSerializer(serializers.ModelSerializer):
+    # full_name = serializers.CharField()
+    phone = serializers.CharField(source='user.phone_number', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+
+    class Meta:
+        model = Parent
+        fields = ['first_name', 'last_name', 'email', 'phone', 'address']
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}" if obj.user else None
+
+    def get_email(self, obj):
+        return obj.user.email  # Correct way to access email
+
+
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    staff_details = serializers.SerializerMethodField()  # Combined staff profile fields
+    staff_details = serializers.SerializerMethodField()
+    student_details = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'phone_number', 'role', 'first_name', 'last_name', 
-            'is_active', 'is_verified', 'created_at', 'staff_details'
+            'id', 'email', 'phone_number', 'role', 'first_name', 'last_name',
+            'is_active', 'is_verified', 'created_at',
+            'staff_details', 'student_details'
         ]
 
     def get_role(self, obj):
@@ -106,14 +127,9 @@ class UserSerializer(serializers.ModelSerializer):
             return 'admin'
         elif obj.school_staff:
             return 'staff'
-        else:
-            return 'user'
+        return 'user'
 
     def get_staff_details(self, obj):
-        """
-        Returns dict with staff_id, tsc_number, position, school (name), roles (list of names)
-        for staff/teachers; None otherwise.
-        """
         if hasattr(obj, 'staffprofile') and obj.staffprofile:
             profile = obj.staffprofile
             return {
@@ -124,6 +140,23 @@ class UserSerializer(serializers.ModelSerializer):
                 'roles': [role.name for role in profile.roles.all()]
             }
         return None
+
+    def get_student_details(self, obj):
+        if hasattr(obj, 'student') and obj.student:
+            student = obj.student
+            parents_data = ParentSerializer(student.parents.all(), many=True).data
+
+            return {
+                'student_id': student.student_id,
+                'grade_level': student.grade_level.name if student.grade_level else None,
+                'stream': student.stream.name if student.stream else None,
+                'status': 'active',  # or compute from enrollment if needed
+                'parents': parents_data
+            }
+        return None
+
+
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
