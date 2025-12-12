@@ -174,9 +174,9 @@ class TeacherLessonsView(APIView):
             timetable__term=active_term,
             timetable__school=teacher.school
         ).select_related(
-            'subject', 'time_slot', 'stream', 'stream__grade_level', 'timetable__term'
+            'subject', 'time_slot', 'stream', 'stream__grade', 'timetable__term'
         ).order_by(
-            'stream__grade_level__name',
+            'stream__grade__name',
             'day_of_week',
             'time_slot__start_time'
         )
@@ -373,7 +373,7 @@ class StreamAttendanceRecordsView(APIView):
         
         # Check if class teacher (assuming position check; adjust if you have assigned_stream/grade field)
         teacher = request.user.staffprofile
-        if not teacher or teacher.position != 'Class Teacher':  # Adjust 'Class Teacher' to your POSITION_CHOICES value
+        if not teacher:  # Adjust 'Class Teacher' to your POSITION_CHOICES value
             return Response({'error': 'Only class teachers can mark attendance for this stream'}, status=status.HTTP_403_FORBIDDEN)
         
         # Limit to max 3 sessions per day (grouped by hour via TruncHour)
@@ -1017,8 +1017,8 @@ class ParentChildrenView(APIView):
         children = parent.children.all().prefetch_related(
             Prefetch(
                 'grade_attendance',   # <-- correct related name
-                queryset=GradeAttendance.objects.select_related('grade'),
-                to_attr='recent_grade_attendances'   # <-- what serializer expects
+                queryset=GradeAttendance.objects.select_related('stream', 'student'),
+                to_attr='recent_stream_attendances'   # <-- what serializer expects
             ),
             Prefetch(
                 'discipline_records',  # <-- correct related name

@@ -260,7 +260,7 @@ class TeacherLessonSerializer(serializers.Serializer):
 
     def get_className(self, obj):
         if obj.stream:
-            grade = obj.stream.grade_level.name if obj.stream.grade_level else ''
+            grade = obj.stream.grade.name if obj.stream.grade else ''
             stream = obj.stream.name if obj.stream.name else ''
             return f"{grade} {stream}".strip()
         return ''
@@ -837,8 +837,8 @@ class ParentChildrenSerializer(serializers.Serializer):
     def get_classAttendanceStats(self, obj):
         # Class attendance from GradeAttendance for current grade, last 30 days
         recent_date = timezone.now().date() - timedelta(days=30)
-        attendances = obj.recent_grade_attendances  # Prefetched; filter in code if needed
-        filtered_attendances = [a for a in attendances if a.recorded_at.date() >= recent_date and a.grade == obj.grade_level]
+        attendances = obj.recent_stream_attendances  # Prefetched; filter in code if needed
+        filtered_attendances = [a for a in attendances if a.recorded_at.date() >= recent_date and a.stream == obj.stream]
         
         total = len(filtered_attendances)
         present = len([a for a in filtered_attendances if a.status == 'P'])
