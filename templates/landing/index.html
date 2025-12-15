@@ -3,6 +3,20 @@
 {% block title %}Home | Kiswate Digital Academy{% endblock %}
 
 {% block content %}
+    <!-- Alerts -->
+    {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
 <header class="hero" id="home">
   <div class="glow"></div>
   <div class="grid"></div>

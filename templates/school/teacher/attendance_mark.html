@@ -1,6 +1,7 @@
 {% extends 'school/teacher/base.html' %}
 {% load custom_filters %}
 {% block title %}Attendance | {{ school.name }}{% endblock %}
+
 {% block content %}
 <header class="header d-flex align-items-center justify-content-between">
   <div class="d-flex gap-2 align-items-center">
@@ -16,103 +17,99 @@
     </div>
   </div>
 </header>
+
 <section class="content container-fluid py-4">
-  {% if messages %}
-  <div class="row mb-3">
-    {% for message in messages %}
-    <div class="col-12">
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-        {{ message }}
-        <button class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
   {% if lesson %}
   <div class="card shadow-sm rounded-4 border-0 mb-4">
     <div class="card-header bg-light">
-      <h5 class="mb-0 fw-bold">Mark Attendance for {{ lesson.subject.name }} — {{ lesson.lesson_date|date:"F d, Y" }} ({{ lesson.stream.name }})</h5>
+      <h5 class="mb-0 fw-bold">
+        Mark Attendance for {{ lesson.subject.name }} — {{ lesson.lesson_date|date:"F d, Y" }}
+      </h5>
     </div>
     <div class="card-body">
-      <!-- SMART ID SCAN -->
-      <div class="alert alert-info border-0 shadow-sm p-3 rounded-4 mb-4">
-        <h6 class="fw-bold mb-2"><i class="bi bi-qr-code-scan"></i> Smart ID Attendance</h6>
-        <button class="btn btn-primary btn-lg" onclick="alert('Smart ID scanning feature coming soon!')">Scan</button>
-      </div>
-      <!-- END SMART ID SCAN -->
+
       {% if students %}
       <form method="post" action="{% url 'school:teacher-attendance-mark' lesson_id=lesson.id %}">
         {% csrf_token %}
         <div class="table-responsive">
           <table class="table table-bordered table-hover align-middle">
-            <thead class="table-light">
+            <thead class="table-light text-center">
               <tr>
-                <th class="text-center">Student</th>
-                <th class="text-center">Attendance Status</th>
+                <th>Student</th>
+                <th>Attendance Status</th>
               </tr>
             </thead>
             <tbody>
               {% for enrollment in students %}
-                {% with attendance_dict|dict_get:enrollment.id as existing %}
-                <tr>
-                  <td class="fw-semibold">
-                    {{ enrollment.student.user.get_full_name }}<br>
-                    <small class="text-muted">ID: {{ enrollment.student.id }}</small>
-                  </td>
-                  <td class="text-center">
-                    <div class="btn-group w-100" role="group">
-                      <!-- Present -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="present_{{ enrollment.id }}" value="P"
-                             {% if existing and existing.status == 'P' %}checked{% endif %}
-                             {% if not existing %}checked{% endif %}>
-                      <label class="btn btn-outline-success btn-sm px-2" for="present_{{ enrollment.id }}">Present</label>
+              {% with attendance_dict|dict_get:enrollment.id as existing %}
+              <tr>
+                <td class="fw-semibold">
+                  {{ enrollment.student.user.get_full_name }}<br>
+                  <small class="text-muted">ID: {{ enrollment.student.id }}</small>
+                </td>
+                <td>
+                  <div class="d-flex flex-wrap gap-3">
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="P"
+                        {% if existing and existing.status == 'P' %}checked{% endif %}
+                        {% if not existing %}checked{% endif %}>
+                      Present
+                    </label>
 
-                      <!-- Excused Tardy -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="et_{{ enrollment.id }}" value="ET"
-                             {% if existing and existing.status == 'ET' %}checked{% endif %}>
-                      <label class="btn btn-outline-primary btn-sm px-2" for="et_{{ enrollment.id }}">Excused Tardy</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="ET"
+                        {% if existing and existing.status == 'ET' %}checked{% endif %}>
+                      Excused Tardy
+                    </label>
 
-                      <!-- Unexcused Tardy -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="ut_{{ enrollment.id }}" value="UT"
-                             {% if existing and existing.status == 'UT' %}checked{% endif %}>
-                      <label class="btn btn-outline-warning btn-sm px-2" for="ut_{{ enrollment.id }}">Unexcused Tardy</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="UT"
+                        {% if existing and existing.status == 'UT' %}checked{% endif %}>
+                      Unexcused Tardy
+                    </label>
 
-                      <!-- Excused Absence -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="ea_{{ enrollment.id }}" value="EA"
-                             {% if existing and existing.status == 'EA' %}checked{% endif %}>
-                      <label class="btn btn-outline-info btn-sm px-2" for="ea_{{ enrollment.id }}">Excused Absence</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="EA"
+                        {% if existing and existing.status == 'EA' %}checked{% endif %}>
+                      Excused Absence
+                    </label>
 
-                      <!-- Unexcused Absence -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="ua_{{ enrollment.id }}" value="UA"
-                             {% if existing and existing.status == 'UA' %}checked{% endif %}>
-                      <label class="btn btn-outline-danger btn-sm px-2" for="ua_{{ enrollment.id }}">Unexcused Absence</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="UA"
+                        {% if existing and existing.status == 'UA' %}checked{% endif %}>
+                      Unexcused Absence
+                    </label>
 
-                      <!-- Inappropriate Behavior -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="ib_{{ enrollment.id }}" value="IB"
-                             {% if existing and existing.status == 'IB' %}checked{% endif %}>
-                      <label class="btn btn-outline-dark btn-sm px-2" for="ib_{{ enrollment.id }}">Inappropriate Behavior</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="IB"
+                        {% if existing and existing.status == 'IB' %}checked{% endif %}>
+                      Inappropriate Behavior
+                    </label>
 
-                      <!-- Suspension -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="susp_{{ enrollment.id }}" value="18"
-                             {% if existing and existing.status == '18' %}checked{% endif %}>
-                      <label class="btn btn-outline-secondary btn-sm px-2" for="susp_{{ enrollment.id }}">Suspension</label>
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="18"
+                        {% if existing and existing.status == '18' %}checked{% endif %}>
+                      Suspension
+                    </label>
 
-                      <!-- Expulsion -->
-                      <input type="radio" class="btn-check" name="status_{{ enrollment.id }}" id="exp_{{ enrollment.id }}" value="20"
-                             {% if existing and existing.status == '20' %}checked{% endif %}>
-                      <label class="btn btn-outline-danger btn-sm px-2" for="exp_{{ enrollment.id }}">Expulsion</label>
-                    </div>
-                    {% if existing %}
-                    <small class="text-muted d-block mt-1">Previous: {{ existing.status }}</small>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endwith %}
+                    <label>
+                      <input type="radio" name="status_{{ enrollment.id }}" value="20"
+                        {% if existing and existing.status == '20' %}checked{% endif %}>
+                      Expulsion
+                    </label>
+                  </div>
+
+                  {% if existing %}
+                  <small class="text-muted d-block mt-1">Previous: {{ existing.get_status_display }}</small>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endwith %}
               {% endfor %}
             </tbody>
           </table>
         </div>
+
         <div class="d-flex justify-content-between align-items-center mt-4">
           <div>
             <small class="text-muted">Total Students: {{ students|length }}</small>
@@ -132,6 +129,7 @@
         <a href="{% url 'school:teacher-attendance' %}" class="btn btn-primary">Back to Attendance</a>
       </div>
       {% endif %}
+
     </div>
   </div>
   {% else %}
@@ -143,18 +141,4 @@
   </div>
   {% endif %}
 </section>
-
-<!-- Optional: Add JS for enhanced UX, e.g., bulk select -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // Example: Bulk set all to Present
-  const bulkPresent = document.createElement('button');
-  bulkPresent.className = 'btn btn-outline-success btn-sm me-2';
-  bulkPresent.innerHTML = '<i class="bi bi-check-all"></i> Bulk Present';
-  bulkPresent.onclick = function() {
-    document.querySelectorAll('input[type="radio"][value="P"]').forEach(r => r.checked = true);
-  };
-  // Insert before submit button if desired
-});
-</script>
 {% endblock %}

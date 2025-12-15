@@ -16,6 +16,7 @@ urlpatterns = [
     # Grades Management
     path('grades/', views.school_grades, name='school-grades'),
     path('grades/create/', views.grade_create, name='grade-create'),
+    path('grades/uploads/', views.upload_grade_file, name='upload-grade-file'),
     path('grades/<int:pk>/edit/', views.grade_edit, name='edit-grade'),
     path('grades/<int:pk>/delete/', views.grade_delete, name='delete-grade'),
 
@@ -111,7 +112,7 @@ urlpatterns = [
     path("terms/<int:term_id>/edit/", views.edit_term, name="edit-term"),
 
 
-
+    path('ajax/get-streams/', views.get_streams_for_grade, name='ajax-get-streams'),
     path('generate-timetable/', views.generate_timetable_view, name='generate_timetable'),
     path('timetable/week/', views.view_timetable_week, name='timetable_week'),
     path('timetable/teacher/', views.teacher_timetable_view, name='teacher_timetable'),
@@ -130,12 +131,15 @@ urlpatterns = [
 
     
     # Attendance Management
-    path('attendance/', views.school_attendance, name='school-attendance'),
+    path('attendance/', views.attendance_dashboard, name='attendance-dashboard'),
+    path('attendance/export/csv/', views.export_attendance_csv, name='attendance-export-csv'),
+    path('attendance/export/pdf/', views.export_attendance_pdf, name='attendance-export-pdf'),
     path('attendance/<int:lesson_id>/mark/', views.attendance_mark, name='attendance-mark'),
     path('attendance/summary/', views.attendance_summary, name='attendance-summary'),
     path('attendance/<int:attendance_id>/delete/', views.attendance_delete, name='attendance-delete'),
     path('attendance/<int:attendance_id>/edit/', views.attendance_edit, name='attendance-edit'),
-
+    path('attendance/export/csv/', views.export_attendance_csv, name='attendance_export_csv'),
+    path('ajax/streams/', views.get_streams_by_grade, name='get_streams_by_grade'),
     # Attendance Reports
     path('teacher/attendance/', views.teacher_attendance, name='teacher-attendance'),
     path('teacher/<int:lesson_id>/attendance/summary/', views.teacher_attendance_summary, name='teacher-attendance-summary'),

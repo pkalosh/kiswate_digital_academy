@@ -5,6 +5,8 @@ from decimal import Decimal
 import uuid
 from django.utils import timezone
 from userauths.models import User
+from django.core.exceptions import ValidationError
+import os
 
 # KDADTR-Specific Choice Constants 
 GENDER_CHOICES = [
@@ -314,7 +316,18 @@ class Enrollment(models.Model):
     def __str__(self):
         return f"{self.student} enrolled in {self.subject} - {self.get_status_display()}"
 
+
+class AcademicYear(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    name = models.CharField(max_length=20)  # e.g., "2025-2026"
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    def __str__(self):
+        return self.school.name + " - " + self.name
+
 class Term(models.Model):
+    year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, blank=True, null=True, related_name='terms')
     school = models.ForeignKey('School', on_delete=models.CASCADE, related_name='terms')
     name = models.CharField(max_length=80)
     start_date = models.DateField()
@@ -416,6 +429,36 @@ class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid
         return f"{self.title} - {self.scheduled_at}"
 
 # Attendance
+def validate_file(file):
+    max_size = 5 * 1024 * 1024  # 5MB
+    ext = os.path.splitext(value.name)[1].lower()
+    if ext not in ['.xls', '.xlsx']:
+        raise ValidationError('Only Excel files (.xls, .xlsx) are allowed.')
+    if value.size > max_size:
+        raise ValidationError('File size must be under 5MB.')
+
+class UploadedFile(models.Model):
+    CATEGORY_CHOICES = [
+        ('grade', 'Grade'),
+        ('staff', 'Staff'),
+        ('subjects', 'Subjects'),
+    ]
+
+    upload_file_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    file = models.FileField(upload_to='uploads/%Y/%m/%d/', validators=[validate_file])
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    file_size = models.PositiveIntegerField(editable=False)
+    file_type = models.CharField(max_length=20, editable=False)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='uploaded_files')
+
+    def save(self, *args, **kwargs):
+        self.file_size = self.file.size
+        self.file_type = os.path.splitext(self.file.name)[1].lower()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.upload_file_category} - {self.file.name}"
 
 
 class Attendance(models.Model):
@@ -424,6 +467,8 @@ class Attendance(models.Model):
         on_delete=models.CASCADE,
         related_name='attendances'
     )
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE,blank=True, null=True)
+    term = models.ForeignKey(Term, on_delete=models.CASCADE,blank=True, null=True)
     date = models.DateField()
     status = models.CharField(
         max_length=20,

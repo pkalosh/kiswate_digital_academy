@@ -3,6 +3,20 @@
 {% block title %}Login | Kiswate Digital Learning App{% endblock %}
 
 {% block content %}
+    <!-- Alerts -->
+    {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
 <section id="login" style="padding:80px 0; background-color:#0d1117;">
   <div class="container">
     <div class="row justify-content-center">

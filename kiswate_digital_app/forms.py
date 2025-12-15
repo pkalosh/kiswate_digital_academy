@@ -14,6 +14,8 @@ from school.models import School,Scholarship,SchoolSubscription,SubscriptionPlan
 from userauths.models import User
 
 
+
+
 class SchoolCreationForm(forms.ModelForm):
     # User (admin) fields for creation
     admin_email = forms.EmailField(
@@ -296,6 +298,12 @@ class SchoolEditForm(forms.ModelForm):
         return school
 
 class AdminEditForm(forms.ModelForm):
+    email = forms.EmailField(
+        label="Admin Email",
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': True}),
+        help_text="Admin email cannot be changed.",
+        required=True
+    )
     send_email = forms.BooleanField(
         label="Send Updated Credentials via Email",
         required=False,
@@ -311,7 +319,7 @@ class AdminEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'phone_number', 'country', 'is_active']
+        fields = ['first_name', 'last_name', 'phone_number', 'country', 'is_active', 'email']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -319,16 +327,6 @@ class AdminEditForm(forms.ModelForm):
             'country': forms.TextInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
-
-    def __init__(self, *args, **kwargs):
-        self.instance = kwargs.get('instance')
-        super().__init__(*args, **kwargs)
-        if self.instance:
-            self.fields['email'] = forms.EmailField(
-                initial=self.instance.email,
-                widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': True}),
-                help_text="Admin email cannot be changed."
-            )
 
     def clean_phone_number(self):
         phone = self.cleaned_data.get('phone_number')
@@ -340,36 +338,29 @@ class AdminEditForm(forms.ModelForm):
         user = super().save(commit=False)
 
         password = None
-        if self.cleaned_data['reset_password']:
+        if self.cleaned_data.get('reset_password'):
             password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
             user.set_password(password)
 
         if commit:
             user.save()
 
-        # Send email if requested
-        if (self.cleaned_data['send_email'] or self.cleaned_data['reset_password']) and getattr(settings, 'EMAIL_HOST', None):
-            subject = 'Account Update - Kiswate Digital Academy Admin'
+        if (self.cleaned_data.get('send_email') or self.cleaned_data.get('reset_password')) and getattr(settings, 'EMAIL_HOST', None):
+            subject = 'Account Update - Admin'
             message = f"""
             Dear {user.get_full_name()},
-            
+
             Your admin account has been updated.
             Email: {user.email}
-            Temporary Password: {password}
-            
+            Temporary Password: {password or '(unchanged)'}
+
             If you did not request this, contact support.
             Login URL: {getattr(settings, 'FRONTEND_URL', 'https://yourapp.com/login')}
-            
+
             Best regards,
             System Admin
             """
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+            # send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=False)
 
         return user
     

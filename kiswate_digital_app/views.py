@@ -12,7 +12,7 @@ from django.db.models import Q
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
-from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription, StaffProfile, Student, Parent, Scholarship
+from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward
 from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 
@@ -47,8 +47,14 @@ def school_list(request):
         form = SchoolCreationForm()
 
     # List schools
+    counties = County.objects.all().order_by('name')
+    cities = City.objects.all().order_by('name')
+    constituencies = Constituency.objects.all().order_by('name')
+    sub_counties = SubCounty.objects.all().order_by('name')
+    wards = Ward.objects.all().order_by('name')
+
     query = request.GET.get('q', '')
-    schools = School.objects.filter(is_active=True).order_by('-created_at')
+    schools = School.objects.all().order_by('-created_at')
     if query:
         schools = schools.filter(
             Q(name__icontains=query) |
@@ -59,6 +65,11 @@ def school_list(request):
 
     context = {
         'schools': schools,
+        'counties': counties,
+        'cities': cities,
+        'constituencies': constituencies,
+        'sub_counties': sub_counties,
+        'wards': wards,
         'form': form,
         'query': query,
     }
@@ -90,6 +101,7 @@ def edit_school(request, pk):
             logger.info(f"Updated school {school.code} by superuser {request.user.email}.")
             return redirect('kiswate_digital_app:school_list')
         else:
+            print(f"Form errors: {form.errors}")  # Debug log
             messages.error(request, "Please correct the form errors.")
     # For GET: Redirect to list (modal-driven)
     messages.info(request, "Use the edit button in the list to modify.")
@@ -164,17 +176,10 @@ def kiswate_dashboard(request):
 
 @login_required
 def school_admin_list(request):
-    """
-    List all school admins (via schools).
-    Handles modal re-open on error via query param.
-    """
+    # Superuser check
     if not request.user.is_superuser:
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:kiswate_admin_dashboard')
-
-    # Check for error re-open
-    edit_pk = request.GET.get('edit_pk')
-    error = request.GET.get('error') == '1'
 
     query = request.GET.get('q', '')
     schools = School.objects.select_related('school_admin').order_by('-created_at')
@@ -186,28 +191,34 @@ def school_admin_list(request):
             Q(name__icontains=query)
         )
 
-    # If error, fetch form for modal
-    edit_form = None
-    if edit_pk and error:
-        school = get_object_or_404(School, pk=edit_pk)
-        edit_form = AdminEditForm(instance=school.school_admin)
-        messages.error(request, "Please correct the form errors below.")
+    # Determine which school had form errors (from query param)
+    edit_pk = request.GET.get('school_pk')
+    error = request.GET.get('error') == '1'
+
+    # Prepare a form for each school
+    forms_dict = {}
+    for school in schools:
+        if edit_pk and str(school.pk) == str(edit_pk) and error:
+            # Keep POST data with errors in form
+            forms_dict[school.pk] = AdminEditForm(request.POST or None, instance=school.school_admin)
+            messages.error(request, "Please correct the form errors below.")
+        else:
+            # Normal form
+            forms_dict[school.pk] = AdminEditForm(instance=school.school_admin)
+
+        # Attach form to school for easier template access
+        school.form = forms_dict[school.pk]
 
     context = {
         'schools': schools,
         'query': query,
         'edit_pk': edit_pk,
-        'edit_form': edit_form,  # Pass for modal errors
     }
     return render(request, "Dashboard/school_admin_list.html", context)
 
 
 @login_required
 def edit_school_admin(request, school_pk):
-    """
-    Edit school admin via modal POST.
-    On error, redirect to list with params to re-open modal.
-    """
     if not request.user.is_superuser:
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:school_admin_list')
@@ -217,26 +228,25 @@ def edit_school_admin(request, school_pk):
 
     if request.method == 'POST':
         form = AdminEditForm(request.POST, instance=admin)
-        logger.info(f"POST data for admin {admin.email}: {request.POST}")  # Debug log
+        logger.info(f"POST data for admin {admin.email}: {request.POST}")
         if form.is_valid():
             form.save()
             messages.success(
                 request,
                 f'Successfully updated admin "{admin.get_full_name()}" for {school.name}. '
-                f'Email sent: {"Yes" if form.cleaned_data["send_email"] else "No"}. '
-                f'Password reset: {"Yes" if form.cleaned_data["reset_password"] else "No"}.'
+                f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}. '
+                f'Password reset: {"Yes" if form.cleaned_data.get("reset_password") else "No"}.'
             )
             logger.info(f"Updated admin {admin.email} for school {school.name}.")
             return redirect('kiswate_digital_app:school_admin_list')
         else:
-            logger.warning(f"Form errors for admin {admin.email}: {form.errors}")  # Debug log
+            logger.warning(f"Form errors for admin {admin.email}: {form.errors}")
             messages.error(request, "Please correct the form errors.")
-            # Redirect to list with params to re-open modal
+            # Redirect with query params to re-open modal if needed
             return redirect(f'/school-admins/?edit_pk={school_pk}&error=1')
-    # For GET: Redirect with message (avoid direct access)
-    messages.info(request, "Use the edit button in the list to modify this admin.")
-    return redirect('skiswate_digital_app:chool_admin_list')
 
+    messages.info(request, "Use the edit button in the list to modify this admin.")
+    return redirect('kiswate_digital_app:school_admin_list')
 
 @login_required
 def delete_school_admin(request, school_pk):

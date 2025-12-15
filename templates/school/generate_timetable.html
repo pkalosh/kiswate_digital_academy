@@ -2,7 +2,8 @@
 {% block content %}
 <div class="container py-4">
   <h3>Generate Timetable</h3>
-    {% if messages %}
+
+  {% if messages %}
   <div class="row">
     {% for message in messages %}
     <div class="col-12">
@@ -15,11 +16,38 @@
   </div>
   {% endif %}
 
-  <form method="post">
-
+  <form method="post" id="timetableForm">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit" class="btn btn-primary">Generate</button>
   </form>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const gradeSelect = document.querySelector("#id_grade");
+    const streamSelect = document.querySelector("#id_stream");
+
+    gradeSelect.addEventListener("change", function () {
+        const gradeId = this.value;
+        streamSelect.innerHTML = '<option value="">Loading...</option>';
+
+        fetch("{% url 'school:ajax-get-streams' %}?grade_id=" + gradeId)
+            .then(response => response.json())
+            .then(data => {
+                streamSelect.innerHTML = '<option value="">Select Stream</option>';
+                data.streams.forEach(function(stream) {
+                    const option = document.createElement("option");
+                    option.value = stream.id;
+                    option.textContent = stream.name;
+                    streamSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error("Error fetching streams:", error);
+                streamSelect.innerHTML = '<option value="">Error loading streams</option>';
+            });
+    });
+});
+</script>
 {% endblock %}

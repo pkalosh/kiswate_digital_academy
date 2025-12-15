@@ -6,6 +6,8 @@ from django.core.paginator import Paginator
 from userauths.models import User
 from .models import Grade, School, Parent,StaffProfile,Student, ScanLog, SmartID,Scholarship
 import logging
+import os
+import pandas as pd
 from django.http import JsonResponse
 from django.conf import settings
 from django.template.loader import render_to_string
@@ -13,6 +15,7 @@ from django.utils.safestring import mark_safe
 from django.core.mail import send_mail
 import random
 import string
+from django.utils.dateparse import parse_date
 from datetime import timedelta, date
 from .services.timetable_generator import generate_for_stream
 from collections import defaultdict
@@ -44,20 +47,21 @@ import csv
 from io import StringIO
 import logging
 from decimal import Decimal
+from django.utils.timezone import localdate
 from datetime import timedelta
 import uuid
 from userauths.models import User
 from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,
-    Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
-    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot
+    Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile,
+    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
     GradeForm,ParentCreationForm, ParentUpdateForm,StaffCreationForm, StaffUpdateForm,
     StudentCreationForm, StudentUpdateForm,SmartIDForm,GenerateTimetableForm,
-    SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,
+    SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,GradeUploadForm,
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
     ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm,AssignParentStudentForm
@@ -74,6 +78,49 @@ from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+import csv
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+
+@login_required
+def export_attendance_csv(request):
+    school = request.user.school_admin_profile
+    qs = Attendance.objects.filter(enrollment__school=school)
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="attendance.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Student','Grade','Stream','Subject','Date','Status','Term','Year'])
+    for a in qs:
+        writer.writerow([
+            a.enrollment.student.user.get_full_name(),
+            a.enrollment.student.grade_level.name,
+            a.enrollment.student.stream.name,
+            a.enrollment.subject.name,
+            a.date,
+            a.status,
+            a.term.name if a.term else '',
+            a.academic_year.name if a.academic_year else '',
+        ])
+    return response
+
+@login_required
+def export_attendance_pdf(request):
+    school = request.user.school_admin_profile
+    qs = Attendance.objects.filter(enrollment__school=school)
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="attendance.pdf"'
+    p = canvas.Canvas(response)
+    p.drawString(100, 800, "Attendance Report")
+    y = 750
+    for a in qs:
+        p.drawString(50, y, f"{a.enrollment.student.user.get_full_name()} | {a.status} | {a.date}")
+        y -= 20
+        if y < 50: p.showPage(); y = 800
+    p.showPage()
+    p.save()
+    return response
 
 @login_required
 def dashboard(request):
@@ -773,69 +820,67 @@ def is_school_admin(user):
     # adapt to your project's admin flag - either is_superuser or custom flag on user
     return user.is_active and (user.is_superuser or getattr(user, 'is_admin', False))
 
+
+@login_required
+@user_passes_test(is_school_admin)
+def get_streams_for_grade(request):
+    grade_id = request.GET.get('grade_id')
+    school = getattr(request.user, 'school_admin_profile', None)
+    if not school or not grade_id:
+        return JsonResponse({'streams': []})
+
+    streams = Streams.objects.filter(grade_id=grade_id, grade__school=school, is_active=True)
+    streams_data = [{'id': s.id, 'name': s.name} for s in streams]
+    return JsonResponse({'streams': streams_data})
+
 @login_required
 @user_passes_test(is_school_admin)
 def generate_timetable_view(request):
-    """
-    Admin endpoint that processes GenerateTimetableForm and triggers generation.
-    """
+    school = getattr(request.user, 'school_admin_profile', None)
+    if not school:
+        messages.error(request, "You do not have permission to access this page.")
+        return redirect('school:dashboard')
+
     if request.method == 'POST':
-        form = GenerateTimetableForm(request.POST)
+        form = GenerateTimetableForm(request.POST, school=school)
         if form.is_valid():
             scope = form.cleaned_data['scope']
-            school = form.cleaned_data['school']
             grade = form.cleaned_data.get('grade')
-            time_slot = form.cleaned_data.get('time_slot')
             stream = form.cleaned_data.get('stream')
             overwrite = form.cleaned_data.get('overwrite')
 
-            # pick term: active term for that school
             term = Term.objects.filter(school=school, is_active=True).first()
             if not term:
-                messages.error(request, "No active term defined for the selected school.")
+                messages.error(request, "No active term defined for your school.")
                 return redirect(request.META.get('HTTP_REFERER', '/'))
 
-            created_total = 0
-            errors = []
-            if scope == 'school':
-                streams_qs = Streams.objects.filter(grade__school=school)
-                for st in streams_qs:
-                    # create timetable if not exists
-                    tt, created = Timetable.objects.get_or_create(
-                        school=school, grade=st.grade, stream=st, term=term, year=term.start_date.year,
-                        defaults={'start_date': term.start_date, 'end_date': term.end_date}
-                    )
-                    try:
-                        created_lessons = generate_for_stream(tt, overwrite=overwrite)
-                        created_total += len(created_lessons)
-                    except Exception as e:
-                        errors.append(str(e))
-            elif scope == 'grade':
+            # Determine streams to generate
+            streams_qs = Streams.objects.filter(grade__school=school)
+            if scope == 'grade':
                 if not grade:
                     messages.error(request, "Please select a grade.")
                     return redirect(request.META.get('HTTP_REFERER', '/'))
-                streams_qs = Streams.objects.filter(grade=grade)
-                for st in streams_qs:
-                    tt, created = Timetable.objects.get_or_create(
-                        school=school, grade=grade, stream=st, term=term, year=term.start_date.year,
-                        defaults={'start_date': term.start_date, 'end_date': term.end_date}
-                    )
-                    try:
-                        created_lessons = generate_for_stream(tt, overwrite=overwrite)
-                        created_total += len(created_lessons)
-                    except Exception as e:
-                        errors.append(str(e))
-            else:  # stream
+                streams_qs = streams_qs.filter(grade=grade)
+            elif scope == 'stream':
                 if not stream:
                     messages.error(request, "Please select a stream.")
                     return redirect(request.META.get('HTTP_REFERER', '/'))
+                streams_qs = streams_qs.filter(id=stream.id)
+
+            created_total = 0
+            errors = []
+            for st in streams_qs:
                 tt, created = Timetable.objects.get_or_create(
-                    school=school, grade=stream.grade, stream=stream, term=term, year=term.start_date.year,
+                    school=school,
+                    grade=st.grade,
+                    stream=st,
+                    term=term,
+                    year=term.start_date.year,
                     defaults={'start_date': term.start_date, 'end_date': term.end_date}
                 )
                 try:
-                    created_lessons = generate_for_stream(tt, overwrite=overwrite)
-                    created_total += len(created_lessons)
+                    lessons_created = generate_for_stream(tt, overwrite=overwrite)
+                    created_total += len(lessons_created)
                 except Exception as e:
                     errors.append(str(e))
 
@@ -843,11 +888,21 @@ def generate_timetable_view(request):
                 messages.success(request, f"Timetable generated — {created_total} lessons created.")
             if errors:
                 messages.warning(request, "Some errors: " + "; ".join(errors))
-            return redirect(request.META.get('HTTP_REFERER', '/'))
-    else:
-        form = GenerateTimetableForm()
 
-    return render(request, 'school/generate_timetable.html', {'form': form})
+            return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    else:
+        form = GenerateTimetableForm(school=request.user.school_admin_profile)
+
+    # Fetch all timetables for the school
+    timetables = Timetable.objects.filter(school=school).order_by('-term__start_date')
+
+    return render(request, 'school/generate_timetable.html', {
+        'form': form,
+        'timetables': timetables,
+        'school': school,
+    })
+
 
 
 @login_required
@@ -1019,24 +1074,20 @@ def delete_parent(request, parent_id):
 @login_required
 def school_grades(request):
     # Ensure user is a school admin
-    print("Accessing grades view as user:", request.user)  # Keep for console
-    logger.info(f"Accessing grades view as user: {request.user.email} (ID: {request.user.id})")
     try:
         school = request.user.school_admin_profile
-        logger.info(f"User's school: {school.name} (ID: {school.id})")
-        print("User's school:", school.name)  # Keep for console
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    except AttributeError:
+        messages.error(request, "You do not have permission to access this page.")
         return redirect('school:dashboard')
 
     form = GradeForm(school=school)
     stream_form = StreamForm()
+    upload_form = GradeUploadForm()  # Add upload form
 
-    # Fetch grades for the school, with search/filter
     query = request.GET.get('q', '')
     grades = Grade.objects.filter(school=school, is_active=True)
     streams = Streams.objects.filter(school=school, is_active=True)
+
     if query:
         grades = grades.filter(Q(name__icontains=query) | Q(code__icontains=query))
 
@@ -1044,11 +1095,13 @@ def school_grades(request):
         'grades': grades,
         'form': form,
         'stream_form': stream_form,
+        'upload_form': upload_form,  # pass to template
         'school': school,
         'streams': streams,
         'query': query,
     }
     return render(request, "school/grade.html", context)
+
 
 @login_required
 def smartid_list(request):
@@ -1231,6 +1284,79 @@ def grade_create(request):
                 for error in error_list:
                     messages.error(request, f"{label}: {error}")
         return redirect('school:school-grades')
+
+
+@login_required
+def upload_grade_file(request):
+    # Ensure user has a school
+    try:
+        school = request.user.school_admin_profile
+    except AttributeError as e:
+        logger.warning(f"Permission denied for user {request.user.email}: {e}")
+        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+        return redirect('school:dashboard')
+
+    if request.method == 'POST':
+        form = GradeUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            upload = form.save(commit=False)
+            upload.upload_file_category = 'grade'
+            upload.uploaded_by = request.user
+            upload.school = school
+            upload.save()
+
+            # Process Excel file
+            file_path = upload.file.path
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in ['.xls', '.xlsx']:
+                messages.error(request, "Invalid file type. Only Excel files allowed.")
+                upload.delete()
+                return redirect('upload_grade_file')
+
+            try:
+                df = pd.read_excel(file_path)  # expects columns: name, description, code, capacity
+            except Exception as e:
+                messages.error(request, f"Failed to read Excel file: {str(e)}")
+                upload.delete()
+                return redirect('upload_grade_file')
+
+            created_count = 0
+            for index, row in df.iterrows():
+                # Skip rows without name or code
+                if pd.isna(row.get('name')) or pd.isna(row.get('code')):
+                    continue
+
+                grade, created = Grade.objects.get_or_create(
+                    school=school,
+                    code=row.get('code'),
+                    defaults={
+                        'name': row.get('name'),
+                        'description': row.get('description', ''),
+                        'capacity': int(row.get('capacity', 30)),
+                    }
+                )
+                if created:
+                    created_count += 1
+
+            messages.success(request, f"File uploaded successfully. {created_count} grades created.")
+            return redirect('school:school-grades')
+
+        else:
+            messages.error(request, "Please fix the errors below.")
+    else:
+        form = GradeUploadForm()
+
+    uploaded_files = UploadedFile.objects.filter(
+        upload_file_category='grade',
+        school=school
+    ).order_by('-uploaded_at')
+
+    context = {
+        'form': form,
+        'uploaded_files': uploaded_files,
+    }
+    return redirect('school:school-grades')
+
 
 
 @login_required
@@ -2454,182 +2580,338 @@ def teacher_class_attendance_report(request, stream_id):
     }
     return render(request, 'school/teacher/class_attendance_report.html', context)
 
+from django.db.models import Count, Q, F
+from django.core.paginator import Paginator
+
 @login_required
-def school_attendance(request):
-    # Ensure this is a school admin
+def attendance_dashboard(request):
     try:
-        school = request.user.school_admin_profile
+        user_school = request.user.staffprofile.school
     except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:dashboard')
+        return render(request, 'error/no_school_access.html', status=403)
 
-    # Base queryset
-    attendances = Attendance.objects.filter(
-        enrollment__school=school
-    ).select_related(
+    qs = Attendance.objects.select_related(
         'enrollment__student__user',
+        'enrollment__student__grade_level',
+        'enrollment__student__stream',
         'enrollment__subject',
+        'term',
+        'academic_year',
         'marked_by__user'
-    )
+    ).filter(enrollment__school=user_school)
 
-    # ----------- FILTERS -----------
-    date_filter = request.GET.get('date')
-    subject_id = request.GET.get('subject')
-    grade_id = request.GET.get('grade')
-    stream_id = request.GET.get('stream')
-    status_filter = request.GET.get('status')
-
-    if date_filter:
-        attendances = attendances.filter(date=date_filter)
-
-    if subject_id:
-        attendances = attendances.filter(enrollment__subject_id=subject_id)
-
-    if grade_id:
-        attendances = attendances.filter(enrollment__student__grade_id=grade_id)
-
-    if stream_id:
-        attendances = attendances.filter(enrollment__student__stream_id=stream_id)
-
-    if status_filter:
-        attendances = attendances.filter(status=status_filter)
-
-    # ----------- AGGREGATIONS -----------
-
-    # Individual status counts
-    count_P = attendances.filter(status="P").count()
-    count_ET = attendances.filter(status="ET").count()
-    count_UT = attendances.filter(status="UT").count()
-    count_EA = attendances.filter(status="EA").count()
-    count_UA = attendances.filter(status="UA").count()
-    count_IB = attendances.filter(status="IB").count()
-    count_18 = attendances.filter(status="18").count()
-    count_20 = attendances.filter(status="20").count()
-
-    # ----------- Grade Stats -----------
-    grade_attendance = (
-        attendances.values(
-            'enrollment__student__grade_level__name',
-            'enrollment__student__stream__name'
-        )
-        .annotate(
-            total=Count('id'),
-            present=Count('id', filter=Q(status="P")),
-            tardy=Count('id', filter=Q(status__in=["ET", "UT"])),
-            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
-        )
-        .order_by('enrollment__student__grade_level__name')
-    )
-
-    # ----------- Subject Stats -----------
-    subject_attendance = (
-        attendances.values('enrollment__subject__name')
-        .annotate(
-            total=Count('id'),
-            present=Count('id', filter=Q(status="P")),
-            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
-            behavior=Count('id', filter=Q(status="IB")),
-        )
-        .order_by('enrollment__subject__name')
-    )
-
-    # ----------- Student Stats -----------
-    student_attendance = (
-        attendances.values(
-            'enrollment__student__user__first_name',
-            'enrollment__student__user__last_name',
-        )
-        .annotate(
-            total=Count('id'),
-            present=Count('id', filter=Q(status="P")),
-            tardy=Count('id', filter=Q(status__in=["ET", "UT"])),
-            absent=Count('id', filter=Q(status__in=["EA", "UA"])),
-        )
-        .order_by('-total')
-    )
-
-    # ----------- Daily Trend for Charts -----------
-    daily_data = (
-        attendances.values('date')
-        .annotate(count=Count('id'))
-        .order_by('date')
-    )
-
-    # ----------- Pie Chart Data (status distribution) -----------
-    status_pie = (
-        attendances.values('status')
-        .annotate(count=Count('id'))
-        .order_by('status')
-    )
-
-    # ----------- Subject Bar Chart Data -----------
-    subject_bar = (
-        attendances.values('enrollment__subject__name')
-        .annotate(present=Count('id', filter=Q(status="P")))
-        .order_by('enrollment__subject__name')
-    )
-
-    # Pagination
-    paginator = Paginator(attendances.order_by('-date', '-marked_at'), 50)
-    page = request.GET.get('page')
-    attendances_page = paginator.get_page(page)
-
-    # Filter dropdowns
-    subjects = Subject.objects.filter(school=school).order_by('name')
-    grades = Grade.objects.filter(school=school).order_by('-id')
-    streams = Streams.objects.filter(school=school).order_by('name')
-
-    # Core context
-    context = {
-        'school': school,
-        'attendances': attendances_page,
-        'subjects': subjects,
-        'grades': grades,
-        'streams': streams,
-        'total_attendance': attendances.count(),
+    filters = {
+        'academic_year': request.GET.get('academic_year', ''),
+        'term': request.GET.get('term', ''),
+        'grade': request.GET.get('grade', ''),
+        'stream': request.GET.get('stream', ''),
+        'subject': request.GET.get('subject', ''),
+        'student': request.GET.get('student', ''),
+        'date': request.GET.get('date', ''),
     }
 
-    # Add stats
-    context.update({
-        "stats": {
-            "P": count_P,
-            "ET": count_ET,
-            "UT": count_UT,
-            "EA": count_EA,
-            "UA": count_UA,
-            "IB": count_IB,
-            "SUSP": count_18,
-            "EXPEL": count_20,
-        },
-        "grade_stats": grade_attendance,
-        "subject_stats": subject_attendance,
-        "student_stats": student_attendance,
-        "daily_trend": daily_data,
-        "status_pie": status_pie,
-        "subject_bar": subject_bar,
-    })
+    if filters['academic_year'].isdigit():
+        qs = qs.filter(academic_year_id=filters['academic_year'])
+    if filters['term'].isdigit():
+        qs = qs.filter(term_id=filters['term'])
+    if filters['grade'].isdigit():
+        qs = qs.filter(enrollment__student__grade_level_id=filters['grade'])
+    if filters['stream'].isdigit():
+        qs = qs.filter(enrollment__student__stream_id=filters['stream'])
+    if filters['subject'].isdigit():
+        qs = qs.filter(enrollment__subject_id=filters['subject'])
+    if filters['student'].strip():
+        s = filters['student'].strip()
+        qs = qs.filter(
+            Q(enrollment__student__admission_number__icontains=s) |
+            Q(enrollment__student__user__first_name__icontains=s) |
+            Q(enrollment__student__user__last_name__icontains=s)
+        )
+    if filters['date']:
+        parsed = parse_date(filters['date'])
+        if parsed:
+            qs = qs.filter(date=parsed)
 
-    return render(request, 'school/attendance.html', context)
+    stats = qs.aggregate(
+        P=Count('id', filter=Q(status='P')),
+        ET=Count('id', filter=Q(status='ET')),
+        UT=Count('id', filter=Q(status='UT')),
+        EA=Count('id', filter=Q(status='EA')),
+        UA=Count('id', filter=Q(status='UA')),
+    )
+    stats = {k: v or 0 for k, v in stats.items()}
 
+    discipline_qs = DisciplineRecord.objects.filter(linked_attendance__in=qs)
+    discipline_stats = discipline_qs.aggregate(
+        total=Count('id'),
+        unresolved=Count('id', filter=Q(resolved=False)),
+        severe=Count('id', filter=Q(severity='severe')),
+    )
+    discipline_stats = {k: v or 0 for k, v in discipline_stats.items()}
+
+    today = localdate()
+    daily_trend = qs.filter(date__gte=today - timedelta(days=30)).values('date').annotate(
+        present=Count('id', filter=Q(status='P')),
+        absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
+    ).order_by('date')
+
+    paginator = Paginator(qs.order_by('-date', '-id'), 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'attendances': page_obj,
+        'stats': stats,
+        'daily_trend': list(daily_trend),
+        'discipline_stats': discipline_stats,
+        'alerts': [],
+        'filters': filters,
+        'academic_years': AcademicYear.objects.filter(school=user_school),
+        'terms': Term.objects.filter(school=user_school),
+        'grades': Grade.objects.filter(school=user_school),
+        'streams': Streams.objects.filter(school=user_school),
+        'subjects': Subject.objects.filter(school=user_school, is_active=True),
+        'school': user_school,
+    }
+    return render(request, 'school/attendance_dashboard.html', context)
+
+
+@login_required
+def get_streams_by_grade(request):
+    grade_id = request.GET.get('grade')
+    streams = []
+    if grade_id:
+        streams_qs = Streams.objects.filter(grade_id=grade_id).order_by('name')
+        streams = [{'id': s.id, 'name': s.name} for s in streams_qs]
+    return JsonResponse({'streams': streams})
+
+# === EXPORT CSV ===
+def export_attendance_csv(request):
+    qs = Attendance.objects.all()
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="attendance_report.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Student', 'Grade', 'Stream', 'Subject', 'Date', 'Status'
+    ])
+
+    for a in qs:
+        writer.writerow([
+            a.enrollment.student.user.get_full_name(),
+            a.enrollment.student.grade_level.name,
+            a.enrollment.student.stream.name,
+            a.enrollment.subject.name,
+            a.date,
+            a.status
+        ])
+
+    return response
+
+# @login_required
+# def school_attendance(request):
+#     # Ensure school admin
+#     try:
+#         school = request.user.school_admin_profile
+#     except AttributeError:
+#         messages.error(request, "Access denied: Admin privileges required.")
+#         return redirect('school:dashboard')
+
+#     # Base queryset
+#     qs = Attendance.objects.filter(
+#         enrollment__school=school
+#     ).select_related(
+#         'enrollment__student__user',
+#         'enrollment__student__grade_level',
+#         'enrollment__student__stream',
+#         'enrollment__subject',
+#         'term',
+#         'academic_year',
+#         'marked_by__user'
+#     )
+
+#     # --- Filters ---
+#     filters = {
+#         'date': request.GET.get('date'),
+#         'lesson': request.GET.get('lesson'),
+#         'grade': request.GET.get('grade'),
+#         'stream': request.GET.get('stream'),
+#         'subject': request.GET.get('subject'),
+#         'student': request.GET.get('student'),
+#         'term': request.GET.get('term'),
+#         'academic_year': request.GET.get('academic_year'),
+#     }
+
+#     if filters['date']:
+#         qs = qs.filter(date=filters['date'])
+#     if filters['lesson']:
+#         qs = qs.filter(enrollment__subject_id=filters['lesson'])
+#     if filters['grade']:
+#         qs = qs.filter(enrollment__student__grade_level_id=filters['grade'])
+#     if filters['stream']:
+#         qs = qs.filter(enrollment__student__stream_id=filters['stream'])
+#     if filters['subject']:
+#         qs = qs.filter(enrollment__subject_id=filters['subject'])
+#     if filters['student'] and filters['student'].isdigit():
+#         qs = qs.filter(enrollment__student__id=int(filters['student']))
+#     if filters['term']:
+#         qs = qs.filter(term_id=filters['term'])
+#     if filters['academic_year']:
+#         qs = qs.filter(academic_year_id=filters['academic_year'])
+
+#     # --- Aggregations ---
+#     stats = qs.aggregate(
+#         P=Count('id', filter=Q(status='P')),
+#         ET=Count('id', filter=Q(status='ET')),
+#         UT=Count('id', filter=Q(status='UT')),
+#         EA=Count('id', filter=Q(status='EA')),
+#         UA=Count('id', filter=Q(status='UA')),
+#         IB=Count('id', filter=Q(status='IB')),
+#         SUSP=Count('id', filter=Q(status='18')),
+#         EXPEL=Count('id', filter=Q(status='20')),
+#     )
+
+#     # Ensure defaults to 0
+#     for key in ['P','ET','UT','EA','UA','IB','SUSP','EXPEL']:
+#         if stats[key] is None:
+#             stats[key] = 0
+
+#     # --- Grade/Stream/Student Stats ---
+#     grade_stats = (
+#         qs.values(
+#             'enrollment__student__grade_level__name',
+#             'enrollment__student__stream__name',
+#             'enrollment__student__user__first_name',
+#             'enrollment__student__user__last_name',
+#             'academic_year__name',
+#             'term__name',
+#         )
+#         .annotate(
+#             total=Count('id'),
+#             present=Count('id', filter=Q(status='P')),
+#             tardy=Count('id', filter=Q(status__in=['ET','UT'])),
+#             absent=Count('id', filter=Q(status__in=['EA','UA'])),
+#         )
+#         .order_by('enrollment__student__grade_level__name','enrollment__student__stream__name')
+#     )
+
+#     # --- Subject Stats ---
+#     subject_stats = (
+#         qs.values('enrollment__subject__name')
+#         .annotate(
+#             total=Count('id'),
+#             present=Count('id', filter=Q(status='P')),
+#             absent=Count('id', filter=Q(status__in=['EA','UA'])),
+#             behavior=Count('id', filter=Q(status='IB')),
+#         )
+#     )
+
+#     # --- Daily Trend for charts ---
+#     daily_trend = (
+#         qs.values('date')
+#         .annotate(
+#             present=Count('id', filter=Q(status='P')),
+#             tardy=Count('id', filter=Q(status__in=['ET','UT'])),
+#             absent=Count('id', filter=Q(status__in=['EA','UA']))
+#         )
+#         .order_by('date')
+#     )
+
+#     # --- Status Pie Chart ---
+#     status_pie = [
+#         {'status': 'Present', 'count': stats['P']},
+#         {'status': 'Tardy', 'count': stats['ET'] + stats['UT']},
+#         {'status': 'Absent', 'count': stats['EA'] + stats['UA']},
+#         {'status': 'Behavior', 'count': stats['IB']},
+#         {'status': 'Suspension', 'count': stats['SUSP']},
+#         {'status': 'Expulsion', 'count': stats['EXPEL']},
+#     ]
+
+#     # --- Pagination ---
+#     paginator = Paginator(qs.order_by('-date','-marked_at'), 50)
+#     page = request.GET.get('page')
+#     attendances_page = paginator.get_page(page)
+
+#     context = {
+#         'school': school,
+#         'attendances': attendances_page,
+#         'grades': Grade.objects.filter(school=school),
+#         'streams': Streams.objects.filter(school=school),
+#         'subjects': Subject.objects.filter(school=school),
+#         'terms': Term.objects.filter(school=school),
+#         'academic_years': AcademicYear.objects.filter(school=school),
+#         'stats': stats,
+#         'grade_stats': grade_stats,
+#         'subject_stats': subject_stats,
+#         'daily_trend': daily_trend,
+#         'status_pie': status_pie,
+#         'filters': filters
+#     }
+
+#     return render(request, 'school/attendance_dashboard.html', context)
 
 
 
 @login_required
 def attendance_mark(request, lesson_id):
-    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
+    lesson = get_object_or_404(
+        Lesson,
+        id=lesson_id,
+        teacher=request.user.staffprofile,
+    )
+
+    # All active enrollments for this subject & school
+    students = Enrollment.objects.filter(
+        subject=lesson.subject,
+        school=lesson.school,  # make sure this is correct
+        status='active'
+    ).select_related('student__user')
+
+    # Existing attendance
+    attendance_dict = {
+        att.enrollment_id: att
+        for att in Attendance.objects.filter(
+            enrollment__in=students,
+            date=lesson.lesson_date
+        )
+    }
+
     if request.method == 'POST':
-        # Bulk mark or individual; assume formset or bulk logic
-        enrollments = Enrollment.objects.filter(subject=lesson.subject, status='active')
-        for enrollment in enrollments:
-            status = request.POST.get(f'status_{enrollment.id}', 'P')
-            Attendance.objects.update_or_create(
+        valid_statuses = {code for code, _ in Attendance.ATTENDANCE_STATUS_CHOICES}
+        saved = 0
+
+        for enrollment in students:
+            key = f'status_{enrollment.id}'
+            raw_status = request.POST.get(key)
+            if raw_status in valid_statuses:
+                status_to_save = raw_status
+            else:
+                status_to_save = 'P'
+
+            # Save/update attendance
+            obj, created = Attendance.objects.update_or_create(
                 enrollment=enrollment,
-                lesson=lesson,
-                defaults={'status': status, 'marked_by': request.user.staffprofile}
+                date=lesson.lesson_date,
+                defaults={
+                    'status': status_to_save,
+                    'marked_by': request.user.staffprofile,
+                    'term': lesson.timetable.term if hasattr(lesson.timetable, 'term') else None,
+                    'academic_year': lesson.timetable.term.academic_year if hasattr(lesson.timetable, 'term') else None,
+                }
             )
-        messages.success(request, f'Attendance marked for {lesson.subject} on {lesson.date}.')
-        return redirect('school:school-attendance')
-    return redirect('school:school-attendance')
+            saved += 1
+
+        messages.success(request, f"Attendance saved successfully ({saved} records).")
+        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
+
+    return render(request, 'school/teacher/attendance_mark.html', {
+        'lesson': lesson,
+        'students': students,
+        'attendance_dict': attendance_dict,
+        'school': lesson.school,
+    })
+
+
 
 @login_required
 def attendance_edit(request, attendance_id):
@@ -2641,7 +2923,7 @@ def attendance_edit(request, attendance_id):
             messages.success(request, f'Attendance for {attendance.enrollment.student} updated successfully.')
         else:
             messages.error(request, "Error updating attendance. Check the form.")
-    return redirect('school:school-attendance')
+    return redirect('school:attendance-dashboard')
 
 @login_required
 def attendance_delete(request, attendance_id):
@@ -2649,7 +2931,7 @@ def attendance_delete(request, attendance_id):
     if request.method == 'POST':
         attendance.delete()
         messages.success(request, f'Attendance for {attendance.enrollment.student} deleted successfully.')
-    return redirect('school:school-attendance')
+    return redirect('school:attendance-dashboard')
 # Summary view
 @login_required
 def attendance_summary(request):

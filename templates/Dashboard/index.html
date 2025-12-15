@@ -3,6 +3,7 @@
 
 {% block content %}
 
+
 <div class="row g-2" data-aos="fade-up">
           <div class="col-6 col-md-3">
             <div class="card k-card">
@@ -12,7 +13,7 @@
                     <div class="text-secondary small">Total Schools</div>
                     <div class="h4 m-0 fw-bold">{{ schools|default:"0" }}</div>
                   </div>
-                  <a href=""><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                  <a href="{% url 'kiswate_digital_app:school_list' %}"><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
                 </div>
                 <div class="k-progress mt-2"><span style="width:70%"></span></div>
               </div>

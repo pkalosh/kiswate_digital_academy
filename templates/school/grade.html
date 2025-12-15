@@ -34,12 +34,15 @@
   {% endif %}
 
   <div class="card shadow-sm border-0 rounded-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header card-success d-flex justify-content-between align-items-center">
       <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Active Grades ({{ grades.count }})</h5>
       <div class="d-flex gap-2">
         <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#gradeModal" data-mode="create">
           <i class="bi bi-plus"></i> Add Grade
         </button>
+        <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#uploadGradeModal">
+  <i class="bi bi-upload"></i> Upload Excel
+</button>
       </div>
     </div>
 
@@ -156,6 +159,34 @@
       </div>
     </div>
   </div>
+<!-- Upload Grades Excel Modal -->
+<div class="modal fade" id="uploadGradeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="post" enctype="multipart/form-data" action="{% url 'school:upload-grade-file' %}">
+        {% csrf_token %}
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title">Upload Grades via Excel</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="text-muted">Upload an Excel file (.xls or .xlsx) with columns: <code>name, code, description, capacity</code>. Max file size: 5MB.</p>
+          <div class="mb-3">
+            {{ upload_form.file.label_tag }}
+            {{ upload_form.file }}
+            {% if upload_form.file.errors %}{{ upload_form.file.errors }}{% endif %}
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-info">Upload File</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
   <!-- GRADE MODALS (CREATE/EDIT + DELETE) -->
       <!-- Grade Modal (Create/Edit) -->

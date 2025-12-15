@@ -2,7 +2,13 @@
 {% block title %}Registered Schools | Dashboard{% endblock %}
 
 {% block content %}
+<style>
+    .modal-dialog-scrollable .modal-body {
+    max-height: 70vh; /* adjust as needed */
+    overflow-y: auto;
+}
 
+</style>
 <header class="header d-flex align-items-center justify-content-between">
     <div class="d-flex align-items-center gap-2">
         <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
@@ -28,20 +34,6 @@
 
 <section class="content container-fluid py-4">
 <div class="container">
-
-    <!-- Alerts -->
-    {% if messages %}
-    <div class="row mb-3">
-        {% for message in messages %}
-        <div class="col-12">
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-                {{ message }}
-                <button class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
     <div class="card shadow-sm border-0 rounded-4">
     <div class="card-body">
@@ -146,87 +138,127 @@
         </tr>
 
         <!-- EDIT SCHOOL MODAL -->
-        <div class="modal fade" id="editSchoolModal{{ school.pk }}" tabindex="-1">
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                    <form method="POST" action="{% url 'kiswate_digital_app:edit_school' school.pk %}">
-                        {% csrf_token %}
+<!-- EDIT SCHOOL MODAL -->
+<div class="modal fade" id="editSchoolModal{{ school.pk }}" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
 
-                        <div class="modal-header bg-warning">
-                            <h5 class="modal-title">Edit School — {{ school.name }}</h5>
-                            <button class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
+      <form method="POST" action="{% url 'kiswate_digital_app:edit_school' school.pk %}">
+        {% csrf_token %}
 
-                        <div class="modal-body">
-                            <div class="row g-3">
-
-                                <div class="col-md-4">
-                                    <label>School Name</label>
-                                    <input type="text" name="name" class="form-control"
-                                           value="{{ school.name }}">
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label>School Code</label>
-                                    <input type="text" name="code" class="form-control"
-                                           value="{{ school.code }}">
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label>Email</label>
-                                    <input type="email" name="contact_email" class="form-control"
-                                           value="{{ school.contact_email }}">
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label>Phone</label>
-                                    <input type="text" name="contact_phone" class="form-control"
-                                           value="{{ school.contact_phone }}">
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label>County</label>
-                                    <select name="county" class="form-select">
-                                        {% for obj in counties %}
-                                            <option value="{{ obj.id }}"
-                                            {% if school.county_id == obj.id %}selected{% endif %}>
-                                                {{ obj.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="col-md-4">
-                                    <label>City</label>
-                                    <select name="city" class="form-select">
-                                        {% for obj in cities %}
-                                            <option value="{{ obj.id }}"
-                                            {% if school.city_id == obj.id %}selected{% endif %}>
-                                                {{ obj.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <div class="col-md-12">
-                                    <label>Address</label>
-                                    <textarea name="address" class="form-control" rows="3">
-                                        {{ school.address }}
-                                    </textarea>
-                                </div>
-
-                            </div>
-                        </div>
-
-                        <div class="modal-footer">
-                            <button class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                            <button class="btn btn-warning">Save Changes</button>
-                        </div>
-
-                    </form>
-                </div>
-            </div>
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title">Edit School — {{ school.name }}</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
         </div>
+
+        <div class="modal-body">
+
+          <!-- SCHOOL DETAILS -->
+          <h6 class="mb-3">School Information</h6>
+          <div class="row g-3">
+
+            <div class="col-md-4">
+              <label class="form-label">School Name</label>
+              <input type="text" name="name" class="form-control" value="{{ school.name }}" required>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">School Code</label>
+              <input type="text" name="code" class="form-control" value="{{ school.code }}" required>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Contact Email</label>
+              <input type="email" name="contact_email" class="form-control"
+                     value="{{ school.contact_email }}">
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Contact Phone</label>
+              <input type="text" name="contact_phone" class="form-control"
+                     value="{{ school.contact_phone }}">
+            </div>
+
+            <div class="col-md-12">
+              <label class="form-label">Address</label>
+              <textarea name="address" class="form-control" rows="3">{{ school.address }}</textarea>
+            </div>
+
+            <div class="col-md-4 mt-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active"
+                       {% if school.is_active %}checked{% endif %}>
+                <label class="form-check-label">School Active</label>
+              </div>
+            </div>
+
+          </div>
+
+          <hr class="my-4">
+
+          <!-- ADMIN DETAILS -->
+          <h6 class="mb-3">School Admin Information</h6>
+          <div class="row g-3">
+
+            <div class="col-md-3">
+              <label class="form-label">Admin First Name</label>
+              <input type="text" name="admin_first_name" class="form-control"
+                     value="{{ school.school_admin.first_name }}" required>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Admin Last Name</label>
+              <input type="text" name="admin_last_name" class="form-control"
+                     value="{{ school.school_admin.last_name }}" required>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Admin Email</label>
+              <input type="email" name="admin_email" class="form-control"
+                     value="{{ school.school_admin.email }}" required>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Admin Phone</label>
+              <input type="text" name="admin_phone_number" class="form-control"
+                     value="{{ school.school_admin.phone_number }}" required>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label">Admin Country</label>
+              <input type="text" name="admin_country" class="form-control"
+                     value="{{ school.school_admin.country }}">
+            </div>
+
+            <div class="col-md-4">
+              <div class="form-check mt-4">
+                <input type="checkbox" name="reset_password" class="form-check-input">
+                <label class="form-check-label">Reset Admin Password</label>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="form-check mt-4">
+                <input type="checkbox" name="send_email" class="form-check-input">
+                <label class="form-check-label">Send Credentials via Email</label>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-warning">Save Changes</button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+</div>
+
 
         <!-- DELETE MODAL -->
         <div class="modal fade" id="deleteModal{{ school.pk }}" tabindex="-1">
@@ -259,148 +291,134 @@
         {% endfor %}
         </tbody>
     </table>
-        <div class="modal fade" id="createSchoolModal" tabindex="-1" aria-labelledby="createSchoolModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
+        <!-- CREATE SCHOOL MODAL -->
+            <div class="modal fade" id="createSchoolModal" tabindex="-1" aria-labelledby="createSchoolModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
                 <form method="POST" action="{% url 'kiswate_digital_app:new_school' %}">
                     {% csrf_token %}
                     <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title">Create New School</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title">Create New School</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
 
                     <div class="modal-body">
-
-                        <!-- School Information -->
-                        <h5 class="mb-3">School Information</h5>
-                        <div class="row g-3">
-
-                            <div class="col-md-4">
-                                <label class="form-label">School Name</label>
-                                {{ form.name }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">School Code</label>
-                                {{ form.code }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Contact Email</label>
-                                {{ form.contact_email }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Contact Phone</label>
-                                {{ form.contact_phone }}
-                            </div>
-
-                            <!-- FK fields -->
-                            <div class="col-md-4">
-                                <label class="form-label">County</label>
-                                <select name="county" class="form-select">
-                                    <option value="">-- Select County --</option>
-                                    {% for obj in form.fields.county.queryset %}
-                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">City</label>
-                                <select name="city" class="form-select">
-                                    <option value="">-- Select City --</option>
-                                    {% for obj in form.fields.city.queryset %}
-                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Constituency</label>
-                                <select name="constituency" class="form-select">
-                                    <option value="">-- Select Constituency --</option>
-                                    {% for obj in form.fields.constituency.queryset %}
-                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Sub-County</label>
-                                <select name="sub_county" class="form-select">
-                                    <option value="">-- Select Sub County --</option>
-                                    {% for obj in form.fields.sub_county.queryset %}
-                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Ward</label>
-                                <select name="ward" class="form-select">
-                                    <option value="">-- Select Ward --</option>
-                                    {% for obj in form.fields.ward.queryset %}
-                                        <option value="{{ obj.id }}">{{ obj.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-12">
-                                <label class="form-label">Address</label>
-                                {{ form.address }}
-                            </div>
+                    <!-- SCHOOL INFORMATION -->
+                    <h5 class="mb-3">School Information</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                        <label class="form-label">School Name</label>
+                        {{ form.name }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">School Code</label>
+                        {{ form.code }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Contact Email</label>
+                        {{ form.contact_email }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Contact Phone</label>
+                        {{ form.contact_phone }}
+                        </div>
+                        <!-- FK Fields -->
+                        <div class="col-md-4">
+                        <label class="form-label">County</label>
+                        <select name="county" class="form-select">
+                            <option value="">-- Select County --</option>
+                            {% for obj in form.fields.county.queryset %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">City</label>
+                        <select name="city" class="form-select">
+                            <option value="">-- Select City --</option>
+                            {% for obj in form.fields.city.queryset %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Constituency</label>
+                        <select name="constituency" class="form-select">
+                            <option value="">-- Select Constituency --</option>
+                            {% for obj in form.fields.constituency.queryset %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Sub-County</label>
+                        <select name="sub_county" class="form-select">
+                            <option value="">-- Select Sub County --</option>
+                            {% for obj in form.fields.sub_county.queryset %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Ward</label>
+                        <select name="ward" class="form-select">
+                            <option value="">-- Select Ward --</option>
+                            {% for obj in form.fields.ward.queryset %}
+                            <option value="{{ obj.id }}">{{ obj.name }}</option>
+                            {% endfor %}
+                        </select>
                         </div>
 
-                        <hr class="my-4">
-
-                        <!-- Admin Information -->
-                        <h5 class="mb-3">School Admin Information</h5>
-                        <div class="row g-3">
-
-                            <div class="col-md-4">
-                                <label class="form-label">Admin Email</label>
-                                {{ form.admin_email }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Admin First Name</label>
-                                {{ form.admin_first_name }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Admin Last Name</label>
-                                {{ form.admin_last_name }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Admin Phone Number</label>
-                                {{ form.admin_phone_number }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <label class="form-label">Admin Country</label>
-                                {{ form.admin_country }}
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-check mt-4">
-                                    {{ form.send_email }}
-                                    <label class="form-check-label">Send Credentials to Admin</label>
-                                </div>
-                            </div>
-
+                        <div class="col-md-12">
+                        <label class="form-label">Address</label>
+                        {{ form.address }}
                         </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- ADMIN INFORMATION -->
+                    <h5 class="mb-3">School Admin Information</h5>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                        <label class="form-label">Admin Email</label>
+                        {{ form.admin_email }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Admin First Name</label>
+                        {{ form.admin_first_name }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Admin Last Name</label>
+                        {{ form.admin_last_name }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Admin Phone Number</label>
+                        {{ form.admin_phone_number }}
+                        </div>
+                        <div class="col-md-4">
+                        <label class="form-label">Admin Country</label>
+                        {{ form.admin_country }}
+                        </div>
+                        <div class="col-md-4 mt-4">
+                        <div class="form-check">
+                            {{ form.send_email }}
+                            <label class="form-check-label">Send Credentials to Admin</label>
+                        </div>
+                        </div>
+                    </div>
                     </div>
 
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Create School</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create School</button>
                     </div>
+
                 </form>
+                </div>
             </div>
-        </div>
-    </div>
+            </div>
+
 
 
     </div>

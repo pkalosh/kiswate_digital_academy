@@ -12,7 +12,7 @@ import uuid
 from .models import (
     Grade, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, Notification, SmartID, Payment,
-    Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,
+    Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile,
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
     Certificate,Term,School,Streams, TimeSlot  # Include if needed, but per request, exclude LMS parts where possible
 )
@@ -273,6 +273,13 @@ class GradeForm(BaseForm):
             'code': forms.TextInput(attrs={'placeholder': 'e.g., GRD-001'}),
         }
 
+class GradeUploadForm(forms.ModelForm):
+    class Meta:
+        model = UploadedFile
+        fields = ['file']
+        widgets = {
+            'file': forms.ClearableFileInput(attrs={'accept': '.xlsx'}),
+        }
 # ------------------------------- SMARTID FORMS -------------------------------
 class SmartIDForm(BaseForm):
     class Meta:
@@ -633,6 +640,11 @@ class SubjectForm(BaseForm):
             'end_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter grades by the school passed from BaseForm
+        if self.school is not None:
+            self.fields['grade'].queryset = Grade.objects.filter(school=self.school, is_active=True)
 
 class AssignParentStudentForm(forms.Form):
     parent = forms.ModelChoiceField(queryset=Parent.objects.none(), label="Select Parent")
@@ -680,17 +692,18 @@ class GenerateTimetableForm(forms.Form):
     )
 
     school = forms.ModelChoiceField(
-        queryset=School.objects.all(),
-        required=True
+        queryset=School.objects.none(),  # Will set in __init__
+        required=True,
+        widget=forms.HiddenInput()  # always the logged-in user's school
     )
 
     grade = forms.ModelChoiceField(
-        queryset=Grade.objects.all(),
+        queryset=Grade.objects.none(),
         required=False
     )
 
     stream = forms.ModelChoiceField(
-        queryset=Streams.objects.all(),
+        queryset=Streams.objects.none(),
         required=False
     )
 
@@ -700,6 +713,18 @@ class GenerateTimetableForm(forms.Form):
         help_text="If checked, existing lessons in timetable will be deleted and regenerated."
     )
 
+    def __init__(self, *args, **kwargs):
+        # Expect 'school' argument from view
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if school:
+            # Set school to logged-in user's school
+            self.fields['school'].queryset = School.objects.filter(pk=school.pk)
+            self.fields['school'].initial = school
+
+            # Limit grades and streams to that school
+            self.fields['grade'].queryset = Grade.objects.filter(school=school, is_active=True)
+            self.fields['stream'].queryset = Streams.objects.filter(grade__school=school, is_active=True)
 
 
 class TimetableForm(BaseForm):

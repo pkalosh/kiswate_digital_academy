@@ -70,7 +70,7 @@
                     data-bs-target="#collapse{{ tt.id }}"
                     aria-expanded="false"
                     aria-controls="collapse{{ tt.id }}">
-              {{ tt.grade.name }} - Term {{ tt.term }} {{ tt.year }}
+              {{ tt.grade.name }} - Term {{ tt.term.name }} {{ tt.year }} {{tt.stream.name|default:"-"}}
               {% if item.active %}<span class="badge bg-success ms-2">Active</span>{% endif %}
               <small class="text-muted ms-2">({{ item.lessons_count }} lessons)</small>
             </button>
