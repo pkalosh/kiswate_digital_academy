@@ -15,8 +15,8 @@ body{font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, C
 .text-kenya{background: linear-gradient(90deg,var(--kenya-white),var(--kenya-green),var(--kenya-red));-webkit-background-clip:text;background-clip:text;color:transparent}
 
 /* NAV */
-.navbar{backdrop-filter: blur(8px); background: rgba(10,10,10,.6)!important; border-bottom:1px solid rgba(255,255,255,.08)}
-.navbar .nav-link{color:#fff!important; opacity:.9}
+.navbar{backdrop-filter: blur(8px); background: rgba(252, 252, 252, 0.993)!important; border-bottom:1px solid rgba(255,255,255,.08)}
+.navbar .nav-link{color:#0a0a0a!important; opacity:.9}
 .navbar .nav-link:hover{color:var(--kenya-green)!important}
 .brand-badge{display:inline-flex;align-items:center;gap:.6rem;font-weight:700;color:#fff}
 .brand-logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--kenya-red),var(--kenya-green));box-shadow:0 6px 14px rgba(0,0,0,.35)}

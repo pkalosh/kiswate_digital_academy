@@ -28,7 +28,7 @@
                     <div class="text-secondary small">Assigned Students</div>
                     <div class="h4 m-0 fw-bold">{{ lessons|length|default:"0" }}</div>
                   </div>
-                  <a href="{% url 'school:school-enrollment' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Manage</span></a>
+                  <a href="#"><span class="k-pill"> <i class="bi bi-eye"></i> Manage</span></a>
                 </div>
               </div>
             </div>
@@ -43,7 +43,7 @@
                     <div class="text-secondary small">Upcoming Sessions</div>
                     <div class="h4 m-0 fw-bold">{{ sessions.count|default:"0" }}</div>
                   </div>
-                  <a href="{% url 'school:school-sessions' %}"><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
+                  <a href="#"><span class="k-pill"> <i class="bi bi-eye"></i> View</span></a>
                 </div>
               </div>
             </div>
@@ -58,7 +58,7 @@
                     <div class="text-secondary small">My Subjects</div>
                     <div class="h4 m-0 fw-bold">{{ subjects|length|default:"0" }}</div>
                   </div>
-                  <a href="{% url 'school:school-subjects' %}"><span class="k-pill"> <i class="bi bi-eye"></i> Edit</span></a>
+                  <a href="#"><span class="k-pill"> <i class="bi bi-eye"></i> Edit</span></a>
                 </div>
               </div>
             </div>
