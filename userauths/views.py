@@ -1,9 +1,9 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect,get_object_or_404
 from django.contrib.auth import authenticate, login, logout,update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from school.models import Timetable, Lesson, Session, Enrollment, StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot
+from school.models import Timetable,TeacherStreamAssignment,Streams, Lesson, Session, Enrollment, StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot
 from django.utils import timezone
 from collections import defaultdict
 from userauths.models import User
@@ -303,15 +303,15 @@ def student_dashboard(request):
 
 
 
+from datetime import timedelta
 @login_required
 def teacher_dashboard(request):
     try:
-        # Check role
         if not (request.user.is_teacher or request.user.school_staff):
             messages.error(request, "Access denied: Teacher/Staff role required.")
             return redirect('userauths:sign-in')
 
-        teacher = request.user.staffprofile  # OneToOneField
+        teacher = request.user.staffprofile
         today = timezone.now().date()
 
         # Lessons assigned to teacher
@@ -320,39 +320,42 @@ def teacher_dashboard(request):
             timetable__start_date__lte=today,
             timetable__end_date__gte=today,
             timetable__school=teacher.school
-        ).select_related('timetable__grade', 'subject').order_by('lesson_date')
+        ).select_related('timetable__grade', 'subject', 'time_slot').order_by('lesson_date', 'time_slot__start_time')
 
-        # Sessions assigned to teacher
-        sessions = Session.objects.filter(
-            lesson__in=assigned_lessons,
-            teacher=teacher
-        ).select_related('lesson', 'subject', 'platform').order_by('scheduled_at')
+        # Prepare weekly timetable (Monday-Sunday)
+        week_start = today - timedelta(days=today.weekday())
+        week_days = [week_start + timedelta(days=i) for i in range(7)]
 
-        # Group lessons by grade (Grade objects, not names)
-        lessons_by_grade = {}
-        grades_set = set()
+        # Unique time slots
+        time_slots = sorted({lesson.time_slot for lesson in assigned_lessons}, key=lambda ts: ts.start_time)
+
+        # Build timetable: {grade_id: {TimeSlot obj: {date obj: lesson}}}
+        timetable = {}
+        grades_dict = {}
         for lesson in assigned_lessons:
             grade = lesson.timetable.grade
-            grades_set.add(grade)
-            lessons_by_grade.setdefault(grade, []).append(lesson)
-
-        # Subjects taught by teacher
-        subjects = teacher.subjects.all()
+            grades_dict[grade.id] = grade
+            timetable.setdefault(grade.id, {})
+            timetable[grade.id].setdefault(lesson.time_slot, {})
+            timetable[grade.id][lesson.time_slot][lesson.lesson_date] = lesson
 
         context = {
-            'lessons': assigned_lessons,
-            'lessons_by_grade': lessons_by_grade,
-            'sessions': sessions,
-            'grades': sorted(grades_set, key=lambda g: g.name),  # Actual Grade objects
-            'subjects': subjects,
             'school': teacher.school,
+            'subjects': teacher.subjects.all(),
+            'sessions': Session.objects.filter(lesson__in=assigned_lessons, teacher=teacher),
             'today_lessons': assigned_lessons.filter(lesson_date=today),
+            'grades_list': sorted(grades_dict.items(), key=lambda x: x[1].name),
+            'timetable': timetable,
+            'week_days': week_days,
+            'time_slots': time_slots,
         }
+
         return render(request, 'school/teacher/dashboard.html', context)
 
     except StaffProfile.DoesNotExist:
         messages.error(request, "Staff profile not found.")
         return redirect('userauths:teacher-dashboard')
+
 @login_required
 def logoutView(request):
     logout(request)

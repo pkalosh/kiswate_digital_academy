@@ -305,6 +305,30 @@ class Student(models.Model):
         return f"{self.user.get_full_name()} ({self.student_id}) - {self.school.name}"
 
 
+class TeacherStreamAssignment(models.Model):
+    teacher = models.ForeignKey(
+        'StaffProfile',
+        on_delete=models.CASCADE,
+        related_name='assigned_streams'
+    )
+    stream = models.ForeignKey(
+        'Streams',
+        on_delete=models.CASCADE,
+        related_name='assigned_teachers'
+    )
+    school = models.ForeignKey(
+        'School',
+        on_delete=models.CASCADE,
+        related_name='teacher_stream_assignments'
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['teacher', 'stream', 'school']
+
+    def __str__(self):
+        return f"{self.teacher.user.get_full_name()} → {self.stream.name} ({self.school.name})"
+
 # Enrollment
 class Enrollment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
@@ -460,36 +484,48 @@ class UploadedFile(models.Model):
     def __str__(self):
         return f"{self.upload_file_category} - {self.file.name}"
 
-
 class Attendance(models.Model):
+    ATTENDANCE_STATUS_CHOICES = [
+        ('P', 'Present'),
+        ('ET', 'Excused Tardy'),
+        ('UT', 'Unexcused Tardy'),
+        ('EA', 'Excused Absence'),
+        ('UA', 'Unexcused Absence'),
+        ('IB', 'Behavior'),
+        ('18', 'Suspension'),
+        ('20', 'Expulsion'),
+    ]
+
     enrollment = models.ForeignKey(
         Enrollment,
         on_delete=models.CASCADE,
         related_name='attendances'
     )
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE,blank=True, null=True)
-    term = models.ForeignKey(Term, on_delete=models.CASCADE,blank=True, null=True)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, blank=True, null=True)
+    term = models.ForeignKey(Term, on_delete=models.CASCADE, blank=True, null=True)
     date = models.DateField()
     status = models.CharField(
         max_length=20,
-        choices=ATTENDANCE_STATUS_CHOICES,
-        default='present'
+        choices=ATTENDANCE_STATUS_CHOICES
     )
     remarks = models.TextField(blank=True, null=True)
-    marked_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='marked_attendance')  # New: Who marked
-    marked_at = models.DateTimeField(auto_now_add=True)  # New: When it was marked
-    # class Meta:
-    #     unique_together = ['enrollment', 'date']  # One per student-lesson
-    #     indexes = [models.Index(fields=['status', 'marked_at'])]
+    marked_by = models.ForeignKey(
+        StaffProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='marked_attendance'
+    )
+    marked_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
-        # Example validation: Only certain roles can mark '18'/'20'
+        # Only certain roles can mark '18'/'20'
         if self.status in ['18', '20'] and self.marked_by.position not in ['deputy_principal', 'principal']:
             raise ValidationError("Suspensions/Expulsions can only be marked by Deputy Principal or Principal.")
         super().clean()
 
     def __str__(self):
         return f"{self.enrollment.student} - {self.enrollment.subject} on {self.date}"
+
 
 
 # DisciplineRecord

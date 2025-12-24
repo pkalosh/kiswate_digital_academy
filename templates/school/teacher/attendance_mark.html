@@ -3,142 +3,203 @@
 {% block title %}Attendance | {{ school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
-  <div class="d-flex gap-2 align-items-center">
-    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-    <div>
-      <h6 class="m-0 fw-bold">Attendance</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Attendance</li>
-        </ol>
-      </nav>
-    </div>
-  </div>
-</header>
+<style>
+/* ===== Attendance UI Enhancements ===== */
+.status-pill {
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
 
-<section class="content container-fluid py-4">
-  {% if lesson %}
-  <div class="card shadow-sm rounded-4 border-0 mb-4">
-    <div class="card-header bg-light">
-      <h5 class="mb-0 fw-bold">
-        Mark Attendance for {{ lesson.subject.name }} — {{ lesson.lesson_date|date:"F d, Y" }}
-      </h5>
+.status-pill:hover {
+    opacity: 0.85;
+}
+
+.status-selected {
+    border-color: #00000030;
+    background-color: #00000008;
+}
+
+.form-check-input {
+    cursor: pointer;
+}
+</style>
+
+<section class="container-fluid py-4">
+
+<div class="card shadow-sm border-0 rounded-4">
+    <!-- HEADER -->
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold mb-1">Mark Attendance</h5>
+            <small class="text-muted">
+                {{ lesson.subject.name }} • {{ lesson.lesson_date|date:"M d, Y" }}
+            </small>
+        </div>
+        <span class="badge bg-primary-subtle text-primary px-3 py-2">
+            {{ students|length }} Students
+        </span>
     </div>
+
     <div class="card-body">
 
-      {% if students %}
-      <form method="post" action="{% url 'school:teacher-attendance-mark' lesson_id=lesson.id %}">
-        {% csrf_token %}
-        <div class="table-responsive">
-          <table class="table table-bordered table-hover align-middle">
-            <thead class="table-light text-center">
-              <tr>
-                <th>Student</th>
-                <th>Attendance Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for enrollment in students %}
-              {% with attendance_dict|dict_get:enrollment.id as existing %}
-              <tr>
-                <td class="fw-semibold">
-                  {{ enrollment.student.user.get_full_name }}<br>
-                  <small class="text-muted">ID: {{ enrollment.student.id }}</small>
-                </td>
-                <td>
-                  <div class="d-flex flex-wrap gap-3">
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="P"
-                        {% if existing and existing.status == 'P' %}checked{% endif %}
-                        {% if not existing %}checked{% endif %}>
-                      Present
-                    </label>
+        {% if students %}
 
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="ET"
-                        {% if existing and existing.status == 'ET' %}checked{% endif %}>
-                      Excused Tardy
-                    </label>
+        <!-- FILTER BAR -->
+        <div class="row g-3 mb-4 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Search Student</label>
+                <input type="text" id="studentSearch" class="form-control"
+                       placeholder="Search by name or student ID">
+            </div>
 
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="UT"
-                        {% if existing and existing.status == 'UT' %}checked{% endif %}>
-                      Unexcused Tardy
-                    </label>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Filter by Status</label>
+                <select id="statusFilter" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for choice in status_choices %}
+                    <option value="{{ choice.code }}">{{ choice.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="EA"
-                        {% if existing and existing.status == 'EA' %}checked{% endif %}>
-                      Excused Absence
-                    </label>
-
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="UA"
-                        {% if existing and existing.status == 'UA' %}checked{% endif %}>
-                      Unexcused Absence
-                    </label>
-
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="IB"
-                        {% if existing and existing.status == 'IB' %}checked{% endif %}>
-                      Inappropriate Behavior
-                    </label>
-
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="18"
-                        {% if existing and existing.status == '18' %}checked{% endif %}>
-                      Suspension
-                    </label>
-
-                    <label>
-                      <input type="radio" name="status_{{ enrollment.id }}" value="20"
-                        {% if existing and existing.status == '20' %}checked{% endif %}>
-                      Expulsion
-                    </label>
-                  </div>
-
-                  {% if existing %}
-                  <small class="text-muted d-block mt-1">Previous: {{ existing.get_status_display }}</small>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endwith %}
-              {% endfor %}
-            </tbody>
-          </table>
+            <div class="col-md-5 text-md-end">
+                <button type="button" id="markAllPresent" class="btn btn-outline-success me-2">
+                    Mark All Present
+                </button>
+                <button type="button" id="clearAll" class="btn btn-outline-secondary">
+                    Clear
+                </button>
+            </div>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mt-4">
-          <div>
-            <small class="text-muted">Total Students: {{ students|length }}</small>
-          </div>
-          <div class="d-flex gap-2">
-            <a href="{% url 'school:teacher-attendance' %}" class="btn btn-secondary btn-lg">Cancel</a>
-            <button type="submit" class="btn btn-success btn-lg px-4">
-              <i class="bi bi-check-circle"></i> Save Attendance
-            </button>
-          </div>
+
+
+        <!-- FORM -->
+        <form method="POST" action="{% url 'school:teacher-attendance-mark' lesson_id=lesson.id %}">
+            {% csrf_token %}
+
+            <!-- DESKTOP TABLE -->
+            <div class="table-responsive d-none d-md-block">
+                <table id="attendance-table" class="table table-bordered align-middle table-hover">
+                    <thead class="table-light text-center">
+                        <tr>
+                            <th class="text-start">Student</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for enrollment in students %}
+                        {% with att=attendance_dict|dict_get:enrollment.id %}
+                        <tr data-student="{{ enrollment.student.user.get_full_name|lower }}"
+                            data-id="{{ enrollment.student.student_id|lower }}">
+                            <td>
+                                <div class="fw-semibold">
+                                    {{ enrollment.student.user.get_full_name }}
+                                </div>
+                                <small class="text-muted">ID: {{ enrollment.student.student_id }}</small>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex justify-content-center flex-wrap gap-2">
+                                    {% for choice in status_choices %}
+                                    <label for="status_{{ enrollment.id }}_{{ choice.code }}"
+                                           class="status-pill {{ choice.color_class }}
+                                           {% if att and att.status == choice.code %}status-selected{% endif %}">
+                                        <input type="radio"
+                                               class="form-check-input me-1 status-radio"
+                                               data-status="{{ choice.code }}"
+                                               id="status_{{ enrollment.id }}_{{ choice.code }}"
+                                               name="status_{{ enrollment.id }}"
+                                               value="{{ choice.code }}"
+                                               {% if att %}
+                                                   {% if att.status == choice.code %}checked{% endif %}
+                                               {% else %}
+                                                   {% if choice.code == 'P' %}checked{% endif %}
+                                               {% endif %}
+                                               required>
+                                        {{ choice.code }}
+                                    </label>
+                                    {% endfor %}
+                                </div>
+
+                                {% if att %}
+                                <small class="text-muted d-block mt-1">
+                                    Previously: <strong>{{ att.get_status_display }}</strong>
+                                </small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MOBILE CARDS -->
+            <div class="d-md-none">
+                {% for enrollment in students %}
+                {% with att=attendance_dict|dict_get:enrollment.id %}
+                <div class="card shadow-sm border-0 rounded-3 mb-3 student-card"
+                     data-student="{{ enrollment.student.user.get_full_name|lower }}"
+                     data-id="{{ enrollment.student.student_id|lower }}">
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>{{ enrollment.student.user.get_full_name }}</strong><br>
+                            <small class="text-muted">ID: {{ enrollment.student.student_id }}</small>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for choice in status_choices %}
+                            <label for="m_status_{{ enrollment.id }}_{{ choice.code }}"
+                                   class="status-pill {{ choice.color_class }}
+                                   {% if att and att.status == choice.code %}status-selected{% endif %}">
+                                <input type="radio"
+                                       class="form-check-input me-1 status-radio"
+                                       data-status="{{ choice.code }}"
+                                       id="m_status_{{ enrollment.id }}_{{ choice.code }}"
+                                       name="status_{{ enrollment.id }}"
+                                       value="{{ choice.code }}"
+                                       {% if att %}
+                                           {% if att.status == choice.code %}checked{% endif %}
+                                       {% else %}
+                                           {% if choice.code == 'P' %}checked{% endif %}
+                                       {% endif %}
+                                       required>
+                                {{ choice.label }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endwith %}
+                {% endfor %}
+            </div>
+
+            <!-- ACTION BAR -->
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div>
+                    {% for choice in status_choices %}
+                    <span class="badge {{ choice.color_class }} me-1">
+                        {{ choice.code }} = {{ choice.label }}
+                    </span>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-success btn-lg px-4">
+                    Save Attendance
+                </button>
+            </div>
+        </form>
+
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            No students found for this lesson.
         </div>
-      </form>
-      {% else %}
-      <div class="text-center py-5">
-        <i class="bi bi-people display-4 text-muted"></i>
-        <p class="text-muted mt-3">No active students available for this lesson.</p>
-        <a href="{% url 'school:teacher-attendance' %}" class="btn btn-primary">Back to Attendance</a>
-      </div>
-      {% endif %}
+        {% endif %}
 
     </div>
-  </div>
-  {% else %}
-  <div class="text-center py-5">
-    <i class="bi bi-calendar-x display-4 text-muted"></i>
-    <h4 class="text-muted mt-3">No Lesson Selected</h4>
-    <p class="text-muted">Please select a lesson from the attendance dashboard to mark attendance.</p>
-    <a href="{% url 'school:teacher-attendance' %}" class="btn btn-primary">Go to Attendance Dashboard</a>
-  </div>
-  {% endif %}
+</div>
 </section>
 {% endblock %}

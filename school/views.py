@@ -53,7 +53,7 @@ import uuid
 from userauths.models import User
 from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
-    Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,
+    Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear
 )
@@ -68,22 +68,141 @@ from .forms import (
 )
 from kiswate_digital_app.forms import StreamForm
 
-
-logger = logging.getLogger(__name__)
 # Create your views here.
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.utils import timezone
 import logging
-
+import requests
 logger = logging.getLogger(__name__)
 
 
 import csv
 from django.http import HttpResponse
 from reportlab.pdfgen import canvas
+from django.db.models import Min, Max
+from school.models import Attendance, Lesson
 
+# =========================
+# SMS + EMAIL HELPERS
+# =========================
+
+def _send_sms_via_eujim(to_phone_number: str, message: str) -> bool:
+    if not to_phone_number:
+        return False
+
+    phone = str(to_phone_number)
+    if phone.startswith("0"):
+        phone = "254" + phone[1:]
+    elif phone.startswith("+254"):
+        phone = phone[1:]
+    elif not phone.startswith("254"):
+        phone = "254" + phone
+
+    payload = {
+        "apikey": '055937fa1c632de42568afe4ee5ec19b',
+        "partnerID": '7003',
+        "shortcode": 'EUJIM LTD',
+        "message": message,
+        "mobile": phone,
+    }
+
+    try:
+        response = requests.post('https://quicksms.advantasms.com/api/services/sendsms/', json=payload, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            r = data.get("responses", [{}])[0]
+            return r.get("response-code") == 200
+    except Exception as e:
+        print("SMS Error:", e)
+    return False
+
+
+def send_email(to_email: str, subject: str, message: str) -> bool:
+    if not to_email:
+        return False
+    try:
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [to_email],
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        print("Email Error:", e)
+        return False
+
+# --------------------------------------------------
+# SLOT HELPERS
+# --------------------------------------------------
+
+def is_first_slot(lesson):
+    return lesson.time_slot == TimeSlot.objects.order_by('start_time').first()
+
+
+def is_last_slot(lesson):
+    return lesson.time_slot == TimeSlot.objects.order_by('-end_time').first()
+
+
+# --------------------------------------------------
+# MESSAGE BUILDERS
+# --------------------------------------------------
+
+def build_single_lesson_message(student, subject, status, lesson_date):
+    return (
+        f"Dear Parent, {student.user.get_full_name()} "
+        f"was marked {status} for {subject.name} "
+        f"on {lesson_date}."
+    )
+
+def build_daily_summary(student, date):
+    stats = (
+        Attendance.objects
+        .filter(enrollment__student=student, date=date)
+        .values('status')
+        .annotate(total=Count('id'))
+    )
+
+    summary = ", ".join(f"{s['status']}: {s['total']}" for s in stats)
+    return f"Daily Attendance Summary ({date}): {summary}"
+
+
+# --------------------------------------------------
+# SENDERS
+# --------------------------------------------------
+
+def notify_first_lesson(attendance):
+    student = attendance.enrollment.student
+    parents = student.parents.all()
+    message = build_single_lesson_message(
+        student,
+        attendance.enrollment.subject,   # Subject object
+        attendance.get_status_display(),
+        attendance.date                   # Lesson date
+    )
+    for parent in parents:
+        _send_sms_via_eujim(parent.phone, message)
+        if parent.user.email:
+            send_mail("Lesson Attendance Notification", message, None, [parent.user.email], fail_silently=True)
+
+
+def notify_last_lesson(student, date):
+    parents = student.parents.all()
+    message = build_daily_summary(student, date)
+
+    for parent in parents:
+        _send_sms_via_eujim(parent.phone, message)
+        if parent.user.email:
+            send_mail(
+                "Daily Attendance Summary",
+                message,
+                None,
+                [parent.user.email],
+                fail_silently=True
+            )
 @login_required
 def export_attendance_csv(request):
     school = request.user.school_admin_profile
@@ -2850,24 +2969,28 @@ def export_attendance_csv(request):
 
 #     return render(request, 'school/attendance_dashboard.html', context)
 
-
-
 @login_required
 def attendance_mark(request, lesson_id):
+    # --- Fetch lesson safely ---
     lesson = get_object_or_404(
-        Lesson,
+        Lesson.objects.select_related('subject', 'school', 'timetable__term__academic_year'),
         id=lesson_id,
-        teacher=request.user.staffprofile,
+        teacher=request.user.staffprofile
     )
 
-    # All active enrollments for this subject & school
+    # --- Fetch students enrolled in lesson's subject or fallback to all active students in the school ---
     students = Enrollment.objects.filter(
-        subject=lesson.subject,
-        school=lesson.school,  # make sure this is correct
+        school=lesson.school,
         status='active'
     ).select_related('student__user')
+    print(students)
 
-    # Existing attendance
+    # Optional: filter by subject if you want strict matching
+    subject_students = students.filter(subject=lesson.subject)
+    if subject_students.exists():
+        students = subject_students
+
+    # --- Fetch existing attendance records for this lesson date ---
     attendance_dict = {
         att.enrollment_id: att
         for att in Attendance.objects.filter(
@@ -2876,32 +2999,35 @@ def attendance_mark(request, lesson_id):
         )
     }
 
+    term = getattr(lesson.timetable, 'term', None) if getattr(lesson, 'timetable', None) else None
+    academic_year = getattr(term, 'academic_year', None) if term else None
+
+    valid_statuses = {code for code, _ in Attendance.ATTENDANCE_STATUS_CHOICES}
+    print(valid_statuses)
+
     if request.method == 'POST':
-        valid_statuses = {code for code, _ in Attendance.ATTENDANCE_STATUS_CHOICES}
-        saved = 0
-
+        saved_count = 0
         for enrollment in students:
-            key = f'status_{enrollment.id}'
-            raw_status = request.POST.get(key)
-            if raw_status in valid_statuses:
-                status_to_save = raw_status
-            else:
-                status_to_save = 'P'
+            field_name = f'status_{enrollment.id}'
+            selected_status = request.POST.get(field_name)
 
-            # Save/update attendance
-            obj, created = Attendance.objects.update_or_create(
+            # Validate selected status
+            if selected_status not in valid_statuses:
+                selected_status = 'P'  # default to Present if invalid/missing
+
+            Attendance.objects.update_or_create(
                 enrollment=enrollment,
                 date=lesson.lesson_date,
                 defaults={
-                    'status': status_to_save,
+                    'status': selected_status,
                     'marked_by': request.user.staffprofile,
-                    'term': lesson.timetable.term if hasattr(lesson.timetable, 'term') else None,
-                    'academic_year': lesson.timetable.term.academic_year if hasattr(lesson.timetable, 'term') else None,
+                    'term': term,
+                    'academic_year': academic_year,
                 }
             )
-            saved += 1
+            saved_count += 1
 
-        messages.success(request, f"Attendance saved successfully ({saved} records).")
+        messages.success(request, f"Attendance for {saved_count} students has been recorded.")
         return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
 
     return render(request, 'school/teacher/attendance_mark.html', {
@@ -2910,9 +3036,6 @@ def attendance_mark(request, lesson_id):
         'attendance_dict': attendance_dict,
         'school': lesson.school,
     })
-
-
-
 @login_required
 def attendance_edit(request, attendance_id):
     attendance = get_object_or_404(Attendance, id=attendance_id, lesson__teacher=request.user.staffprofile)
@@ -2988,65 +3111,88 @@ def teacher_attendance(request):
 from django.db import IntegrityError
 @login_required
 def teacher_attendance_mark(request, lesson_id):
-    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
-    
-    # Filter by subject, stream, and active (prevents over-marking wrong students)
-    students = Enrollment.objects.filter(
-        subject=lesson.subject,
-        status='active'
-    ).select_related('student__user')  # Optimize for template
-    
-    if not students.exists():
-        messages.warning(request, f'No active students found for {lesson.subject} in {lesson.stream}.')
-        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)  # Or to list view
-    
-    # Pre-load existing attendance for status pre-filling (filter by lesson/date)
-    attendance_qs = Attendance.objects.filter(
-        enrollment__in=students,
-        # If lesson FK: lesson=lesson
-        # Else: date=lesson.lesson_date  # Fallback for date-based
+    # --- Fetch lesson ---
+    lesson = get_object_or_404(
+        Lesson.objects.select_related(
+            'subject', 'timetable', 'timetable__term'
+        ),
+        id=lesson_id,
+        teacher=request.user.staffprofile
     )
-    attendance_dict = {att.enrollment.id: att for att in attendance_qs}
-    
+
+    school = lesson.timetable.school
+
+    # --- Fetch students: Active & in this subject ---
+    students = (
+        Enrollment.objects
+        .filter(
+            school=school,
+            subject=lesson.subject,
+            status='active'
+        )
+        .select_related('student__user')
+        .distinct()
+    )
+
+    # --- Existing attendance records ---
+    attendance_dict = {
+        att.enrollment_id: att
+        for att in Attendance.objects.filter(
+            enrollment__in=students,
+            date=lesson.lesson_date
+        )
+    }
+
+    # --- Status choices ---
+    status_choices = [
+        {'code':'P','label':'Present','color_class':'text-success'},
+        {'code':'ET','label':'Excused Tardy','color_class':'text-warning'},
+        {'code':'UT','label':'Unexcused Tardy','color_class':'text-warning'},
+        {'code':'EA','label':'Excused Absence','color_class':'text-danger'},
+        {'code':'UA','label':'Unexcused Absence','color_class':'text-danger'},
+        {'code':'IB','label':'Inappropriate Behavior','color_class':'text-info'},
+        {'code':'18','label':'Suspension','color_class':'text-dark'},
+        {'code':'20','label':'Expulsion','color_class':'text-dark'},
+    ]
+
+    # --- POST: Save attendance ---
     if request.method == 'POST':
-        updated_count = 0
+        saved_count = 0
         for enrollment in students:
-            status = request.POST.get(f'status_{enrollment.id}', 'P')
-            if status not in ['P', 'A', 'L']:  # Basic validation; expand to choices
-                status = 'P'  # Fallback
-            
-            try:
-                # If Attendance has lesson FK (recommended):
-                Attendance.objects.update_or_create(
-                    enrollment=enrollment,
-                    defaults={
-                        'status': status,
-                        'marked_by': request.user.staffprofile,
-                        'date': lesson.lesson_date,  # Fixes the NULL error
-                    }
-                )
-                # Else (date-based uniqueness, no lesson FK):
-                # Attendance.objects.update_or_create(
-                #     enrollment=enrollment,
-                #     date=lesson.lesson_date,
-                #     defaults={'status': status, 'marked_by': request.user.staffprofile}
-                # )
-                updated_count += 1
-            except IntegrityError:
-                # Rare: If still fails (e.g., other constraints), log and skip
-                messages.error(request, f'Error marking {enrollment.student.user.get_full_name}.')
+            field_name = f'status_{enrollment.id}'
+            selected_status = request.POST.get(field_name)
+
+            if not selected_status:
                 continue
-        
-        messages.success(request, f'Attendance marked for {updated_count} students on {lesson.lesson_date}.')
-        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)  # Reloads form with updates
-    
-    context = {
-        'school': request.user.staffprofile.school,
+
+            attendance, _ = Attendance.objects.update_or_create(
+                enrollment=enrollment,
+                date=lesson.lesson_date,
+                defaults={
+                    'status': selected_status,
+                    'marked_by': request.user.staffprofile,
+                    'term': lesson.timetable.term,
+                    'academic_year': lesson.timetable.term.year,
+                }
+            )
+            saved_count += 1
+            # 🔔 Notify first/last slot
+            if is_first_slot(lesson):
+                notify_first_lesson(attendance)
+            if is_last_slot(lesson):
+                notify_last_lesson(enrollment.student, lesson.lesson_date)
+
+        messages.success(request, f"Attendance for {saved_count} students has been recorded.")
+        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
+
+    return render(request, 'school/teacher/attendance_mark.html', {
         'lesson': lesson,
         'students': students,
         'attendance_dict': attendance_dict,
-    }
-    return render(request, 'school/teacher/attendance_mark.html', context)
+        'school': school,
+        'status_choices': status_choices,
+    })
+
 
 @login_required
 def teacher_attendance_edit(request, attendance_id):
@@ -3144,12 +3290,35 @@ def teacher_discipline_create(request):
             record.teacher = request.user.staffprofile
             record.reported_by = request.user
             record.save()
-            messages.success(request, f'Discipline record for {record.student} created.')
+
+            # --- Notify all parents via SMS & create notifications ---
+            parents = record.student.parents.all()  # assuming M2M relation to Parent model
+            message_text = (
+                f"Dear Parent, an incident of {record.incident_type} "
+                f"has been recorded for {record.student.user.get_full_name()}."
+            )
+
+            for parent in parents:
+                # Send SMS
+                _send_sms_via_eujim(parent.phone, message_text)
+
+                # Create Notification in DB
+                if parent.user:
+                    Notification.objects.create(
+                        recipient=parent.user,
+                        title="Discipline Incident Logged",
+                        message=message_text,
+                        related_discipline=record,
+                        school=school
+                    )
+
+            messages.success(request, f'Discipline record for {record.student} created and parents notified.')
             return redirect('school:teacher-discipline')
         else:
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"{form.fields[field].label}: {error}")
+
     return redirect('school:teacher-discipline')
 
 @login_required
@@ -3835,3 +4004,36 @@ def create_parent_student(request):
         'school': school,
     }
     return render(request, 'school/staff.html', context)
+
+@login_required
+def assign_class_teacher_for_teacher(request, teacher_id):
+    school = request.user.staffprofile.school
+
+    # Get teacher to assign
+    teacher = get_object_or_404(StaffProfile, id=teacher_id, school=school)
+
+    if request.method == 'POST':
+        stream_id = request.POST.get('stream')
+        stream = get_object_or_404(Streams, id=stream_id, school=school)
+
+        assignment, created = TeacherStreamAssignment.objects.get_or_create(
+            teacher=teacher,
+            stream=stream,
+            school=school
+        )
+
+        if created:
+            messages.success(request, f"{teacher.user.get_full_name()} assigned to {stream.name} successfully.")
+        else:
+            messages.info(request, f"{teacher.user.get_full_name()} is already assigned to {stream.name}.")
+
+        return redirect('school:assign-class-teacher-for-teacher', teacher_id=teacher.id)
+
+    streams = Streams.objects.filter(school=school)
+    assignments = TeacherStreamAssignment.objects.filter(teacher=teacher, school=school)
+
+    return render(request, 'school/staff.html', {
+        'teacher': teacher,
+        'streams': streams,
+        'assignments': assignments
+    })

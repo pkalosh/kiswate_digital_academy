@@ -800,23 +800,26 @@ class SessionForm(BaseForm):
             self.fields['lesson'].queryset = Lesson.objects.filter(timetable__school=school)
 
 # ------------------------------- ATTENDANCE FORM -------------------------------
-class AttendanceForm(BaseForm):
+from django import forms
+from .models import Attendance, ATTENDANCE_STATUS_CHOICES
+
+class AttendanceForm(forms.ModelForm):
     class Meta:
         model = Attendance
         fields = ['status', 'remarks']
         widgets = {
-            'status': forms.Select(choices=ATTENDANCE_STATUS_CHOICES),
-            'remarks': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Reason for absence/tardy'}),
+            'status': forms.RadioSelect(choices=ATTENDANCE_STATUS_CHOICES),
+            'remarks': forms.Textarea(attrs={
+                'rows': 2,
+                'class': 'form-control',
+                'placeholder': 'Optional remarks...'
+            }),
         }
 
-    def __init__(self, *args, lesson=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if lesson:
-            self.instance.lesson = lesson
-
-# For bulk attendance, use formset
-from django.forms import formset_factory
-AttendanceFormSet = formset_factory(AttendanceForm, extra=0, can_delete=False)
+        # Optional: make status required visually
+        self.fields['status'].required = True
 
 # ------------------------------- DISCIPLINE FORM -------------------------------
 class DisciplineRecordForm(BaseForm):

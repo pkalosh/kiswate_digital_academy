@@ -147,7 +147,7 @@ urlpatterns = [
     path('teacher/attendance/<int:attendance_id>/edit/', views.teacher_attendance_edit, name='teacher-attendance-edit'),
     path('teacher/attendance/<int:attendance_id>/delete/', views.teacher_attendance_delete, name='teacher-attendance-delete'),
     path('teacher/attendance/<int:grade_id>/class/', views.teacher_class_attendance_report, name='teacher-class-attendance-report'),
-
+    path('assign-class-teacher/<int:teacher_id>/', views.assign_class_teacher_for_teacher, name='assign-class-teacher-for-teacher'),
     
     # Discipline Management
     path('discipline/', views.school_discipline, name='school-discipline'),
