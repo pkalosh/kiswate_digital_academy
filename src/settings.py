@@ -233,3 +233,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://your-mobile-app-domain.com",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+SMS_API_KEY = ''
+SMS_PARTNERID =''
+SMS_SHORTCODE = ''
+SMS_API_URL = ''

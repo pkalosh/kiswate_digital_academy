@@ -47,10 +47,12 @@ ATTENDANCE_STATUS_CHOICES = [
 # Expanded INCIDENT_TYPE_CHOICES for discipline
 INCIDENT_TYPE_CHOICES = [
     ('late', 'Late Arrival'),
-    ('misconduct', 'Misconduct'),  # Covers IB
-    ('absence', 'Unauthorized Absence'),  # Covers UA
-    ('suspension', 'Suspension'),  # New: Aligns with '18'
-    ('expulsion', 'Expulsion'),  # New: Aligns with '20'
+    ('expulsion', 'Expulsion'),
+    ('tardy', 'Tardy'),
+    ('absence', 'Absence'),
+    ('misconduct', 'Misconduct'),
+    ('suspension', 'Suspension'),
+    ('expulsion', 'Expulsion'),
     ('other', 'Other'),
 ]
 
@@ -99,12 +101,7 @@ ASSIGNMENT_TYPE_CHOICES = [
     ('assessment', 'Assessment'),
 ]
 
-INCIDENT_TYPE_CHOICES = [
-    ('late', 'Late Arrival'),
-    ('misconduct', 'Misconduct'),
-    ('absence', 'Unauthorized Absence'),
-    ('other', 'Other'),
-]
+
 
 SEVERITY_CHOICES = [
     ('minor', 'Minor'),

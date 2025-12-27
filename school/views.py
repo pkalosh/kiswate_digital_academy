@@ -101,9 +101,9 @@ def _send_sms_via_eujim(to_phone_number: str, message: str) -> bool:
         phone = "254" + phone
 
     payload = {
-        "apikey": '055937fa1c632de42568afe4ee5ec19b',
-        "partnerID": '7003',
-        "shortcode": 'EUJIM LTD',
+        "apikey": settings.SMS_API_KEY,
+        "partnerID": settings.SMS_PARTNERID,
+        "shortcode": settings.SMS_SHORTCODE,
         "message": message,
         "mobile": phone,
     }
@@ -3108,33 +3108,54 @@ def teacher_attendance(request):
     }
     return render(request, 'school/teacher/attendance.html', context)
 
+
+def send_parent_discipline_notification(parent, student, discipline, lesson):
+    """
+    Customize this based on your notification system (email, SMS, in-app, FCM, etc.)
+    """
+    subject = f"Discipline Alert: {student.user.get_full_name()}"
+    message = (
+        f"Dear Parent,\n\n"
+        f"Your child {student.user.get_full_name()} was marked with "
+        f"{discipline.get_incident_type_display()} on {discipline.date}.\n\n"
+        f"Reason: {discipline.description}\n"
+        f"Severity: {discipline.get_severity_display()}\n"
+        f"Action Taken: {discipline.action_taken or 'None recorded'}\n\n"
+        f"Teacher: {discipline.teacher.user.get_full_name()}\n"
+        f"Subject: {lesson.subject.name}\n\n"
+        f"Please contact the school if needed."
+    )
+
+    # Example using Django email
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[parent.email],  # assuming parent has email
+            fail_silently=False,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send discipline email to {parent.email}: {e}")
+
 from django.db import IntegrityError
 @login_required
 def teacher_attendance_mark(request, lesson_id):
-    # --- Fetch lesson ---
     lesson = get_object_or_404(
-        Lesson.objects.select_related(
-            'subject', 'timetable', 'timetable__term'
-        ),
+        Lesson.objects.select_related('subject', 'timetable', 'timetable__term', 'timetable__school'),
         id=lesson_id,
         teacher=request.user.staffprofile
     )
-
     school = lesson.timetable.school
 
-    # --- Fetch students: Active & in this subject ---
     students = (
         Enrollment.objects
-        .filter(
-            school=school,
-            subject=lesson.subject,
-            status='active'
-        )
+        .filter(school=school, subject=lesson.subject, status='active')
         .select_related('student__user')
         .distinct()
+        .order_by('student__user__first_name', 'student__user__last_name')
     )
 
-    # --- Existing attendance records ---
     attendance_dict = {
         att.enrollment_id: att
         for att in Attendance.objects.filter(
@@ -3143,56 +3164,94 @@ def teacher_attendance_mark(request, lesson_id):
         )
     }
 
-    # --- Status choices ---
     status_choices = [
-        {'code':'P','label':'Present','color_class':'text-success'},
-        {'code':'ET','label':'Excused Tardy','color_class':'text-warning'},
-        {'code':'UT','label':'Unexcused Tardy','color_class':'text-warning'},
-        {'code':'EA','label':'Excused Absence','color_class':'text-danger'},
-        {'code':'UA','label':'Unexcused Absence','color_class':'text-danger'},
-        {'code':'IB','label':'Inappropriate Behavior','color_class':'text-info'},
-        {'code':'18','label':'Suspension','color_class':'text-dark'},
-        {'code':'20','label':'Expulsion','color_class':'text-dark'},
+        {'code': 'P',  'label': 'Present',               'color_class': 'text-success'},
+        {'code': 'ET', 'label': 'Excused Tardy',         'color_class': 'text-warning'},
+        {'code': 'UT', 'label': 'Unexcused Tardy',       'color_class': 'text-warning'},
+        {'code': 'EA', 'label': 'Excused Absence',       'color_class': 'text-danger'},
+        {'code': 'UA', 'label': 'Unexcused Absence',     'color_class': 'text-danger'},
+        {'code': 'IB', 'label': 'Inappropriate Behavior','color_class': 'text-info'},
+        {'code': '18', 'label': 'Suspension',            'color_class': 'text-dark'},
+        {'code': '20', 'label': 'Expulsion',             'color_class': 'text-dark'},
     ]
 
-    # --- POST: Save attendance ---
+    try:
+        user_position = request.user.staffprofile.position or ''
+    except AttributeError:
+        user_position = ''
+
     if request.method == 'POST':
         saved_count = 0
-        for enrollment in students:
-            field_name = f'status_{enrollment.id}'
-            selected_status = request.POST.get(field_name)
+        discipline_count = 0
 
-            if not selected_status:
-                continue
+        with transaction.atomic():
+            for enrollment in students:
+                selected_status = request.POST.get(f'status_{enrollment.id}')
+                if not selected_status:
+                    continue
 
-            attendance, _ = Attendance.objects.update_or_create(
-                enrollment=enrollment,
-                date=lesson.lesson_date,
-                defaults={
-                    'status': selected_status,
-                    'marked_by': request.user.staffprofile,
-                    'term': lesson.timetable.term,
-                    'academic_year': lesson.timetable.term.year,
-                }
-            )
-            saved_count += 1
-            # 🔔 Notify first/last slot
-            if is_first_slot(lesson):
-                notify_first_lesson(attendance)
-            if is_last_slot(lesson):
-                notify_last_lesson(enrollment.student, lesson.lesson_date)
+                # Save attendance
+                attendance, _ = Attendance.objects.update_or_create(
+                    enrollment=enrollment,
+                    date=lesson.lesson_date,
+                    defaults={
+                        'status': selected_status,
+                        'marked_by': request.user.staffprofile,
+                        'term': lesson.timetable.term,
+                        'academic_year': lesson.timetable.term.year,
+                    }
+                )
+                saved_count += 1
 
-        messages.success(request, f"Attendance for {saved_count} students has been recorded.")
+                # Only process discipline for IB, 18, 20
+                if selected_status in ['IB', '18', '20']:
+                    description = request.POST.get(f'description_{enrollment.id}', '').strip()
+                    severity = request.POST.get(f'severity_{enrollment.id}', 'minor')
+                    action_taken = request.POST.get(f'action_{enrollment.id}', '').strip()
+
+                    if not description:
+                        messages.warning(
+                            request,
+                            f"{enrollment.student.user.get_full_name()} ({selected_status}): "
+                            "Missing required discipline description."
+                        )
+                        continue
+
+                    incident_type = {'IB': 'misconduct', '18': 'suspension', '20': 'expulsion'}[selected_status]
+
+                    DisciplineRecord.objects.create(
+                        student=enrollment.student,
+                        linked_attendance=attendance,
+                        teacher=request.user.staffprofile,
+                        school=school,
+                        incident_type=incident_type,
+                        description=description,
+                        date=lesson.lesson_date,
+                        severity=severity,
+                        action_taken=action_taken,
+                        reported_by=request.user,
+                        resolved=False,
+                    )
+                    discipline_count += 1
+
+                    # Send parent notification (customize as needed)
+                    # ...
+
+        messages.success(request, f"Attendance saved for {saved_count} student(s).")
+        if discipline_count:
+            messages.success(request, f"{discipline_count} discipline record(s) created.")
+
         return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
 
-    return render(request, 'school/teacher/attendance_mark.html', {
+    context = {
         'lesson': lesson,
         'students': students,
         'attendance_dict': attendance_dict,
         'school': school,
         'status_choices': status_choices,
-    })
-
+        'user_position': user_position,
+    }
+    return render(request, 'school/teacher/attendance_mark.html', context)
 
 @login_required
 def teacher_attendance_edit(request, attendance_id):

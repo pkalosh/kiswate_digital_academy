@@ -15,6 +15,9 @@ from userauths.models import User  # adjust path to your app
 from school.models import ScanLog, School, SmartID, Student,Grade, GradeAttendance  # adjust path to your app
 from django.utils import timezone
 from django.db import IntegrityError
+# import settings
+from django.conf import settings
+
 
 # -------------------------------
 # Configuration
@@ -31,15 +34,15 @@ DEVICES = [
 POLL_INTERVAL = 5   
 
 # EUJIM SMS setup
-# SMS_API_KEY = ''
-# SMS_PARTNERID =''
-# SMS_SHORTCODE = ''
-# SMS_API_URL = ''
-ALERT_PHONE = ""
-SMS_API_KEY = '055937fa1c632de42568afe4ee5ec19b'
-SMS_PARTNERID ='7003'
-SMS_SHORTCODE = 'EUJIM LTD'
-SMS_API_URL = 'https://quicksms.advantasms.com/api/services/sendsms/'
+SMS_API_KEY = settings.SMS_API_KEY or ''
+SMS_PARTNERID = settings.SMS_PARTNERID or ''
+SMS_SHORTCODE = settings.SMS_SHORTCODE or ''
+SMS_API_URL = settings.SMS_API_URL or 'https://quicksms.advantasms.com/api/services/sendsms/'
+if not SMS_API_KEY or not SMS_PARTNERID or not SMS_SHORTCODE:
+    print("⚠️ SMS configuration is incomplete. Please check your settings.")
+    SMS_API_KEY = ''
+    SMS_PARTNERID = ''
+    SMS_SHORTCODE = ''
 
 # -------------------------------
 # Django Setup
