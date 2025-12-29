@@ -216,7 +216,7 @@ class Streams(models.Model):
         unique_together = ['grade', 'name', 'school']
 
     def __str__(self):
-        return f"{self.name} - {self.grade.name} - {self.school.name}"
+        return f"{self.name}"
 
 #Role Model for granular permissions
 class Role(models.Model):

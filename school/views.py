@@ -7,6 +7,10 @@ from userauths.models import User
 from .models import Grade, School, Parent,StaffProfile,Student, ScanLog, SmartID,Scholarship
 import logging
 import os
+from django.db.models import Q
+from collections import defaultdict
+from django.db.models import Count
+
 import pandas as pd
 from django.http import JsonResponse
 from django.conf import settings
@@ -243,61 +247,93 @@ def export_attendance_pdf(request):
 
 @login_required
 def dashboard(request):
-    # Determine the school based on user's profile
-    school = None
-    try:
-        # If user is school admin
-        school = request.user.school_admin_profile
-    except AttributeError:
-        try:
-            # If user is staff
-            school = request.user.staffprofile.school
-        except AttributeError as e:
-            logger.warning(f"Permission denied for user {request.user.email}: {e}")
-            messages.error(
-                request, 
-                f"You do not have permission to access this page. (User: {request.user.email})"
+    school = request.user.school_admin_profile
+    today = timezone.now().date()
+    today_weekday = today.strftime('%A').lower()
+
+    # Get filters — convert empty strings to None
+    grade_id    = request.GET.get('grade') or None
+    stream_id   = request.GET.get('stream') or None
+    teacher_id  = request.GET.get('teacher') or None
+    weekday     = request.GET.get('weekday') or None
+    slot_id     = request.GET.get('slot') or None
+
+    # Base query: all weekdays for this school
+    lessons_qs = Lesson.objects.filter(
+        Q(timetable__school=school) |
+        Q(stream__school=school) |
+        Q(teacher__school=school),
+        day_of_week__in=['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    ).select_related(
+        'subject', 'subject__grade', 'stream', 'teacher__user', 'time_slot'
+    )
+
+    # Apply filters only if value is truthy (not None and not empty string)
+    if grade_id:
+        lessons_qs = lessons_qs.filter(subject__grade_id=grade_id)
+    if stream_id:
+        lessons_qs = lessons_qs.filter(stream_id=stream_id)
+    if teacher_id:
+        lessons_qs = lessons_qs.filter(teacher_id=teacher_id)
+    if weekday:
+        lessons_qs = lessons_qs.filter(day_of_week=weekday)
+    if slot_id:
+        lessons_qs = lessons_qs.filter(time_slot_id=slot_id)
+
+    lessons = list(lessons_qs)
+
+    # Build table_data
+    table_data = defaultdict(lambda: defaultdict(list))
+    conflicts = set()
+    seen = set()
+
+    for lesson in lessons:
+        if lesson.teacher and lesson.day_of_week and lesson.time_slot:
+            key = (lesson.teacher_id, lesson.day_of_week, lesson.time_slot_id)
+            if key in seen:
+                conflicts.add(lesson.id)
+            seen.add(key)
+
+            table_data[lesson.day_of_week][lesson.time_slot].append(lesson)
+
+    # Sort by grade name
+    for day in table_data:
+        for slot in table_data[day]:
+            table_data[day][slot].sort(
+                key=lambda l: l.subject.grade.name if l.subject and l.subject.grade else ""
             )
-            return redirect('userauths:sign-in')  # redirect to login or some "no access" page
-
-    # Aggregate data
-    total_teachers = StaffProfile.objects.filter(school=school, position='teacher').count()
-    total_students = Student.objects.filter(school=school).count()
-    total_parents = Parent.objects.filter(school=school).count()
-    total_discipline_cases = DisciplineRecord.objects.filter(school=school).count()
-    total_timetable_slots = Timetable.objects.filter(school=school).count()
-
-    recent_discipline = DisciplineRecord.objects.filter(school=school).order_by('-date')[:5]
-
-    timetables = Timetable.objects.filter(school=school).select_related('grade').order_by('-year', 'term')
-
-    timetables_with_lessons = []
-    for tt in timetables:
-        lessons_qs = Lesson.objects.filter(timetable=tt)\
-                                   .select_related('subject', 'teacher')\
-                                   .order_by('time_slot','lesson_date')[:20]
-        lessons_count = Lesson.objects.filter(timetable=tt).count()
-        timetables_with_lessons.append({
-            'timetable': tt,
-            'lessons': lessons_qs,
-            'lessons_count': lessons_count,
-            'active': timezone.now().date() >= tt.start_date and timezone.now().date() <= tt.end_date,
-        })
 
     context = {
-        "total_teachers": total_teachers,
-        "total_students": total_students,
-        "school": school,
-        "total_parents": total_parents,
-        "total_discipline_cases": total_discipline_cases,
-        "total_timetable_slots": total_timetable_slots,
-        "recent_discipline": recent_discipline,
-        "timetables_with_lessons": timetables_with_lessons,
+        'time_slots': TimeSlot.objects.filter(school=school).order_by('start_time'),
+        'weekdays': [
+            ('monday', 'Monday'), ('tuesday', 'Tuesday'), ('wednesday', 'Wednesday'),
+            ('thursday', 'Thursday'), ('friday', 'Friday')
+        ],
+        'table_data': dict(table_data),
+        'conflicts': conflicts,
+        'today_weekday': today_weekday,
+
+        # KPIs
+        'total_teachers': StaffProfile.objects.filter(school=school, position='teacher').count(),
+        'total_students': Student.objects.filter(school=school).count(),
+        'total_parents': Parent.objects.filter(school=school).count(),
+        'total_discipline_cases': DisciplineRecord.objects.filter(school=school).count(),
+
+        # For template dropdowns
+        'grades': Grade.objects.filter(school=school),
+        'streams': Streams.objects.filter(school=school),
+        'teachers': StaffProfile.objects.filter(school=school, position__in=['teacher', 'hod']),
+
+        # Preserve selected values (including empty ones correctly)
+        'selected_grade': grade_id,
+        'selected_stream': stream_id,
+        'selected_teacher': teacher_id,
+        'selected_weekday': weekday,
+        'selected_slot': slot_id,
     }
 
-    return render(request, "school/dashboard.html", context)
-
-
+    return render(request, 'school/dashboard.html', context)
+    
 @login_required
 def time_slot_list(request):
     school_profile = getattr(request.user, 'school_admin_profile', None)
