@@ -663,7 +663,7 @@ class AssignParentStudentForm(forms.Form):
 class EnrollmentForm(BaseForm):
     class Meta:
         model = Enrollment
-        fields = ['student', 'subject', 'status']
+        fields = ['student', 'lesson', 'status']
         widgets = {
             'status': forms.Select(choices=ENROLLMENT_STATUS_CHOICES),
         }

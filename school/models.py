@@ -329,13 +329,17 @@ class TeacherStreamAssignment(models.Model):
 # Enrollment
 class Enrollment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='enrollments')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='enrollments')
+    lesson = models.ForeignKey(
+        'Lesson',
+        on_delete=models.CASCADE,
+        related_name="l_enrollments",        blank=True, null=True
+    )    
     enrolled_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=ENROLLMENT_STATUS_CHOICES, default='active')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='enrollments')
 
     def __str__(self):
-        return f"{self.student} enrolled in {self.subject} - {self.get_status_display()}"
+        return f"{self.student} → {self.lesson.subject if self.lesson else 'No Lesson'}"
 
 
 class AcademicYear(models.Model):
@@ -521,7 +525,7 @@ class Attendance(models.Model):
         super().clean()
 
     def __str__(self):
-        return f"{self.enrollment.student} - {self.enrollment.subject} on {self.date}"
+        return f"{self.enrollment.student} - {self.enrollment.lesson.subject} on {self.date}"
 
 
 

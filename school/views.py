@@ -20,14 +20,13 @@ from django.core.mail import send_mail
 import random
 import string
 from django.utils.dateparse import parse_date
-from datetime import timedelta, date
+import datetime
+from datetime import timedelta,date
 from .services.timetable_generator import generate_for_stream
 from collections import defaultdict
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponseForbidden
-from datetime import timedelta
-import datetime
 from collections import defaultdict
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -52,7 +51,6 @@ from io import StringIO
 import logging
 from decimal import Decimal
 from django.utils.timezone import localdate
-from datetime import timedelta
 import uuid
 from userauths.models import User
 from .models import (
@@ -334,6 +332,7 @@ def dashboard(request):
 
     return render(request, 'school/dashboard.html', context)
     
+
 @login_required
 def time_slot_list(request):
     school_profile = getattr(request.user, 'school_admin_profile', None)
@@ -1060,74 +1059,93 @@ def generate_timetable_view(request):
 
 
 
+WEEKDAY_MAP = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
 @login_required
 def view_timetable_week(request):
-    """
-    Weekly timetable view: Admin, Teacher, Student, Parent
-    Handles recurring lessons (day_of_week) and one-off lessons (lesson_date)
-    """
     user = request.user
-    school_id = user.school_admin_profile.id 
+    school = user.staffprofile.school
 
-    # Focus date
-    date_str = request.GET.get('date')
-    try:
-        focus_date = date.fromisoformat(date_str) if date_str else timezone.localdate()
-    except ValueError:
+    # ── Focus date ───────────────────────────────────────────────────────────
+    focus_date_str = request.GET.get("date")
+    if focus_date_str:
+        try:
+            focus_date = datetime.datetime.strptime(focus_date_str, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            focus_date = timezone.localdate()
+    else:
         focus_date = timezone.localdate()
 
-    # Week range: Monday → Friday
-    monday = focus_date - timedelta(days=focus_date.weekday())
-    week_days = [monday + timedelta(days=i) for i in range(5)]
+    # ── Week range (Monday → Friday) ─────────────────────────────────────────
+    week_start = focus_date - timedelta(days=focus_date.weekday())
+    week_end = week_start + timedelta(days=4)
+    week_days = [week_start + timedelta(days=i) for i in range(5)]
 
-    # Map Python weekday to Lesson.day_of_week
-    WEEKDAY_MAP = {0:'monday',1:'tuesday',2:'wednesday',3:'thursday',4:'friday',5:'saturday',6:'sunday'}
+    # ── Time slots ───────────────────────────────────────────────────────────
+    time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
 
-    # Base lessons queryset
-    lessons_qs = Lesson.objects.select_related('timetable','subject','teacher','stream','time_slot')
-    if is_school_admin(user):
-        if school_id:
-            lessons_qs = lessons_qs.filter(timetable__school_id=school_id)
-    elif hasattr(user,'staffprofile'):
-        lessons_qs = lessons_qs.filter(teacher=user.staffprofile)
-    elif hasattr(user,'student'):
-        lessons_qs = lessons_qs.filter(stream=user.student.stream)
-    elif hasattr(user,'parent'):
-        child_stream_ids = user.parent.children.values_list('stream_id', flat=True)
-        lessons_qs = lessons_qs.filter(stream_id__in=child_stream_ids)
-    else:
-        lessons_qs = lessons_qs.none()
+    # ── Lessons ──────────────────────────────────────────────────────────────
+    lessons_qs = Lesson.objects.filter(
+        timetable__school=school,
+        timetable__term__is_active=True,
+        lesson_date__range=(week_start, week_end),
+    ).select_related(
+        'subject',
+        'teacher__user',
+        'stream',
+        'timetable',
+    )
 
-    # Time slots for the school
-    if school_id:
-        school = get_object_or_404(School, id=school_id)
-        print(f"school: {school.name}")
-        time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
+    # ── Streams ──────────────────────────────────────────────────────────────
+    streams = Streams.objects.filter(school=school)
+    streams_dict = {s.id: s for s in streams}
 
-    else:
-        time_slots = TimeSlot.objects.none()
+    # ── Build calendar ───────────────────────────────────────────────────────
+    calendar = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
-    # Build table: {date: {slot: [lessons]}}
-    table_data = {}
-    for d in week_days:
-        weekday_str = WEEKDAY_MAP[d.weekday()]
-        table_data[d] = {}
-        for slot in time_slots:
-            # Include one-off lessons for this date
-            lessons_on_date = lessons_qs.filter(time_slot=slot, lesson_date=d)
-            print("lesson",lessons_on_date)
-            # Include recurring lessons for this weekday
-            lessons_recurring = lessons_qs.filter(time_slot=slot, day_of_week=weekday_str, lesson_date__isnull=True)
-            table_data[d][slot] = lessons_on_date | lessons_recurring
+    for lesson in lessons_qs:
+        date_str = lesson.lesson_date.strftime("%Y-%m-%d")
+        # Precompute stream name for template
+        lesson.stream_name = streams_dict.get(lesson.stream.id).name if streams_dict.get(lesson.stream.id) else "(stream missing)"
+        calendar[lesson.time_slot.id][date_str][lesson.stream.id].append(lesson)
 
-    context = {
-        'week_days': week_days,
-        'time_slots': time_slots,
-        'table_data': table_data,
-        'focus_date': focus_date,
+    # Convert defaultdict → plain dict for template iteration
+    calendar_plain = {
+        slot_id: {
+            date_str: dict(stream_dict)
+            for date_str, stream_dict in date_dict.items()
+        }
+        for slot_id, date_dict in calendar.items()
     }
-    print(context)
-    return render(request, 'school/timetable_week.html', context)
+
+    # ── Subjects & colors ────────────────────────────────────────────────────
+    subjects = Subject.objects.filter(school=school).distinct()
+    subject_colors = {s.id: getattr(s, "color", "#eee") for s in subjects}
+    subjects_dict = {s.id: s for s in subjects}
+
+    # ── Conflicts placeholder ────────────────────────────────────────────────
+    conflict_lessons = set()
+
+    # ── Context ──────────────────────────────────────────────────────────────
+    context = {
+        "week_days": week_days,
+        "time_slots": time_slots,
+        "calendar": calendar_plain,
+        "subject_colors": subject_colors,
+        "streams_dict": streams_dict,
+        "focus_date": focus_date.strftime("%Y-%m-%d"),
+        "conflict_lessons": conflict_lessons,
+        "subjects": subjects_dict,
+    }
+
+    return render(request, "school/timetable_week.html", context)
 
 
 @login_required
@@ -2746,14 +2764,15 @@ def attendance_dashboard(request):
         return render(request, 'error/no_school_access.html', status=403)
 
     qs = Attendance.objects.select_related(
-        'enrollment__student__user',
-        'enrollment__student__grade_level',
-        'enrollment__student__stream',
-        'enrollment__subject',
-        'term',
-        'academic_year',
-        'marked_by__user'
-    ).filter(enrollment__school=user_school)
+    'enrollment__student__user',
+    'enrollment__student__grade_level',
+    'enrollment__student__stream',
+    'enrollment__lesson__subject',  # ✅ correct path
+    'term',
+    'academic_year',
+    'marked_by__user'
+).filter(enrollment__school=user_school)
+
 
     filters = {
         'academic_year': request.GET.get('academic_year', ''),
@@ -2774,7 +2793,8 @@ def attendance_dashboard(request):
     if filters['stream'].isdigit():
         qs = qs.filter(enrollment__student__stream_id=filters['stream'])
     if filters['subject'].isdigit():
-        qs = qs.filter(enrollment__subject_id=filters['subject'])
+        qs = qs.filter(enrollment__lesson__subject_id=filters['subject'])
+
     if filters['student'].strip():
         s = filters['student'].strip()
         qs = qs.filter(
@@ -3174,32 +3194,57 @@ def send_parent_discipline_notification(parent, student, discipline, lesson):
     except Exception as e:
         logger.error(f"Failed to send discipline email to {parent.email}: {e}")
 
-from django.db import IntegrityError
 @login_required
 def teacher_attendance_mark(request, lesson_id):
+    # ─────────────────────────────────────────────
+    # Fetch lesson & validate teacher ownership
+    # ─────────────────────────────────────────────
     lesson = get_object_or_404(
-        Lesson.objects.select_related('subject', 'timetable', 'timetable__term', 'timetable__school'),
+        Lesson.objects.select_related(
+            'subject',
+            'timetable',
+            'timetable__grade',
+            'timetable__term',
+            'timetable__school',
+        ),
         id=lesson_id,
         teacher=request.user.staffprofile
     )
-    school = lesson.timetable.school
 
-    students = (
-        Enrollment.objects
-        .filter(school=school, subject=lesson.subject, status='active')
-        .select_related('student__user')
-        .distinct()
-        .order_by('student__user__first_name', 'student__user__last_name')
+    school = lesson.timetable.school
+    term = lesson.timetable.term
+    academic_year = term.year
+
+    # ─────────────────────────────────────────────
+    # Fetch enrollments FOR THIS LESSON ONLY ✅
+    # ─────────────────────────────────────────────
+    # ✅ CORRECT: lesson-based enrollments
+    enrollments = Enrollment.objects.filter(
+        lesson=lesson,
+        school=school,
+        status='active'
+    ).select_related(
+        'student',
+        'student__user'
     )
 
+    print("[DEBUG] Enrollments found:", enrollments.count())
+
+
+    # ─────────────────────────────────────────────
+    # Existing attendance (prefill)
+    # ─────────────────────────────────────────────
     attendance_dict = {
         att.enrollment_id: att
         for att in Attendance.objects.filter(
-            enrollment__in=students,
+            enrollment__in=enrollments,
             date=lesson.lesson_date
         )
     }
 
+    # ─────────────────────────────────────────────
+    # Status choices (UI metadata)
+    # ─────────────────────────────────────────────
     status_choices = [
         {'code': 'P',  'label': 'Present',               'color_class': 'text-success'},
         {'code': 'ET', 'label': 'Excused Tardy',         'color_class': 'text-warning'},
@@ -3211,83 +3256,115 @@ def teacher_attendance_mark(request, lesson_id):
         {'code': '20', 'label': 'Expulsion',             'color_class': 'text-dark'},
     ]
 
-    try:
-        user_position = request.user.staffprofile.position or ''
-    except AttributeError:
-        user_position = ''
-
+    # ─────────────────────────────────────────────
+    # POST: Save attendance + discipline
+    # ─────────────────────────────────────────────
     if request.method == 'POST':
         saved_count = 0
         discipline_count = 0
 
-        with transaction.atomic():
-            for enrollment in students:
-                selected_status = request.POST.get(f'status_{enrollment.id}')
-                if not selected_status:
-                    continue
-
-                # Save attendance
-                attendance, _ = Attendance.objects.update_or_create(
-                    enrollment=enrollment,
-                    date=lesson.lesson_date,
-                    defaults={
-                        'status': selected_status,
-                        'marked_by': request.user.staffprofile,
-                        'term': lesson.timetable.term,
-                        'academic_year': lesson.timetable.term.year,
-                    }
-                )
-                saved_count += 1
-
-                # Only process discipline for IB, 18, 20
-                if selected_status in ['IB', '18', '20']:
-                    description = request.POST.get(f'description_{enrollment.id}', '').strip()
-                    severity = request.POST.get(f'severity_{enrollment.id}', 'minor')
-                    action_taken = request.POST.get(f'action_{enrollment.id}', '').strip()
-
-                    if not description:
-                        messages.warning(
-                            request,
-                            f"{enrollment.student.user.get_full_name()} ({selected_status}): "
-                            "Missing required discipline description."
-                        )
+        try:
+            with transaction.atomic():
+                for enrollment in enrollments:
+                    status = request.POST.get(f'status_{enrollment.id}')
+                    if not status:
                         continue
 
-                    incident_type = {'IB': 'misconduct', '18': 'suspension', '20': 'expulsion'}[selected_status]
-
-                    DisciplineRecord.objects.create(
-                        student=enrollment.student,
-                        linked_attendance=attendance,
-                        teacher=request.user.staffprofile,
-                        school=school,
-                        incident_type=incident_type,
-                        description=description,
+                    # ── Save Attendance ─────────────────
+                    attendance, _ = Attendance.objects.update_or_create(
+                        enrollment=enrollment,
                         date=lesson.lesson_date,
-                        severity=severity,
-                        action_taken=action_taken,
-                        reported_by=request.user,
-                        resolved=False,
+                        defaults={
+                            'status': status,
+                            'term': term,
+                            'academic_year': academic_year,
+                            'marked_by': request.user.staffprofile,
+                        }
                     )
-                    discipline_count += 1
+                    saved_count += 1
 
-                    # Send parent notification (customize as needed)
-                    # ...
+                    # ── Discipline Required ─────────────
+                    if status in ['IB', '18', '20']:
+                        description = request.POST.get(
+                            f'description_{enrollment.id}', ''
+                        ).strip()
+                        severity = request.POST.get(
+                            f'severity_{enrollment.id}', 'minor'
+                        )
+                        action_taken = request.POST.get(
+                            f'action_{enrollment.id}', ''
+                        ).strip()
 
-        messages.success(request, f"Attendance saved for {saved_count} student(s).")
+                        if not description:
+                            raise ValidationError(
+                                f"Discipline description required for "
+                                f"{enrollment.student.user.get_full_name()}"
+                            )
+
+                        incident_type_map = {
+                            'IB': 'misconduct',
+                            '18': 'suspension',
+                            '20': 'expulsion',
+                        }
+
+                        DisciplineRecord.objects.update_or_create(
+                            linked_attendance=attendance,
+                            defaults={
+                                'student': enrollment.student,
+                                'teacher': request.user.staffprofile,
+                                'school': school,
+                                'incident_type': incident_type_map[status],
+                                'description': description,
+                                'severity': severity,
+                                'action_taken': action_taken,
+                                'date': lesson.lesson_date,
+                                'reported_by': request.user,
+                                'resolved': False,
+                            }
+                        )
+
+                        discipline_count += 1
+
+        except ValidationError as e:
+            messages.error(request, str(e))
+            return redirect(
+                'school:teacher-attendance-mark',
+                lesson_id=lesson.id
+            )
+
+        messages.success(
+            request,
+            f"Attendance saved for {saved_count} student(s)."
+        )
         if discipline_count:
-            messages.success(request, f"{discipline_count} discipline record(s) created.")
+            messages.success(
+                request,
+                f"{discipline_count} discipline record(s) created."
+            )
 
-        return redirect('school:teacher-attendance-mark', lesson_id=lesson.id)
+        return redirect(
+            'school:teacher-attendance-mark',
+            lesson_id=lesson.id
+        )
 
+    # ─────────────────────────────────────────────
+    # GET: Render page
+    # ─────────────────────────────────────────────
     context = {
         'lesson': lesson,
-        'students': students,
-        'attendance_dict': attendance_dict,
         'school': school,
+        'enrollments': enrollments,      # ✅ lesson-based
+        'attendance_dict': attendance_dict,
         'status_choices': status_choices,
-        'user_position': user_position,
     }
-    return render(request, 'school/teacher/attendance_mark.html', context)
+
+    return render(
+        request,
+        'school/teacher/attendance_mark.html',
+        context
+    )
+
+
 
 @login_required
 def teacher_attendance_edit(request, attendance_id):

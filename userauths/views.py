@@ -3,10 +3,11 @@ from django.contrib.auth import authenticate, login, logout,update_session_auth_
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from school.models import Timetable,TeacherStreamAssignment,Streams, Lesson, Session, Enrollment, StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot
+from school.models import Timetable,TeacherStreamAssignment,Streams, Term, Lesson, Session, Enrollment, StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot
 from django.utils import timezone
 from collections import defaultdict
 from userauths.models import User
+from django.db.models import Sum
 
 
 def index(request):
@@ -90,143 +91,156 @@ def LoginView(request):
 # Note: Assumes OneToOneFields (e.g., user.parent for is_parent=True users).
 # For school attr, derive from profile (e.g., parent.school) since User lacks direct 'school'.
 
+from collections import defaultdict
+
+def generate_timetable_grid(student, timetable):
+    """
+    Returns a nested dict of lessons by weekday and time slot for the student's grade.
+    Format: { 'monday': {1: [lesson1, lesson2], 2: [...] }, ... }
+    """
+    from collections import defaultdict
+
+    grid = defaultdict(lambda: defaultdict(list))
+
+    # Fix: use __in if streams is a RelatedManager
+    student_streams = student.grade_level.streams.all()  # RelatedManager -> queryset
+
+    lessons = Lesson.objects.filter(
+        timetable=timetable,
+        stream__in=student_streams
+    ).select_related("subject", "teacher", "time_slot")
+
+    for lesson in lessons:
+        if lesson.day_of_week and lesson.time_slot:
+            grid[lesson.day_of_week][lesson.time_slot.id].append(lesson)
+
+    return grid
+
+
+WEEKDAY_CHOICES = [
+    ('monday', 'Monday'),
+    ('tuesday', 'Tuesday'),
+    ('wednesday', 'Wednesday'),
+    ('thursday', 'Thursday'),
+    ('friday', 'Friday'),
+    ('saturday', 'Saturday'),
+    ('sunday', 'Sunday'),
+]
+
 
 @login_required
 def parent_dashboard(request):
     """
     Parent Dashboard:
-    - Child list
-    - Lessons + Sessions
-    - Attendance Summary (New Status Types Supported)
+    - Children overview
+    - Lessons & Sessions
+    - Attendance Summary (P/A included)
     - Discipline Summary
-    - Active Term Display
+    - Fee Overview
     """
     user = request.user
 
-    # Ensure this user is a parent
     if not hasattr(user, "parent"):
         messages.error(request, "Access denied: Parent account required.")
         return redirect("userauths:sign-in")
 
     parent = user.parent
-
-    # Ensure parent has children
     children = parent.children.all()
+
     if not children.exists():
         return render(
             request,
             "school/parent/dashboard.html",
-            {
-                "message": "No children enrolled under your account.",
-                "children": [],
-            },
+            {"message": "No children enrolled under your account.", "children": []},
         )
 
     today = timezone.now().date()
     child_data = []
 
     for child in children:
-
-        # -------------------------------------------------------------
-        # ACTIVE TIMETABLE FOR CHILD'S GRADE
-        # -------------------------------------------------------------
-        active_timetable = Timetable.objects.filter(
-            school=parent.school,
-            grade=child.grade_level,
-            start_date__lte=today,
-            end_date__gte=today,
-        ).first()
-
-        # Lessons & Sessions
-        if active_timetable:
-            lessons = (
-                Lesson.objects.filter(timetable=active_timetable)
-                .select_related("subject", "teacher")
-                .order_by("lesson_date")
+        # ------------------------
+        # ACTIVE TIMETABLE
+        # ------------------------
+        active_timetable = (
+            Timetable.objects.filter(
+                school=parent.school,
+                grade=child.grade_level,
+                start_date__lte=today,
+                end_date__gte=today,
             )
+            .first()
+        )
 
-            sessions = (
-                Session.objects.filter(lesson__in=lessons)
-                .select_related("lesson", "subject", "teacher")
-                .order_by("scheduled_at")
+        if active_timetable and hasattr(child, "stream") and child.stream:
+            lessons = (
+                Lesson.objects.filter(timetable=active_timetable, stream=child.stream)
+                .select_related("subject", "teacher", "time_slot")
+                .order_by("lesson_date", "time_slot__start_time")
             )
         else:
             lessons = []
-            sessions = []
 
-        # -------------------------------------------------------------
-        # ATTENDANCE — FIXED
-        # -------------------------------------------------------------
-        attendance_qs = Attendance.objects.filter(
-            enrollment__student=child
-        ).select_related("lesson", "session", "enrollment")
-
-        # New Status Mappings
-        status_counts = {
-            "P": 0,
-            "ET": 0,
-            "UT": 0,
-            "EA": 0,
-            "UA": 0,
-            "IB": 0,
-            "18": 0,
-            "20": 0,
-        }
-
-        for st in status_counts.keys():
-            status_counts[st] = attendance_qs.filter(status=st).count()
-
+        # ------------------------
+        # ATTENDANCE
+        # ------------------------
+        attendance_qs = Attendance.objects.filter(enrollment__student=child)
+        status_keys = ["P", "A", "ET", "UT", "EA", "UA", "IB", "18", "20"]
+        status_counts = {key: attendance_qs.filter(status=key).count() for key in status_keys}
         status_counts["total"] = attendance_qs.count()
+        status_counts["present_percentage"] = int((status_counts.get("P", 0) / status_counts["total"] * 100) if status_counts["total"] else 0)
 
-        # -------------------------------------------------------------
-        # DISCIPLINE RECORDS
-        # -------------------------------------------------------------
+        # ------------------------
+        # DISCIPLINE
+        # ------------------------
         if hasattr(child, "discipline_records"):
             discipline_list = child.discipline_records.all().order_by("-date")
-            discipline_score = 0  # Could summarize points if needed
+            discipline_score = 0
         else:
             discipline_list = []
             discipline_score = 0
 
-        # -------------------------------------------------------------
+        # ------------------------
         # SUBJECT ENROLLMENTS
-        # -------------------------------------------------------------
-        enrollments = child.enrollments.filter(status="active").select_related(
-            "subject"
-        )
+        # ------------------------
+        enrollments = child.enrollments.filter(status="active").select_related("lesson__subject")
 
-        # -------------------------------------------------------------
-        # Add to child data bundle
-        # -------------------------------------------------------------
+        # ------------------------
+        # FEE OVERVIEW
+        # ------------------------
+        fee_total = getattr(child, "fee_total", 0) or 0
+        fee_paid = getattr(child, "fee_paid", 0) or 0
+        fee_balance = fee_total - fee_paid
+        fee_percentage = int((fee_paid / fee_total * 100) if fee_total else 0)
+
+        # ------------------------
+        # Bundle child data
+        # ------------------------
         child_data.append(
             {
                 "child": child,
                 "lessons": lessons,
-                "sessions": sessions,
                 "attendance": status_counts,
                 "discipline_records": discipline_list,
                 "discipline_score": discipline_score,
                 "enrollments": enrollments,
-                "active_term": (
-                    f"Term {active_timetable.term} {active_timetable.year}"
-                    if active_timetable
-                    else None
-                ),
+                "active_term": f"Term {active_timetable.term} {active_timetable.year}" if active_timetable else "N/A",
+                "fee_total": fee_total,
+                "fee_paid": fee_paid,
+                "fee_balance": fee_balance,
+                "fee_percentage": fee_percentage,
             }
         )
 
-    # -------------------------------------------------------------
+    # ------------------------
     # CHILD SELECTION
-    # -------------------------------------------------------------
+    # ------------------------
     requested_child_id = request.GET.get("child_id")
     selected_child = None
-
     if requested_child_id:
         for data in child_data:
             if str(data["child"].id) == requested_child_id:
                 selected_child = data["child"]
                 break
-
     if not selected_child:
         selected_child = children.first()
 
@@ -238,25 +252,37 @@ def parent_dashboard(request):
 
     return render(request, "school/parent/dashboard.html", context)
 
-
-
 from collections import defaultdict
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.utils import timezone
+from school.models import Lesson, TimeSlot, Enrollment, Session, Term
 
 @login_required
 def student_dashboard(request):
     user = request.user
-    if not hasattr(user, 'student'):
-        messages.error(request, "Access denied: Student role required.")
-        return redirect('userauths:sign-in')
-
+    try:
+        # Ensure the user is a student
+        student = user.student
+    except Student.DoesNotExist:
+        messages.error(request, "Student profile not found.")
+        return redirect("userauths:sign-in")
     student = user.student
     today = timezone.now().date()
-    enrollments = student.enrollments.filter(status='active').select_related('subject')
 
+    # Get active enrollments
+    enrollments = student.enrollments.filter(status='active').select_related('lesson__subject', 'lesson__teacher', 'lesson__time_slot', 'lesson__stream')
+
+    # Extract lesson IDs from enrollments
+    lesson_ids = enrollments.values_list('lesson_id', flat=True)
+
+    # Filter lessons
     lessons_qs = Lesson.objects.filter(
-        subject__in=enrollments.values_list('subject', flat=True),
+        id__in=lesson_ids,
         timetable__school=student.school
-    ).select_related('timetable', 'subject', 'teacher', 'stream', 'time_slot')
+    ).select_related('subject', 'teacher', 'time_slot', 'stream').prefetch_related('sessions')
 
     # Apply filters
     term_id = request.GET.get('term')
@@ -266,27 +292,38 @@ def student_dashboard(request):
 
     if term_id:
         lessons_qs = lessons_qs.filter(timetable__term_id=term_id)
-    if date_filter:
-        lessons_qs = lessons_qs.filter(lesson_date=date_filter)
     if lesson_id:
         lessons_qs = lessons_qs.filter(id=lesson_id)
     if session_id:
         lessons_qs = lessons_qs.filter(sessions__id=session_id)
+    if date_filter:
+        lessons_qs = lessons_qs.filter(lesson_date=date_filter)
 
-    lessons_qs = lessons_qs.order_by('lesson_date')
+    lessons_qs = lessons_qs.order_by('day_of_week', 'time_slot__start_time')
 
     # Prepare timetable grid
     time_slots = TimeSlot.objects.filter(school=student.school).order_by('start_time')
     weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    # Initialize timetable_grid with empty dicts
+    # Initialize timetable_grid
     timetable_grid = {day: {} for day in weekdays}
-
     for lesson in lessons_qs:
         if lesson.day_of_week and lesson.time_slot:
-            # Normalize to capitalized weekday to match the keys
-            day = lesson.day_of_week.capitalize()
-            timetable_grid[day][lesson.time_slot.id] = lesson
+            day = lesson.day_of_week.capitalize()  # normalize weekday
+            timetable_grid[day].setdefault(lesson.time_slot.id, []).append(lesson)
+
+    # Stats cards
+    stats = [
+        {'title': "Today's Schedule", 'value': lessons_qs.filter(lesson_date=today).count(), 'icon': 'bi-calendar-day', 'color': 'success'},
+        {'title': "Subjects", 'value': enrollments.count(), 'icon': 'bi-book', 'color': 'success'},
+        {'title': "Attendance Rate", 'value': '95%', 'icon': 'bi-bar-chart-line', 'color': 'success'},
+        {'title': "Assignments Due", 'value': 2, 'icon': 'bi-journal-check', 'color': 'success'},
+    ]
+
+    # For filters
+    terms = Timetable.objects.filter(school=student.school).order_by('start_date')
+    lessons_list = lessons_qs
+    sessions_list = Session.objects.filter(lesson__in=lessons_qs).distinct()
 
     context = {
         'student': student,
@@ -296,65 +333,99 @@ def student_dashboard(request):
         'timetable_grid': timetable_grid,
         'time_slots': time_slots,
         'weekdays': weekdays,
+        'stats': stats,
+        'terms': terms,
+        'lessons_list': lessons_list,
+        'sessions_list': sessions_list,
         'request': request,
     }
 
     return render(request, 'school/student/dashboard.html', context)
 
 
-
 from datetime import timedelta
+import datetime
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from datetime import timedelta
+from school.models import Lesson, Session
+
 @login_required
 def teacher_dashboard(request):
+    user = request.user
+
     try:
-        if not (request.user.is_teacher or request.user.school_staff):
-            messages.error(request, "Access denied: Teacher/Staff role required.")
-            return redirect('userauths:sign-in')
+        teacher_profile = user.staffprofile
+    except:
+        return render(request, 'school/teacher/not_authorized.html', status=403)
 
-        teacher = request.user.staffprofile
-        today = timezone.now().date()
+    # Only allow teachers (position='teacher') to access
+    if teacher_profile.position != 'teacher':
+        return render(request, 'school/teacher/not_authorized.html', status=403)
 
-        # Lessons assigned to teacher
-        assigned_lessons = Lesson.objects.filter(
-            teacher=teacher,
-            timetable__start_date__lte=today,
-            timetable__end_date__gte=today,
-            timetable__school=teacher.school
-        ).select_related('timetable__grade', 'subject', 'time_slot').order_by('lesson_date', 'time_slot__start_time')
+    # Get selected date from query param
+    selected_date_str = request.GET.get('date')
+    today = timezone.localdate()
+    selected_date = today
+    if selected_date_str:
+        try:
+            selected_date = timezone.datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            pass
 
-        # Prepare weekly timetable (Monday-Sunday)
-        week_start = today - timedelta(days=today.weekday())
-        week_days = [week_start + timedelta(days=i) for i in range(7)]
+    # Calculate current week
+    week_start = selected_date - timedelta(days=selected_date.weekday())
+    week_end = week_start + timedelta(days=6)
+    week_days = [week_start + timedelta(days=i) for i in range(7)]
 
-        # Unique time slots
-        time_slots = sorted({lesson.time_slot for lesson in assigned_lessons}, key=lambda ts: ts.start_time)
+    # Fetch lessons for this teacher in the week
+    assigned_lessons = Lesson.objects.filter(
+        teacher=teacher_profile,
+        lesson_date__range=(week_start, week_end),
+        timetable__school=teacher_profile.school
+    ).select_related('timetable__grade', 'subject', 'time_slot', 'stream').order_by(
+        'lesson_date', 'time_slot__start_time'
+    )
 
-        # Build timetable: {grade_id: {TimeSlot obj: {date obj: lesson}}}
-        timetable = {}
-        grades_dict = {}
-        for lesson in assigned_lessons:
-            grade = lesson.timetable.grade
-            grades_dict[grade.id] = grade
-            timetable.setdefault(grade.id, {})
-            timetable[grade.id].setdefault(lesson.time_slot, {})
-            timetable[grade.id][lesson.time_slot][lesson.lesson_date] = lesson
+    # Unique time slots
+    time_slots = sorted({lesson.time_slot for lesson in assigned_lessons if lesson.time_slot}, key=lambda ts: ts.start_time)
 
-        context = {
-            'school': teacher.school,
-            'subjects': teacher.subjects.all(),
-            'sessions': Session.objects.filter(lesson__in=assigned_lessons, teacher=teacher),
-            'today_lessons': assigned_lessons.filter(lesson_date=today),
-            'grades_list': sorted(grades_dict.items(), key=lambda x: x[1].name),
-            'timetable': timetable,
-            'week_days': week_days,
-            'time_slots': time_slots,
-        }
+    # Build timetable: {Grade obj: {TimeSlot obj: {date: [lessons]}}}
+    timetable_by_grade = {}
+    for lesson in assigned_lessons:
+        if not lesson.time_slot:
+            continue
+        grade = lesson.timetable.grade
+        timetable_by_grade.setdefault(grade, {})
+        timetable_by_grade[grade].setdefault(lesson.time_slot, {})
+        timetable_by_grade[grade][lesson.time_slot].setdefault(lesson.lesson_date, [])
+        timetable_by_grade[grade][lesson.time_slot][lesson.lesson_date].append(lesson)
 
-        return render(request, 'school/teacher/dashboard.html', context)
+    # Stats for dashboard
+    stats = [
+        {'title': "Today's Lessons", 'value': assigned_lessons.filter(lesson_date=selected_date).count(), 'icon': 'fa-chalkboard-teacher', 'color': 'success'},
+        {'title': "This Week's Lessons", 'value': assigned_lessons.count(), 'icon': 'fa-calendar-week', 'color': 'primary'},
+        {'title': "Subjects", 'value': teacher_profile.subjects.count(), 'icon': 'fa-book', 'color': 'warning'},
+        {'title': "Sessions", 'value': Session.objects.filter(lesson__in=assigned_lessons, teacher=teacher_profile).count(), 'icon': 'fa-hourglass', 'color': 'info'},
+    ]
 
-    except StaffProfile.DoesNotExist:
-        messages.error(request, "Staff profile not found.")
-        return redirect('userauths:teacher-dashboard')
+    context = {
+        'school': teacher_profile.school,
+        'subjects': teacher_profile.subjects.all(),
+        'today_lessons': assigned_lessons.filter(lesson_date=selected_date),
+        'assigned_lessons': assigned_lessons,
+        'timetable_by_grade': timetable_by_grade,
+        'week_days': week_days,
+        'time_slots': time_slots,
+        'selected_date': selected_date,
+        'stats': stats,
+    }
+
+    return render(request, 'school/teacher/dashboard.html', context)
+
+
 
 @login_required
 def logoutView(request):

@@ -1,12 +1,8 @@
 {% extends 'school/parent/base.html' %}
-
-{% load math_filters %}
-{% load static %}
 {% block title %}Parent Dashboard | {{ request.user.parent.school.name }}{% endblock %}
 
 {% block content %}
-
-<section class="bg-light py-4">
+<section class="py-4 bg-light">
     <div class="container">
 
         {% if children %}
@@ -18,8 +14,7 @@
                         id="child-{{ data.child.id }}-tab"
                         data-bs-toggle="tab"
                         data-bs-target="#child-{{ data.child.id }}"
-                        type="button"
-                        role="tab">
+                        type="button">
                     {{ data.child.user.get_full_name }} ({{ data.child.grade_level.name }})
                 </button>
             </li>
@@ -30,75 +25,64 @@
         <div class="tab-content" id="childTabsContent">
             {% for data in child_data %}
             <div class="tab-pane fade {% if data.child.id == selected_child.id %}show active{% endif %}"
-                 id="child-{{ data.child.id }}" role="tabpanel">
+                 id="child-{{ data.child.id }}">
 
-                <!-- STATS CARDS -->
                 <div class="row g-4 mb-4">
                     <!-- Attendance -->
-                    <div class="col-6 col-md-3">
-                        <div class="card shadow-sm border-0">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 text-center">
                             <div class="card-body">
                                 <div class="text-secondary small">Attendance</div>
-                                {% with total=data.attendance.total|default:0 %}
-                                    {% with present=data.attendance.P|default:0 %}
-                                        <div class="h4 fw-bold mt-1">
-                                            {% if total > 0 %}
-                                                {{ present }}/{{ total }}
-                                            {% else %}
-                                                N/A
-                                            {% endif %}
-                                        </div>
-                                        {% if total > 0 %}
-                                        <div class="progress mt-2" style="height:6px;">
-                                            <div class="progress-bar bg-success"
-                                                 role="progressbar"
-                                                 style="width:{{ present|floatformat:0|divisibleby:total|mul:100 }}%">
-                                            </div>
-                                        </div>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% endwith %}
-                                <a href="#" class="small mt-2 d-block"><i class="bi bi-eye"></i> View Attendance</a>
+                                <div class="h4 fw-bold mt-1">{{ data.attendance.P }}/{{ data.attendance.total }}</div>
+                                <div class="progress mt-2" style="height:6px;">
+                                    <div class="progress-bar bg-success" role="progressbar"
+                                         style="width:{{ data.attendance.present_percentage }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">Present</small>
                             </div>
                         </div>
                     </div>
 
                     <!-- Discipline -->
-                    <div class="col-6 col-md-3">
-                        <div class="card shadow-sm border-0">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 text-center">
                             <div class="card-body">
-                                <div class="text-secondary small">Discipline</div>
-                                <div class="h4 fw-bold mt-1">{{ data.discipline_score|default:"0" }}</div>
-                                <a href="#" class="small"><i class="bi bi-eye"></i> View Records</a>
+                                <div class="text-secondary small">Discipline Score</div>
+                                <div class="h4 fw-bold mt-1">{{ data.discipline_score }}</div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Enrolled Subjects -->
-                    <div class="col-6 col-md-3">
-                        <div class="card shadow-sm border-0">
+                    <!-- Subjects -->
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 text-center">
                             <div class="card-body">
                                 <div class="text-secondary small">Subjects</div>
                                 <div class="h4 fw-bold mt-1">{{ data.enrollments|length }}</div>
-                                <a href="#" class="small"><i class="bi bi-eye"></i> View Subjects</a>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Upcoming Lessons -->
-                    <div class="col-6 col-md-3">
-                        <div class="card shadow-sm border-0">
+                    <!-- Fee -->
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 text-center">
                             <div class="card-body">
-                                <div class="text-secondary small">Upcoming Lessons</div>
-                                <div class="h4 fw-bold mt-1">{{ data.lessons|length }}</div>
-                                <a href="#" class="small"><i class="bi bi-eye"></i> View Schedule</a>
+                                <div class="text-secondary small">Fee Paid</div>
+                                <div class="h4 fw-bold mt-1">KES {{ data.fee_paid }} / {{ data.fee_total }}</div>
+                                <div class="progress mt-2" style="height:6px;">
+                                    <div class="progress-bar bg-success" role="progressbar"
+                                         style="width:{{ data.fee_percentage }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">Paid Percentage</small>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- UPCOMING LESSONS TABLE -->
-                <h5 class="fw-bold mb-3">Upcoming Lessons</h5>
+                <!-- Lessons Table -->
+                <h5>Upcoming Lessons</h5>
                 <div class="table-responsive mb-4">
                     <table class="table table-hover align-middle">
                         <thead class="table-light">
@@ -137,10 +121,10 @@
                     </table>
                 </div>
 
-                <!-- DISCIPLINE RECORDS TABLE -->
-                <h5 class="fw-bold mb-3">Discipline Records</h5>
+                <!-- Discipline Records Table -->
+                <h5>Discipline Records</h5>
                 <div class="table-responsive">
-                    <table class="table table-bordered align-middle">
+                    <table class="table table-bordered">
                         <thead class="table-light">
                             <tr>
                                 <th>Date</th>
@@ -175,5 +159,4 @@
 
     </div>
 </section>
-
 {% endblock %}

@@ -9,95 +9,58 @@
 
         <!-- Stats Cards -->
         <div class="row g-4 mb-4">
+            {% for stat in stats %}
             <div class="col-6 col-md-3">
-                <div class="card k-card">
-                    <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-secondary small">Today's Schedule</div>
-                            <div class="h4 m-0 fw-bold">{{ today_lessons.count }}</div>
-                        </div>
-                        <a href="{% url 'school:school-assignments' %}" class="k-pill"><i class="bi bi-eye"></i> View Full</a>
+                <div class="card shadow-sm bg-white text-center border-0">
+                    <div class="card-body p-3">
+                        <i class="bi {{ stat.icon }} fs-2" style="color: #0b7a2a;"></i>
+                        <div class="mt-2">{{ stat.title }}</div>
+                        <div class="h4 fw-bold">{{ stat.value }}</div>
                     </div>
                 </div>
             </div>
-            <div class="col-6 col-md-3">
-                <div class="card k-card">
-                    <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-secondary small">Attendance Rate</div>
-                            <div class="h4 m-0 fw-bold">95%</div>
-                        </div>
-                        <a href="" class="k-pill"><i class="bi bi-eye"></i> History</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card k-card">
-                    <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-secondary small">Subjects</div>
-                            <div class="h4 m-0 fw-bold">{{ enrollments.count }}</div>
-                        </div>
-                        <a href="{% url 'school:school-subjects' %}" class="k-pill"><i class="bi bi-eye"></i> My Subjects</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card k-card">
-                    <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-secondary small">Assignments Due</div>
-                            <div class="h4 m-0 fw-bold">2</div>
-                        </div>
-                        <a href="{% url 'school:school-assignments' %}" class="k-pill"><i class="bi bi-eye"></i> Submit</a>
-                    </div>
-                </div>
-            </div>
+            {% endfor %}
         </div>
 
         <!-- Filter Form -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <form method="get" class="row g-2">
-                    <div class="col-md-3">
-                        <input type="date" name="date" class="form-control form-control-sm" value="{{ request.GET.date }}">
-                    </div>
-                    <div class="col-md-3">
-                        <select name="term" class="form-select form-select-sm">
-                            <option value="">All Terms</option>
-                            {% for t in terms %}
-                                <option value="{{ t.id }}" {% if request.GET.term == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="lesson" class="form-select form-select-sm">
-                            <option value="">All Lessons</option>
-                            {% for l in lessons_list %}
-                                <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>{{ l.subject.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="session" class="form-select form-select-sm">
-                            <option value="">All Sessions</option>
-                            {% for s in sessions_list %}
-                                <option value="{{ s.id }}" {% if request.GET.session == s.id|stringformat:"s" %}selected{% endif %}>{{ s.platform }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-12 mt-2">
-                        <button class="btn btn-primary btn-sm">Filter</button>
-                        <a href="{% url 'userauths:student-dashboard' %}" class="btn btn-outline-secondary btn-sm">Reset</a>
-                    </div>
-                </form>
+        <form method="get" class="row g-2 mb-4">
+            <div class="col-md-3">
+                <input type="date" name="date" class="form-control form-control-sm" value="{{ request.GET.date }}">
             </div>
-        </div>
+            <div class="col-md-3">
+                <select name="term" class="form-select form-select-sm">
+                    <option value="">All Terms</option>
+                    {% for t in terms %}
+                    <option value="{{ t.id }}" {% if request.GET.term == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="lesson" class="form-select form-select-sm">
+                    <option value="">All Lessons</option>
+                    {% for l in lessons_list %}
+                    <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>{{ l.subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="session" class="form-select form-select-sm">
+                    <option value="">All Sessions</option>
+                    {% for s in sessions_list %}
+                    <option value="{{ s.id }}" {% if request.GET.session == s.id|stringformat:"s" %}selected{% endif %}>{{ s.platform }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 mt-2">
+                <button class="btn btn-primary btn-sm">Filter</button>
+                <a href="{% url 'userauths:student-dashboard' %}" class="btn btn-outline-secondary btn-sm">Reset</a>
+            </div>
+        </form>
 
         <!-- Timetable Grid -->
         {% if timetable_grid %}
         <div class="table-responsive">
-            <table class="table table-bordered timetable-table align-middle text-center">
+            <table class="table table-bordered timetable-table text-center align-middle">
                 <thead class="table-light">
                     <tr>
                         <th style="width: 80px;">Time</th>
@@ -114,26 +77,28 @@
                         <td>
                             {% with day_lessons=timetable_grid|get_item:weekday %}
                                 {% if day_lessons %}
-                                    {% with lesson=day_lessons|get_item:slot.id %}
-                                        {% if lesson %}
-                                        <div class="card mb-1 shadow-sm p-1">
-                                            <div class="fw-bold small">{{ lesson.subject.name }}</div>
-                                            <div class="small">Teacher: {{ lesson.teacher.user.get_full_name }}</div>
-                                            <div class="small">{{ lesson.room|default:"Online" }}</div>
-                                            {% if lesson.sessions.exists %}
-                                            <div class="mt-1">
-                                                {% for session in lesson.sessions.all %}
-                                                <a href="{{ session.meeting_link }}" target="_blank" class="badge bg-primary text-light small">{{ session.platform }}</a>
-                                                {% endfor %}
+                                    {% with lessons=day_lessons|get_item:slot.id %}
+                                        {% if lessons %}
+                                            {% for lesson in lessons %}
+                                            <div class="card mb-1 shadow-sm p-2" style="background-color:#0b7a2a; color:white;">
+                                                <div class="fw-bold small">{{ lesson.subject.name }}</div>
+                                                <div class="small">Teacher: {{ lesson.teacher.user.get_full_name }}</div>
+                                                <div class="small">{{ lesson.room|default:"Online" }}</div>
+                                                {% if lesson.sessions.exists %}
+                                                <div class="mt-1">
+                                                    {% for session in lesson.sessions.all %}
+                                                    <a href="{{ session.meeting_link }}" target="_blank" class="badge bg-light text-success small">{{ session.platform }}</a>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
                                             </div>
-                                            {% endif %}
-                                        </div>
+                                            {% endfor %}
                                         {% else %}
-                                        <span class="text-muted small">-</span>
+                                            <span class="text-muted small">-</span>
                                         {% endif %}
                                     {% endwith %}
                                 {% else %}
-                                <span class="text-muted small">-</span>
+                                    <span class="text-muted small">-</span>
                                 {% endif %}
                             {% endwith %}
                         </td>
@@ -150,18 +115,11 @@
 </section>
 
 <style>
-.timetable-table th, .timetable-table td {
-    vertical-align: top;
-    min-width: 120px;
-    padding: 0.5rem;
-}
-.timetable-table .card {
-    font-size: 0.85rem;
-}
+.timetable-table th, .timetable-table td { vertical-align: top; min-width: 120px; padding: 0.5rem; }
+.timetable-table .card { font-size: 0.85rem; border-radius: 6px; }
 @media (max-width: 768px) {
-    .timetable-table, .timetable-table thead, .timetable-table tbody, .timetable-table th, .timetable-table td, .timetable-table tr {
-        display: block;
-    }
+    .timetable-table, .timetable-table thead, .timetable-table tbody, 
+    .timetable-table th, .timetable-table td, .timetable-table tr { display: block; }
     .timetable-table tr { margin-bottom: 1rem; }
     .timetable-table td { margin-bottom: 0.5rem; border: none; }
     .timetable-table th { display: none; }

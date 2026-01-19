@@ -4,25 +4,22 @@
 
 {% block content %}
 <style>
-    .status-pill {
-        padding: 6px 12px;
-        border-radius: 20px;
-        border: 2px solid transparent;
-        cursor: pointer;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-    .status-pill:hover { opacity: 0.85; }
-    .status-selected {
-        border-color: #00000040;
-        background-color: #00000008;
-    }
-    .form-check-input { cursor: pointer; }
+.status-pill {
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-weight: 600;
+}
+.status-selected {
+    border-color: #00000040;
+    background-color: #00000008;
+}
 </style>
 
 <section class="container-fluid py-4">
     <div class="card shadow-sm border-0 rounded-4">
-        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between">
             <div>
                 <h5 class="fw-bold mb-1">Mark Attendance</h5>
                 <small class="text-muted">
@@ -30,38 +27,17 @@
                 </small>
             </div>
             <span class="badge bg-primary-subtle text-primary px-3 py-2">
-                {{ students|length }} Students
+                {{ enrollments|length }} Students
             </span>
         </div>
 
         <div class="card-body">
-            {% if students %}
-            <div class="row g-3 mb-4 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Search Student</label>
-                    <input type="text" id="studentSearch" class="form-control" placeholder="Search by name or ID">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label fw-semibold">Filter by Status</label>
-                    <select id="statusFilter" class="form-select">
-                        <option value="">All Statuses</option>
-                        {% for choice in status_choices %}
-                        <option value="{{ choice.code }}">{{ choice.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-5 text-md-end">
-                    <button type="button" id="markAllPresent" class="btn btn-outline-success me-2">Mark All Present</button>
-                    <button type="button" id="clearAll" class="btn btn-outline-secondary">Clear All</button>
-                </div>
-            </div>
-
-            <form method="POST" id="attendanceForm">
+            {% if enrollments %}
+            <form method="POST">
                 {% csrf_token %}
 
-                <!-- DESKTOP TABLE -->
-                <div class="table-responsive d-none d-md-block">
-                    <table id="attendance-table" class="table table-bordered align-middle table-hover">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle">
                         <thead class="table-light text-center">
                             <tr>
                                 <th class="text-start">Student</th>
@@ -69,36 +45,27 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for enrollment in students %}
+                            {% for enrollment in enrollments %}
                             {% with att=attendance_dict|dict_get:enrollment.id %}
-                            <tr data-student="{{ enrollment.student.user.get_full_name|lower }}"
-                                data-id="{{ enrollment.student.student_id|lower }}">
+                            <tr data-enrollment="{{ enrollment.id }}">
                                 <td>
-                                    <div class="fw-semibold">{{ enrollment.student.user.get_full_name }}</div>
+                                    <strong>{{ enrollment.student.user.get_full_name }}</strong><br>
                                     <small class="text-muted">ID: {{ enrollment.student.student_id }}</small>
                                 </td>
                                 <td class="text-center">
-                                    <div class="d-flex justify-content-center flex-wrap gap-2">
-                                        {% for choice in status_choices %}
-                                        <label class="status-pill {{ choice.color_class }}
-                                               {% if att and att.status == choice.code %}status-selected{% endif %}">
-                                            <input type="radio"
-                                                   class="form-check-input me-1 status-radio"
-                                                   name="status_{{ enrollment.id }}"
-                                                   value="{{ choice.code }}"
-                                                   data-enrollment="{{ enrollment.id }}"
-                                                   data-code="{{ choice.code }}"
-                                                   {% if att and att.status == choice.code %}checked{% endif %}
-                                                   {% if not att and choice.code == 'P' %}checked{% endif %}>
-                                            {{ choice.code }}
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    {% if att %}
-                                    <small class="text-muted d-block mt-1">
-                                        Previously: <strong>{{ att.get_status_display }}</strong>
-                                    </small>
-                                    {% endif %}
+                                    {% for choice in status_choices %}
+                                    <label class="status-pill {{ choice.color_class }}">
+                                        <input type="radio"
+                                               class="form-check-input status-radio"
+                                               name="status_{{ enrollment.id }}"
+                                               value="{{ choice.code }}"
+                                               data-enrollment="{{ enrollment.id }}"
+                                               data-label="{{ choice.label }}"
+                                               {% if att and att.status == choice.code %}checked{% endif %}
+                                               {% if not att and choice.code == 'P' %}checked{% endif %}>
+                                        {{ choice.code }}
+                                    </label>
+                                    {% endfor %}
                                 </td>
                             </tr>
                             {% endwith %}
@@ -107,75 +74,39 @@
                     </table>
                 </div>
 
-                <!-- MOBILE CARDS -->
-                <div class="d-md-none">
-                    {% for enrollment in students %}
-                    {% with att=attendance_dict|dict_get:enrollment.id %}
-                    <div class="card shadow-sm border-0 rounded-3 mb-3 student-card"
-                         data-student="{{ enrollment.student.user.get_full_name|lower }}"
-                         data-id="{{ enrollment.student.student_id|lower }}">
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <strong>{{ enrollment.student.user.get_full_name }}</strong><br>
-                                <small class="text-muted">ID: {{ enrollment.student.student_id }}</small>
-                            </div>
-                            <div class="d-flex flex-wrap gap-2">
-                                {% for choice in status_choices %}
-                                <label class="status-pill {{ choice.color_class }}
-                                       {% if att and att.status == choice.code %}status-selected{% endif %}">
-                                    <input type="radio"
-                                           class="form-check-input me-1 status-radio"
-                                           name="status_{{ enrollment.id }}"
-                                           value="{{ choice.code }}"
-                                           data-enrollment="{{ enrollment.id }}"
-                                           data-code="{{ choice.code }}"
-                                           {% if att and att.status == choice.code %}checked{% endif %}
-                                           {% if not att and choice.code == 'P' %}checked{% endif %}>
-                                    {{ choice.label }}
-                                </label>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                    {% endwith %}
-                    {% endfor %}
-                </div>
-
-                <!-- LEGEND + SUBMIT -->
-                <div class="d-flex justify-content-between align-items-center mt-4">
-                    <div>
-                        {% for choice in status_choices %}
-                        <span class="badge {{ choice.color_class }} me-1">
-                            {{ choice.code }} = {{ choice.label }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                    <button type="submit" class="btn btn-success btn-lg px-5">Save Attendance</button>
+                <div class="text-end mt-4">
+                    <button type="submit" class="btn btn-success btn-lg px-5">
+                        Smart Attendance
+                    </button> 
+                    <button type="submit" class="btn btn-success btn-lg px-5">
+                        Save Attendance
+                    </button>
                 </div>
             </form>
-
             {% else %}
-            <div class="text-center py-5 text-muted">No students found for this lesson.</div>
+                <div class="text-center text-muted py-5">
+                    No students enrolled for this lesson.
+                </div>
             {% endif %}
         </div>
     </div>
 </section>
 
-<!-- DISCIPLINE MODAL (ONLY FOR IB, 18, 20) -->
+<!-- ───────────────── MODAL ───────────────── -->
 <div class="modal fade" id="disciplineModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4">
             <div class="modal-header">
                 <h5 class="modal-title">Discipline Record Required</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p><strong>Student: <span id="modalStudent"></span></strong></p>
-                <p>Status: <strong><span id="modalStatusLabel"></span></strong></p>
+                <p><strong>Student:</strong> <span id="modalStudent"></span></p>
+                <p><strong>Status:</strong> <span id="modalStatus"></span></p>
 
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
-                    <textarea id="modalDescription" class="form-control" rows="4" required></textarea>
+                    <label class="form-label fw-semibold">Description *</label>
+                    <textarea id="modalDescription" class="form-control" rows="3"></textarea>
                 </div>
 
                 <div class="mb-3">
@@ -192,134 +123,76 @@
                     <textarea id="modalAction" class="form-control" rows="2"></textarea>
                 </div>
 
-                <input type="hidden" id="modalEnrollmentId">
+                <input type="hidden" id="modalEnrollment">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="saveDiscipline">Save Discipline Record</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger" id="saveDiscipline">Save</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Hidden fields for discipline data -->
-{% for enrollment in students %}
+<!-- ───────────── Hidden discipline fields ───────────── -->
+{% for enrollment in enrollments %}
 <input type="hidden" name="description_{{ enrollment.id }}" id="desc_{{ enrollment.id }}">
 <input type="hidden" name="severity_{{ enrollment.id }}" id="sev_{{ enrollment.id }}">
 <input type="hidden" name="action_{{ enrollment.id }}" id="act_{{ enrollment.id }}">
 {% endfor %}
 
 <script>
-    const seriousStatuses = ['IB', '18', '20'];
-    let currentEnrollment = null;
-    let currentRadio = null;
+const seriousStatuses = ['IB', '18', '20'];
+let activeRadio = null;
 
-    // When a radio button is clicked
-    document.querySelectorAll('.status-radio').forEach(radio => {
-        radio.addEventListener('click', function() {
-            const code = this.dataset.code;
-            const enrollmentId = this.dataset.enrollment;
+document.querySelectorAll('.status-radio').forEach(radio => {
+    radio.addEventListener('change', function () {
+        if (!seriousStatuses.includes(this.value)) return;
 
-            // Clear previous discipline data if switching away from serious status
-            if (!seriousStatuses.includes(code)) {
-                document.getElementById(`desc_${enrollmentId}`).value = '';
-                document.getElementById(`sev_${enrollmentId}`).value = '';
-                document.getElementById(`act_${enrollmentId}`).value = '';
-                return;
-            }
+        activeRadio = this;
+        const row = this.closest('tr');
+        const student = row.querySelector('strong').textContent;
 
-            // For IB, 18, 20 → open modal
-            currentEnrollment = enrollmentId;
-            currentRadio = this;
+        document.getElementById('modalStudent').textContent = student;
+        document.getElementById('modalStatus').textContent = this.dataset.label;
+        document.getElementById('modalEnrollment').value = this.dataset.enrollment;
 
-            const studentName = this.closest('tr, .student-card')
-                .querySelector('.fw-semibold, strong').textContent.trim();
+        document.getElementById('modalDescription').value = '';
+        document.getElementById('modalAction').value = '';
+        document.getElementById('modalSeverity').value = 'minor';
 
-            const statusLabel = this.parentElement.textContent.trim();
-
-            document.getElementById('modalStudent').textContent = studentName;
-            document.getElementById('modalStatusLabel').textContent = statusLabel;
-            document.getElementById('modalEnrollmentId').value = enrollmentId;
-
-            // Clear modal
-            document.getElementById('modalDescription').value = '';
-            document.getElementById('modalAction').value = '';
-            document.getElementById('modalSeverity').value = 'minor';
-
-            new bootstrap.Modal(document.getElementById('disciplineModal')).show();
-        });
+        new bootstrap.Modal(
+            document.getElementById('disciplineModal')
+        ).show();
     });
+});
 
-    // Save discipline and allow selection
-    document.getElementById('saveDiscipline').addEventListener('click', function() {
-        const desc = document.getElementById('modalDescription').value.trim();
-        if (!desc) {
-            alert("Description is required for this status.");
-            return;
-        }
+document.getElementById('saveDiscipline').onclick = () => {
+    const id = document.getElementById('modalEnrollment').value;
+    const desc = document.getElementById('modalDescription').value.trim();
 
-        const enrollmentId = document.getElementById('modalEnrollmentId').value;
-        document.getElementById(`desc_${enrollmentId}`).value = desc;
-        document.getElementById(`sev_${enrollmentId}`).value = document.getElementById('modalSeverity').value;
-        document.getElementById(`act_${enrollmentId}`).value = document.getElementById('modalAction').value;
-
-        // Close modal and keep radio selected
-        bootstrap.Modal.getInstance(document.getElementById('disciplineModal')).hide();
-    });
-
-    // If user cancels modal → uncheck the serious status
-    document.getElementById('disciplineModal').addEventListener('hidden.bs.modal', function() {
-        if (currentRadio && !document.getElementById(`desc_${currentEnrollment}`).value) {
-            currentRadio.checked = false;
-        }
-        currentEnrollment = null;
-        currentRadio = null;
-    });
-
-    // Search & Filter
-    document.getElementById('studentSearch').addEventListener('input', filterTable);
-    document.getElementById('statusFilter').addEventListener('change', filterTable);
-
-    function filterTable() {
-        const search = document.getElementById('studentSearch').value.toLowerCase();
-        const status = document.getElementById('statusFilter').value;
-
-        document.querySelectorAll('#attendance-table tr, .student-card').forEach(row => {
-            const name = row.dataset.student || '';
-            const id = row.dataset.id || '';
-            const matchesSearch = name.includes(search) || id.includes(search);
-
-            let matchesStatus = true;
-            if (status) {
-                const selectedRadio = row.querySelector(`input[name^="status_"][value="${status}"]`);
-                matchesStatus = selectedRadio?.checked;
-            }
-
-            row.style.display = matchesSearch && matchesStatus ? '' : 'none';
-        });
+    if (!desc) {
+        alert('Description is required');
+        return;
     }
 
-    // Mark All Present
-    document.getElementById('markAllPresent').addEventListener('click', () => {
-        document.querySelectorAll('input[value="P"]').forEach(radio => {
-            radio.checked = true;
-            // Clear any discipline data
-            const enrollmentId = radio.name.split('_')[1];
-            document.getElementById(`desc_${enrollmentId}`).value = '';
-            document.getElementById(`sev_${enrollmentId}`).value = '';
-            document.getElementById(`act_${enrollmentId}`).value = '';
-        });
-    });
+    document.getElementById(`desc_${id}`).value = desc;
+    document.getElementById(`sev_${id}`).value =
+        document.getElementById('modalSeverity').value;
+    document.getElementById(`act_${id}`).value =
+        document.getElementById('modalAction').value;
 
-    // Clear All
-    document.getElementById('clearAll').addEventListener('click', () => {
-        document.querySelectorAll('.status-radio').forEach(radio => {
-            radio.checked = false;
-            const enrollmentId = radio.name.split('_')[1];
-            document.getElementById(`desc_${enrollmentId}`).value = '';
-            document.getElementById(`sev_${enrollmentId}`).value = '';
-            document.getElementById(`act_${enrollmentId}`).value = '';
-        });
-    });
+    bootstrap.Modal.getInstance(
+        document.getElementById('disciplineModal')
+    ).hide();
+};
+
+document.getElementById('disciplineModal')
+.addEventListener('hidden.bs.modal', () => {
+    const id = document.getElementById('modalEnrollment').value;
+    if (activeRadio && !document.getElementById(`desc_${id}`).value) {
+        activeRadio.checked = false;
+    }
+    activeRadio = null;
+});
 </script>
 {% endblock %}

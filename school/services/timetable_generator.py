@@ -1,220 +1,222 @@
+import datetime
 from datetime import timedelta
+from collections import defaultdict
+from itertools import cycle
 from django.db import transaction
-from django.utils import timezone
 from ..models import (
-    Timetable, Lesson, Subject, StaffProfile, Student,
-    TimeSlot, School, Enrollment
+    Timetable, Lesson, Subject, StaffProfile,
+    Student, TimeSlot, Enrollment
 )
-
-# Define working weekdays (school days)
+# ---------------- CONFIG ---------------- #
 WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+PRIORITY_SUBJECTS = ['Mathematics', 'English']
+MAX_SUBJECTS_PER_DAY = 2
+MAX_TEACHER_PER_DAY = 3
+MAX_CONSECUTIVE = 2
+MAX_RETRY_PASSES = 3
 
-
+# ---------------- HELPERS ---------------- #
 def get_school_time_slots(school):
-    """Returns a list of TimeSlot objects ordered by start_time for the given school."""
-    return TimeSlot.objects.filter(school=school).order_by('start_time')
-
+    return list(TimeSlot.objects.filter(school=school).order_by('start_time'))
 
 def get_school_days_between(start_date, end_date):
-    """Return all school days (Mon-Fri) between start_date and end_date (inclusive)."""
-    day = start_date
     days = []
-    while day <= end_date:
-        if day.weekday() < 5:  # Monday=0 to Friday=4
-            days.append(day)
-        day += timedelta(days=1)
+    d = start_date
+    while d <= end_date:
+        if d.weekday() < 5:  # Monday=0, Friday=4
+            days.append(d)
+        d += timedelta(days=1)
     return days
 
+def stream_occupied_map(timetable, time_slots):
+    occupied = set()
+    for l in timetable.lessons.select_related('time_slot'):
+        idx = next(i for i, ts in enumerate(time_slots) if ts.id == l.time_slot_id)
+        occupied.add((l.day_of_week, idx))
+    return occupied
 
-def choose_teacher_for_subject(subject, school):
-    """Return queryset of teachers (StaffProfile) in school that teach the subject."""
-    return StaffProfile.objects.filter(school=school, subjects=subject)
-
-
-def teacher_load_map(lessons_queryset, time_slots):
-    """
-    Helper: builds busy map from a queryset of lessons.
-    Format: teacher_id -> set of (day_of_week, time_slot_index)
-    """
+def global_teacher_load(school, start_date, end_date, time_slots):
     busy = {}
-    for lesson in lessons_queryset.select_related('teacher', 'time_slot'):
-        if not lesson.teacher_id:
-            continue
-        tid = lesson.teacher_id
-        busy.setdefault(tid, set())
-        ts_idx = next((i for i, ts in enumerate(time_slots) if ts.id == lesson.time_slot_id), None)
-        if ts_idx is not None:
-            busy[tid].add((lesson.day_of_week, ts_idx))
-    return busy
-
-
-def global_teacher_busy_map(school, time_slots, term=None, exclude_timetable=None):
-    """
-    Build teacher busy map considering ALL lessons in the school (or term),
-    excluding the current timetable if we're overwriting it.
-    This prevents the same teacher from being double-booked across streams/grades.
-    """
-    queryset = Lesson.objects.filter(
+    daily = {}
+    lessons = Lesson.objects.filter(
         timetable__school=school,
-        time_slot__school=school
-    )
-    if term:
-        queryset = queryset.filter(timetable__term=term)
-    if exclude_timetable:
-        queryset = queryset.exclude(timetable=exclude_timetable)
+        lesson_date__range=(start_date, end_date)
+    ).select_related('time_slot')
+    for l in lessons:
+        tid = l.teacher_id
+        day = l.day_of_week
+        idx = next(i for i, ts in enumerate(time_slots) if ts.id == l.time_slot_id)
+        busy.setdefault(tid, set()).add((day, idx))
+        daily.setdefault(tid, {}).setdefault(day, 0)
+        daily[tid][day] += 1
+    return busy, daily
 
-    return teacher_load_map(queryset, time_slots)
+def has_three_consecutive(tid, day, idx, teacher_busy):
+    busy = teacher_busy.get(tid, set())
+    return (day, idx - 1) in busy and (day, idx - 2) in busy
 
+def subject_daily_load(timetable):
+    load = {}
+    for l in timetable.lessons.all():
+        key = (l.subject_id, l.day_of_week)
+        load[key] = load.get(key, 0) + 1
+    return load
 
+def subject_weekly_load(timetable):
+    load = {}
+    for l in timetable.lessons.all():
+        load[l.subject_id] = load.get(l.subject_id, 0) + 1
+    return load
+
+# ---------------- MAIN GENERATOR ---------------- #
 @transaction.atomic
 def generate_for_stream(timetable: Timetable, overwrite=False):
-    """
-    Generate lessons for a single Timetable (stream) using dynamic DB time slots.
-    Auto-enroll students in the grade for all subjects.
-    If overwrite=True, existing lessons for timetable are deleted first.
-    Returns list of created Lesson objects.
-    """
+    print(f"[DEBUG] Starting generation for timetable {timetable.id} (overwrite={overwrite})")
+
     if overwrite:
         timetable.lessons.all().delete()
 
     term = timetable.term
-    if not term:
-        raise ValueError("Timetable must reference a Term")
-
     school = timetable.school
     grade = timetable.grade
     stream = timetable.stream
+    time_slots = get_school_time_slots(school)
 
-    # Get all time slots for school
-    time_slots = list(get_school_time_slots(school))
     if not time_slots:
-        raise ValueError("No time slots defined for school")
+        raise ValueError("No time slots defined")
 
-    # Get all school days within the valid window
     days = get_school_days_between(
         max(term.start_date, timetable.start_date),
         min(term.end_date, timetable.end_date)
     )
-    if not days:
-        raise ValueError("No valid school days within the timetable/term window")
 
-    created = []
-
-    # Stream-specific occupied slots (different streams can share time slots if teachers/rooms differ)
-    stream_occupied = set(
-        (lesson.day_of_week, next((i for i, ts in enumerate(time_slots) if ts.id == lesson.time_slot_id), None))
-        for lesson in timetable.lessons.all()
-        if lesson.time_slot_id is not None
-    )
-
-    # CRITICAL FIX: Use GLOBAL teacher availability across the school (and term)
-    teacher_busy = global_teacher_busy_map(
-        school=school,
-        time_slots=time_slots,
-        term=term,
-        exclude_timetable=timetable if overwrite else None
-    )
-
-    # Get active subjects for the grade
-    subjects = Subject.objects.filter(grade=grade, is_active=True)
+    # Only subjects assigned to this grade
+    subjects = Subject.objects.filter(grade=grade)
     if not subjects.exists():
-        raise ValueError("No subjects defined for grade")
+        raise ValueError("No subjects found for this grade")
 
-    # Auto-enroll all students in the grade into each subject
-    students = Student.objects.filter(grade_level=grade, school=school)
-    for subject in subjects:
-        Enrollment.objects.bulk_create(
-            [
-                Enrollment(student=student, subject=subject, school=school, status='active')
-                for student in students
-                if not Enrollment.objects.filter(student=student, subject=subject, school=school).exists()
-            ],
-            ignore_conflicts=True
-        )
+    # Prioritize Mathematics and English
+    priority_order = {n: i for i, n in enumerate(PRIORITY_SUBJECTS)}
+    subjects = sorted(subjects, key=lambda s: priority_order.get(s.name, 99))
 
-    # Build subject weekly loads
-    subject_loads = [(subj, max(1, getattr(subj, 'sessions_per_week', 2))) for subj in subjects]
+    # All students in this grade & stream
+    students = Student.objects.filter(
+        grade_level=grade,
+        stream=stream,
+        school=school
+    )
+    print(f"[DEBUG] Students found: {students.count()}")
 
-    # Generate lessons per subject
-    for subject, weekly_load in subject_loads:
-        teachers = list(choose_teacher_for_subject(subject, school))
-        if not teachers:
-            raise ValueError(f"No teacher assigned for subject {subject.name} in school {school.name}")
+    # Map of subject → eligible teachers
+    teacher_map = {
+        s.id: list(StaffProfile.objects.filter(school=school, subjects=s))
+        for s in subjects
+    }
 
-        teacher_ids = [t.id for t in teachers]
-        created_count = 0
-        teacher_rotate_idx = 0
+    stream_occupied = stream_occupied_map(timetable, time_slots)
+    teacher_busy, teacher_daily = global_teacher_load(
+        school, term.start_date, term.end_date, time_slots
+    )
+    subject_daily = subject_daily_load(timetable)
+    subject_weekly = subject_weekly_load(timetable)
 
-        # Track dates already assigned for this subject in this timetable (to avoid duplicates)
-        subject_dates = set(
-            l.lesson_date for l in timetable.lessons.filter(subject=subject)
-        )
+    conflicts = []
+    created_lessons = []
+    enrollments_created = 0
 
-        # Total sessions needed (based on weeks in term)
-        total_sessions = weekly_load * max(1, len(days) // len(WEEKDAYS))
-        attempts = 0
-        max_attempts = total_sessions * 30  # Increased safety margin
+    # Target sessions per subject per week
+    weeks = max(1, len(days) // 5)
+    weekly_targets = {s.id: weeks * getattr(s, "sessions_per_week", 2) for s in subjects}
 
-        day_idx = 0
-        while created_count < total_sessions and attempts < max_attempts:
-            cur_date = days[day_idx % len(days)]
-            day_name = WEEKDAYS[cur_date.weekday()]
+    for pass_no in range(1, MAX_RETRY_PASSES + 1):
+        relax_soft = pass_no > 1
 
-            # Skip if this date already has this subject in this timetable
-            if cur_date in subject_dates:
-                day_idx += 1
-                attempts += 1
+        for subject in subjects:
+            teachers = teacher_map.get(subject.id, [])
+            if not teachers:
+                conflicts.append({"type": "NO_TEACHER", "subject": subject.name})
                 continue
 
-            # Rotate teacher preference order
-            preferred_teacher_ids = teacher_ids[teacher_rotate_idx:] + teacher_ids[:teacher_rotate_idx]
+            target = weekly_targets[subject.id]
+            current = subject_weekly.get(subject.id, 0)
 
-            # Find an available slot and teacher
-            slot_idx = None
-            chosen_tid = None
-            for idx, ts in enumerate(time_slots):
-                if (day_name, idx) in stream_occupied:
-                    continue  # Slot already used in this stream
+            while current < target:
+                placed = False
+                for day in days:
+                    day_name = WEEKDAYS[day.weekday()]
+                    if subject_daily.get((subject.id, day_name), 0) >= MAX_SUBJECTS_PER_DAY:
+                        continue
 
-                for tid in preferred_teacher_ids:
-                    if (day_name, idx) not in teacher_busy.get(tid, set()):
-                        slot_idx = idx
-                        chosen_tid = tid
+                    for idx, slot in enumerate(time_slots):
+                        if (day_name, idx) in stream_occupied:
+                            continue
+
+                        for teacher in teachers:
+                            tid = teacher.id
+
+                            if (day_name, idx) in teacher_busy.get(tid, set()):
+                                continue
+                            if teacher_daily.get(tid, {}).get(day_name, 0) >= MAX_TEACHER_PER_DAY:
+                                continue
+                            if has_three_consecutive(tid, day_name, idx, teacher_busy):
+                                continue
+
+                            # ---- CREATE LESSON ---- #
+                            lesson = Lesson.objects.create(
+                                timetable=timetable,
+                                subject=subject,
+                                stream=stream,
+                                teacher=teacher,
+                                day_of_week=day_name,
+                                time_slot=slot,
+                                lesson_date=day,
+                                room=f"{grade.name} {stream.name}"
+                            )
+                            created_lessons.append(lesson)
+
+                            # ---- ENROLL STUDENTS INTO THIS LESSON ---- #
+                            for student in students:
+                                Enrollment.objects.get_or_create(
+                                    student=student,
+                                    lesson=lesson,
+                                    school=school,
+                                    defaults={"status": "active"}
+                                )
+                                enrollments_created += 1
+
+                            # Update tracking maps
+                            stream_occupied.add((day_name, idx))
+                            teacher_busy.setdefault(tid, set()).add((day_name, idx))
+                            teacher_daily.setdefault(tid, {}).setdefault(day_name, 0)
+                            teacher_daily[tid][day_name] += 1
+                            subject_daily[(subject.id, day_name)] = subject_daily.get((subject.id, day_name), 0) + 1
+                            subject_weekly[subject.id] = current + 1
+                            current += 1
+                            placed = True
+                            break
+                        if placed:
+                            break
+                    if placed:
                         break
-                if slot_idx is not None:
+
+                if not placed:
+                    conflicts.append({
+                        "type": "WEEKLY_TARGET_NOT_MET",
+                        "subject": subject.name,
+                        "pass": pass_no
+                    })
                     break
 
-            if slot_idx is not None:
-                teacher_obj = next(t for t in teachers if t.id == chosen_tid)
+    print(
+        f"[DEBUG] Generation complete: "
+        f"{len(created_lessons)} lessons, "
+        f"{enrollments_created} enrollments, "
+        f"{len(conflicts)} conflicts"
+    )
 
-                lesson = Lesson.objects.create(
-                    timetable=timetable,
-                    subject=subject,
-                    stream=stream,
-                    teacher=teacher_obj,
-                    day_of_week=day_name,
-                    time_slot=time_slots[slot_idx],
-                    lesson_date=cur_date,
-                    room=f"{grade.name} {stream.name}",
-                )
-                created.append(lesson)
-                created_count += 1
-
-                # Update tracking structures
-                subject_dates.add(cur_date)
-                stream_occupied.add((day_name, slot_idx))
-                teacher_busy.setdefault(teacher_obj.id, set()).add((day_name, slot_idx))
-
-                # Rotate for next placement
-                teacher_rotate_idx = (teacher_rotate_idx + 1) % len(teacher_ids)
-
-            day_idx += 1
-            attempts += 1
-
-        if created_count < total_sessions:
-            raise RuntimeError(
-                f"Could not schedule all {total_sessions} sessions for {subject.name}. "
-                f"Only scheduled {created_count}. Consider adding more time slots or teachers."
-            )
-
-    return created
+    return {
+        "lessons": created_lessons,
+        "enrollments_created": enrollments_created,
+        "conflicts": conflicts,
+        "total_in_db": Lesson.objects.filter(timetable=timetable).count()
+    }

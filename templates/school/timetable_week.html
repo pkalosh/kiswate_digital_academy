@@ -1,49 +1,91 @@
 {% extends 'school/base.html' %}
 {% load dict_extras %}
+
 {% block content %}
 <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <a href="{% url 'school:generate_timetable' %}" class="btn btn-success">Generate Timetable</a>
+        <h4>Weekly Timetable <small class="text-muted">(week of {{ week_days.0|date:"D, M j" }})</small></h4>
+        <form method="get" class="d-flex gap-2">
+            <input type="date" name="date" value="{{ focus_date }}" class="form-control" style="width: 160px;">
+            <button type="submit" class="btn btn-outline-primary">Go</button>
+        </form>
+    </div>
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <a href="{% url 'school:generate_timetable' %}" class="btn btn-success btn-sm">Generate Timetable</a>
-    <h4>Weekly Timetable (week of {{ week_days.0|date:"D, M j" }})</h4>
-    <form class="d-flex" method="get">
-      <input type="date" name="date" value="{{ focus_date }}" class="form-control me-2">
-      <button class="btn btn-outline-primary">Go</button>
-    </form>
-  </div>
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead class="table-light text-center">
+                <tr>
+                    <th style="width:140px;">Time</th>
+                    {% for day in week_days %}
+                        <th>{{ day|date:"D, M j" }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for slot in time_slots %}
+                <tr>
+                    <td class="fw-bold text-center align-middle">
+                        {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
+                    </td>
+                    {% for day in week_days %}
+                    <td style="min-width:240px; vertical-align:top; padding:8px;">
+                        {% with day_str=day|date:"Y-m-d" %}
+                            {% with slot_day=calendar|get_item:slot.id|get_item:day_str %}
+                                {% if slot_day %}
+                                    {% for stream_id, lessons in slot_day.items %}
+                                    <div class="mb-3 border rounded p-2">
+                                        {% for lesson in lessons %}
+                                        <div class="p-2 mb-2 rounded" 
+                                             style="background-color: {{ subject_colors|get_item:lesson.subject.id|default:'#f8f9fa' }};">
+                                            <!-- Subject -->
+                                            <div class="fw-bold mb-1">{{ lesson.subject.name|default:"—" }}</div>
+                                            <!-- Grade • Stream -->
+                                            <div class="small mb-1">
+                                                {% if lesson.stream.grade %}
+                                                    {{ lesson.stream.grade.name|default:"(no grade)" }}
+                                                {% elif lesson.timetable and lesson.timetable.grade %}
+                                                    {{ lesson.timetable.grade.name|default:"(no grade)" }}
+                                                {% else %}
+                                                    Grade not available
+                                                {% endif %}
+                                                • {{ lesson.stream_name }}
+                                            </div>
+                                            <!-- Teacher -->
+                                            <div class="mb-1">{{ lesson.teacher.user.get_full_name|default:"—" }}</div>
+                                            <!-- Room -->
+                                            <div class="small text-muted">
+                                                Room: <strong>{{ lesson.room|default:"—" }}</strong>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted small">No lesson</span>
+                                {% endif %}
+                            {% endwith %}
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
-  <div class="table-responsive">
-    <table class="table table-bordered align-top">
-      <thead class="table-light text-center">
-        <tr>
-          <th style="width:140px;">Time</th>
-          {% for d in week_days %}
-            <th>{{ d|date:"D, M j" }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for slot in time_slots %}
-        <tr>
-          <td class="fw-bold text-center">{{ slot.start_time|time:"H:i" }} - {{ slot.end_time|time:"H:i" }}</td>
-          {% for d in week_days %}
-          <td style="min-width:200px; vertical-align: top;">
-{% for lesson in table_data|get_item:d|get_item:slot %}
-              <div class="card mb-1 p-2 bg-light">
-                <strong>{{ lesson.subject.name }}</strong><br>
-                <small>{{ lesson.stream.name }}</small><br>
-                <small>{{ lesson.teacher.user.get_full_name }}</small><br>
-                <small>Room: {{ lesson.room }}</small>
-              </div>
-            {% empty %}
-              <span class="text-muted">No lesson</span>
+    <div class="mt-3">
+        <h6>Legend</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for subj_id, color in subject_colors.items %}
+                {% with subject=subjects|get_item:subj_id %}
+                    <span class="badge" style="background-color: {{ color }}; color: {% if color == '#eee' %}#333{% else %}white{% endif %}">
+                        {{ subject.name }}
+                    </span>
+                {% endwith %}
             {% endfor %}
-          </td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+            <span class="badge bg-danger">Conflict</span>
+        </div>
+    </div>
 </div>
 {% endblock %}
