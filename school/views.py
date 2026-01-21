@@ -10,7 +10,7 @@ import os
 from django.db.models import Q
 from collections import defaultdict
 from django.db.models import Count
-
+from django.views.decorators.http import require_POST
 import pandas as pd
 from django.http import JsonResponse
 from django.conf import settings
@@ -85,6 +85,24 @@ from django.http import HttpResponse
 from reportlab.pdfgen import canvas
 from django.db.models import Min, Max
 from school.models import Attendance, Lesson
+
+INCIDENT_TYPE_CHOICES = [
+    ('late', 'Late Arrival'),
+    ('expulsion', 'Expulsion'),
+    ('tardy', 'Tardy'),
+    ('absence', 'Absence'),
+    ('misconduct', 'Misconduct'),
+    ('suspension', 'Suspension'),
+    ('expulsion', 'Expulsion'),
+    ('other', 'Other'),
+]
+
+SEVERITY_CHOICES = [
+    ('minor', 'Minor'),
+    ('major', 'Major'),
+    ('critical', 'Critical'),
+]
+
 
 # =========================
 # SMS + EMAIL HELPERS
@@ -3194,177 +3212,233 @@ def send_parent_discipline_notification(parent, student, discipline, lesson):
     except Exception as e:
         logger.error(f"Failed to send discipline email to {parent.email}: {e}")
 
+# Constants
+DISCIPLINE_CODES = ['IB', '18', '20']
+ATTENDANCE_CODES = ['P', 'ET', 'UT', 'EA', 'UA']
+
 @login_required
 def teacher_attendance_mark(request, lesson_id):
-    # ─────────────────────────────────────────────
-    # Fetch lesson & validate teacher ownership
-    # ─────────────────────────────────────────────
-    lesson = get_object_or_404(
-        Lesson.objects.select_related(
-            'subject',
-            'timetable',
-            'timetable__grade',
-            'timetable__term',
-            'timetable__school',
-        ),
-        id=lesson_id,
-        teacher=request.user.staffprofile
-    )
+    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
+    teacher = request.user.staffprofile
+    can_override = teacher.position in ['principal', 'deputy_principal']
 
-    school = lesson.timetable.school
-    term = lesson.timetable.term
-    academic_year = term.year
+    enrollments = Enrollment.objects.filter(
+        lesson=lesson, status='active'
+    ).select_related('student', 'student__user')
 
-    # ─────────────────────────────────────────────
-    # Fetch enrollments FOR THIS LESSON ONLY ✅
-    # ─────────────────────────────────────────────
-    # ✅ CORRECT: lesson-based enrollments
+    attendance_locked = Attendance.objects.filter(
+        enrollment__in=enrollments,
+        date=lesson.lesson_date
+    ).exists()
+
+    # Build current attendance statuses from DB
+    current_statuses = {
+        a.enrollment_id: a.status
+        for a in Attendance.objects.filter(enrollment__in=enrollments, date=lesson.lesson_date)
+    }
+
+    # Status & discipline choices
+    status_choices = [
+        {'code': 'P',  'label': 'Present', 'color': 'success'},
+        {'code': 'ET', 'label': 'Excused Tardy', 'color': 'warning'},
+        {'code': 'UT', 'label': 'Unexcused Tardy', 'color': 'warning'},
+        {'code': 'EA', 'label': 'Excused Absence', 'color': 'danger'},
+        {'code': 'UA', 'label': 'Unexcused Absence', 'color': 'danger'},
+        {'code': 'IB', 'label': 'Inappropriate Behavior', 'color': 'info'},
+        {'code': '18', 'label': 'Suspension', 'color': 'dark'},
+        {'code': '20', 'label': 'Expulsion', 'color': 'dark'},
+    ]
+    if not can_override:
+        status_choices = [s for s in status_choices if s['code'] not in ['18','20']]
+
+    # ────────────────────────────────────────────────
+    #                POST → save + notifications
+    # ────────────────────────────────────────────────
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        if attendance_locked and not can_override:
+            return JsonResponse({'success': False, 'error': 'Attendance locked'}, status=403)
+
+        with transaction.atomic():
+            # Save all attendances
+            updated_attendances = []
+            for e in enrollments:
+                status = request.POST.get(f'status_{e.id}')
+                if status not in [s['code'] for s in status_choices]:
+                    status = 'P'
+
+                att, created = Attendance.objects.update_or_create(
+                    enrollment=e,
+                    date=lesson.lesson_date,
+                    defaults={
+                        'status': status,
+                        'term': lesson.timetable.term,
+                        'academic_year': lesson.timetable.term.year,
+                        'marked_by': teacher
+                    }
+                )
+                updated_attendances.append(att)
+
+        # ─── After successful save ───────────────────────────────────────
+        # Decide whether to notify (only if this is first or last slot)
+        is_first = is_first_slot(lesson)
+        print(f"Is first slot: {is_first}")
+        is_last  = is_last_slot(lesson)
+
+        if is_first or is_last:
+            # For first slot → per-lesson notifications
+            if is_first:
+                for attendance in updated_attendances:
+                    # Only notify if actually marked present/absent/tardy (optional filter)
+                    if attendance.status in ['P', 'ET', 'UT', 'EA', 'UA']:
+                        notify_first_lesson(attendance)
+
+            # For last slot → daily summary per student
+            if is_last:
+                # Group by student (in case one student has multiple lessons)
+                from collections import defaultdict
+                students_notified = set()
+
+                for att in updated_attendances:
+                    student = att.enrollment.student
+                    if student.id not in students_notified:
+                        notify_last_lesson(student, lesson.lesson_date)
+                        students_notified.add(student.id)
+
+        return JsonResponse({'success': True})
+
+    # Trends for JS
+    trend_map = {}
+    for e in enrollments:
+        qs = Attendance.objects.filter(enrollment__student=e.student, term=lesson.timetable.term)
+        total = qs.count() or 1
+        student_trend = {}
+        for code in ['P','ET','UT','EA','UA']:
+            student_trend[code] = round(qs.filter(status=code).count() * 100 / total, 0)
+        trend_map[e.student.id] = student_trend
+
+    return render(request, 'school/teacher/attendance_mark.html', {
+        'lesson': lesson,
+        'enrollments': enrollments,
+        'status_choices': status_choices,
+        'current_statuses': current_statuses,
+        'attendance_locked': attendance_locked,
+        'can_override': can_override,
+        'ATTENDANCE_CODES': ['P','ET','UT','EA','UA'],
+        'DISCIPLINE_CODES': ['IB','18','20'],
+        'INCIDENT_TYPE_CHOICES': DisciplineRecord._meta.get_field('incident_type').choices,
+        'SEVERITY_CHOICES': DisciplineRecord._meta.get_field('severity').choices,
+        'trend_map': trend_map,
+    })
+
+
+@login_required
+def teacher_attendance_smart(request, lesson_id):
+    """
+    Returns smart attendance statuses via AJAX.
+    Only updates radio buttons; does NOT save anything.
+    Scan logic:
+        - Scan before 10 mins after lesson start: P
+        - Scan within lesson time but after 10 mins: UT
+        - No scan: UA
+    Trends are ignored for now.
+    """
+    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
+
     enrollments = Enrollment.objects.filter(
         lesson=lesson,
-        school=school,
         status='active'
-    ).select_related(
-        'student',
-        'student__user'
-    )
+    ).select_related('student', 'student__user')
 
-    print("[DEBUG] Enrollments found:", enrollments.count())
+    smart_statuses = {}
+
+    # Combine lesson date with start/end times
+    lesson_start_dt = timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.start_time)
+    lesson_end_dt = timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.end_time)
+    buffer_end = lesson_start_dt + timedelta(minutes=10)
+
+    for e in enrollments:
+        # Fetch scans for this student on lesson date
+        student_scans = GradeAttendance.objects.filter(
+            student=e.student,
+            recorded_at__date=lesson.lesson_date
+        ).order_by('recorded_at')
+
+        if student_scans.exists():
+            first_scan = student_scans.first().recorded_at
+
+            if first_scan <= buffer_end:
+                status = 'P'  # Present
+            elif first_scan <= lesson_end_dt:
+                status = 'UT'  # Unexcused Tardy
+            else:
+                status = 'UA'  # Scan after lesson end → unexcused absence
+        else:
+            status = 'UA'  # No scan → unexcused absence
+
+        smart_statuses[e.id] = status
+
+    return JsonResponse({
+        'success': True,
+        'statuses': smart_statuses
+    })
 
 
-    # ─────────────────────────────────────────────
-    # Existing attendance (prefill)
-    # ─────────────────────────────────────────────
-    attendance_dict = {
-        att.enrollment_id: att
-        for att in Attendance.objects.filter(
-            enrollment__in=enrollments,
-            date=lesson.lesson_date
-        )
-    }
+@login_required
+@require_POST
+def teacher_discipline_create_ajax(request):
+    teacher = request.user.staffprofile
+    
+    # ─── Extract & validate inputs ─────────────────────────────────────
+    try:
+        student_id     = request.POST['student_id']
+        code           = request.POST.get('code')
+        description    = request.POST['description'].strip()
+        incident_type  = request.POST['incident_type']
+        severity       = request.POST['severity']
+        action         = request.POST.get('action', '').strip()
 
-    # ─────────────────────────────────────────────
-    # Status choices (UI metadata)
-    # ─────────────────────────────────────────────
-    status_choices = [
-        {'code': 'P',  'label': 'Present',               'color_class': 'text-success'},
-        {'code': 'ET', 'label': 'Excused Tardy',         'color_class': 'text-warning'},
-        {'code': 'UT', 'label': 'Unexcused Tardy',       'color_class': 'text-warning'},
-        {'code': 'EA', 'label': 'Excused Absence',       'color_class': 'text-danger'},
-        {'code': 'UA', 'label': 'Unexcused Absence',     'color_class': 'text-danger'},
-        {'code': 'IB', 'label': 'Inappropriate Behavior','color_class': 'text-info'},
-        {'code': '18', 'label': 'Suspension',            'color_class': 'text-dark'},
-        {'code': '20', 'label': 'Expulsion',             'color_class': 'text-dark'},
-    ]
+        if not description:
+            return JsonResponse({'success': False, 'error': 'Description is required'}, status=400)
 
-    # ─────────────────────────────────────────────
-    # POST: Save attendance + discipline
-    # ─────────────────────────────────────────────
-    if request.method == 'POST':
-        saved_count = 0
-        discipline_count = 0
+        # Discipline code authorization check
+        if code in ['18', '20'] and teacher.position not in ['principal', 'deputy_principal']:
+            return JsonResponse({'success': False, 'error': 'Only principal or deputy can issue suspension/expulsion'}, status=403)
 
-        try:
-            with transaction.atomic():
-                for enrollment in enrollments:
-                    status = request.POST.get(f'status_{enrollment.id}')
-                    if not status:
-                        continue
+    except KeyError as e:
+        return JsonResponse({'success': False, 'error': f'Missing field: {str(e)}'}, status=400)
 
-                    # ── Save Attendance ─────────────────
-                    attendance, _ = Attendance.objects.update_or_create(
-                        enrollment=enrollment,
-                        date=lesson.lesson_date,
-                        defaults={
-                            'status': status,
-                            'term': term,
-                            'academic_year': academic_year,
-                            'marked_by': request.user.staffprofile,
-                        }
-                    )
-                    saved_count += 1
+    # ─── Validate student exists and belongs to the school ─────────────
+    try:
+        student = Student.objects.get(id=student_id, school=teacher.school)
+    except Student.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Invalid or unauthorized student'}, status=403)
 
-                    # ── Discipline Required ─────────────
-                    if status in ['IB', '18', '20']:
-                        description = request.POST.get(
-                            f'description_{enrollment.id}', ''
-                        ).strip()
-                        severity = request.POST.get(
-                            f'severity_{enrollment.id}', 'minor'
-                        )
-                        action_taken = request.POST.get(
-                            f'action_{enrollment.id}', ''
-                        ).strip()
-
-                        if not description:
-                            raise ValidationError(
-                                f"Discipline description required for "
-                                f"{enrollment.student.user.get_full_name()}"
-                            )
-
-                        incident_type_map = {
-                            'IB': 'misconduct',
-                            '18': 'suspension',
-                            '20': 'expulsion',
-                        }
-
-                        DisciplineRecord.objects.update_or_create(
-                            linked_attendance=attendance,
-                            defaults={
-                                'student': enrollment.student,
-                                'teacher': request.user.staffprofile,
-                                'school': school,
-                                'incident_type': incident_type_map[status],
-                                'description': description,
-                                'severity': severity,
-                                'action_taken': action_taken,
-                                'date': lesson.lesson_date,
-                                'reported_by': request.user,
-                                'resolved': False,
-                            }
-                        )
-
-                        discipline_count += 1
-
-        except ValidationError as e:
-            messages.error(request, str(e))
-            return redirect(
-                'school:teacher-attendance-mark',
-                lesson_id=lesson.id
+    # ─── Create record inside transaction ──────────────────────────────
+    try:
+        with transaction.atomic():
+            record = DisciplineRecord.objects.create(
+                student=student,               # better than student_id directly
+                teacher=teacher,
+                school=teacher.school,
+                description=description,
+                incident_type=incident_type,
+                severity=severity,
+                action_taken=action,
+                reported_by=request.user,
+                # Optional: link to the lesson if you want traceability
+                # lesson_id=request.POST.get('lesson_id'),
             )
+    except ValidationError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    except Exception as e:
+        # In production: log this error
+        return JsonResponse({'success': False, 'error': 'Failed to create record'}, status=500)
 
-        messages.success(
-            request,
-            f"Attendance saved for {saved_count} student(s)."
-        )
-        if discipline_count:
-            messages.success(
-                request,
-                f"{discipline_count} discipline record(s) created."
-            )
-
-        return redirect(
-            'school:teacher-attendance-mark',
-            lesson_id=lesson.id
-        )
-
-    # ─────────────────────────────────────────────
-    # GET: Render page
-    # ─────────────────────────────────────────────
-    context = {
-        'lesson': lesson,
-        'school': school,
-        'enrollments': enrollments,      # ✅ lesson-based
-        'attendance_dict': attendance_dict,
-        'status_choices': status_choices,
-    }
-
-    return render(
-        request,
-        'school/teacher/attendance_mark.html',
-        context
-    )
-
-
+    return JsonResponse({
+        'success': True,
+        'id': record.id,
+        'message': 'Discipline record created successfully'
+    })
 
 @login_required
 def teacher_attendance_edit(request, attendance_id):

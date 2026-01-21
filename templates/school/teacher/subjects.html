@@ -29,19 +29,6 @@
 
 <section class="content container-fluid py-4">
 
-  {% if messages %}
-  <div class="row">
-    {% for message in messages %}
-    <div class="col-12">
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-        {{ message }}
-        <button class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
   <div class="card shadow-sm border-0 rounded-4">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="mb-0"><i class="bi bi-journal-bookmark me-2"></i> Subjects ({{ subjects.count }})</h5>
@@ -66,7 +53,6 @@
               <th>Start</th>
               <th>End</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -88,31 +74,7 @@
                 {% endif %}
               </td>
 
-              <td>
-                <button class="btn btn-sm btn-outline-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#subjectModal"
-                        data-mode="edit"
-                        data-id="{{ subject.id }}"
-                        data-name="{{ subject.name|escapejs }}"
-                        data-code="{{ subject.code|escapejs }}"
-                        data-description="{{ subject.description|escapejs }}"
-                        data-teacher="{{ subject.teacher.id }}"
-                        data-grade="{{ subject.grade.id }}"
-                        data-start_date="{{ subject.start_date }}"
-                        data-end_date="{{ subject.end_date }}"
-                        data-is_active="{% if subject.is_active %}true{% else %}false{% endif %}">
-                  <i class="bi bi-pencil"></i>
-                </button>
 
-                <button class="btn btn-sm btn-outline-danger"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteModal"
-                        data-id="{{ subject.id }}"
-                        data-name="{{ subject.name|escapejs }}">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </td>
             </tr>
             {% empty %}
             <tr>

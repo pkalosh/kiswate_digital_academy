@@ -1,198 +1,364 @@
-{% extends 'school/teacher/base.html' %}
-{% load custom_filters %}
-{% block title %}Attendance | {{ school.name }}{% endblock %}
+{% extends "school/teacher/base.html" %}
+{% load static %}
+{% load dict_filters school_extras %}
+
+{% block title %}
+Attendance | {{ lesson.subject.name }}
+{% endblock %}
 
 {% block content %}
-<style>
-.status-pill {
-    padding: 6px 12px;
-    border-radius: 20px;
-    border: 2px solid transparent;
-    cursor: pointer;
-    font-weight: 600;
-}
-.status-selected {
-    border-color: #00000040;
-    background-color: #00000008;
-}
-</style>
 
-<section class="container-fluid py-4">
-    <div class="card shadow-sm border-0 rounded-4">
-        <div class="card-header bg-white border-bottom d-flex justify-content-between">
-            <div>
-                <h5 class="fw-bold mb-1">Mark Attendance</h5>
-                <small class="text-muted">
-                    {{ lesson.subject.name }} • {{ lesson.lesson_date|date:"M d, Y" }}
-                </small>
-            </div>
-            <span class="badge bg-primary-subtle text-primary px-3 py-2">
-                {{ enrollments|length }} Students
-            </span>
-        </div>
+<div class="container-fluid mt-4">
 
-        <div class="card-body">
-            {% if enrollments %}
-            <form method="POST">
-                {% csrf_token %}
+    <!-- HEADER -->
+    <div class="card shadow-sm rounded-4 mb-3 p-3">
+        <h5 class="mb-1">
+            Taking Attendance: <strong>{{ lesson.subject.name }}</strong>
+        </h5>
+        <small class="text-muted">
+            Class: {{ lesson.stream }} |
+            Date: {{ lesson.lesson_date }} |
+            Time: {{ lesson.time_slot.start_time }} - {{ lesson.time_slot.end_time }}
+        </small>
+    </div>
 
-                <div class="table-responsive">
-                    <table class="table table-bordered align-middle">
-                        <thead class="table-light text-center">
+    <div class="row">
+        <!-- MAIN CONTENT -->
+        <div class="col-md-9">
+            <div class="card shadow-sm rounded-4 p-3">
+
+                <!-- SEARCH -->
+                <input id="studentSearch" class="form-control mb-3" placeholder="Search student...">
+
+                <form method="post" id="attendanceForm">
+                    {% csrf_token %}
+
+                    <table class="table table-sm align-middle">
+                        <thead>
                             <tr>
-                                <th class="text-start">Student</th>
+                                <th>Student</th>
                                 <th>Status</th>
+                                <th width="30%">Trends</th>
+                                <th>Discipline</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for enrollment in enrollments %}
-                            {% with att=attendance_dict|dict_get:enrollment.id %}
-                            <tr data-enrollment="{{ enrollment.id }}">
+                        <tbody id="studentsTable">
+                            {% for e in enrollments %}
+                            <tr data-name="{{ e.student.user.get_full_name|lower }}">
+                                <!-- STUDENT NAME -->
+                                <td>{{ e.student.user.get_full_name }}</td>
+
+                                <!-- ATTENDANCE RADIO BUTTONS -->
                                 <td>
-                                    <strong>{{ enrollment.student.user.get_full_name }}</strong><br>
-                                    <small class="text-muted">ID: {{ enrollment.student.student_id }}</small>
+                                    {% for s in status_choices %}
+                                        {% if s.code not in DISCIPLINE_CODES %}
+                                        <label class="badge bg-{{ s.color }} text-dark me-1">
+                                            <input type="radio"
+                                                   name="status_{{ e.id }}"
+                                                   value="{{ s.code }}"
+                                                   {% if current_statuses|get_item:e.id == s.code %}checked{% endif %}
+                                                   {% if attendance_locked and not can_override %}disabled{% endif %}>
+                                            {{ s.code }}
+                                        </label>
+                                        {% endif %}
+                                    {% endfor %}
                                 </td>
-                                <td class="text-center">
-                                    {% for choice in status_choices %}
-                                    <label class="status-pill {{ choice.color_class }}">
-                                        <input type="radio"
-                                               class="form-check-input status-radio"
-                                               name="status_{{ enrollment.id }}"
-                                               value="{{ choice.code }}"
-                                               data-enrollment="{{ enrollment.id }}"
-                                               data-label="{{ choice.label }}"
-                                               {% if att and att.status == choice.code %}checked{% endif %}
-                                               {% if not att and choice.code == 'P' %}checked{% endif %}>
-                                        {{ choice.code }}
-                                    </label>
+
+                                <!-- TRENDS (populated by JS) -->
+                                <td class="trendsCell" data-student-id="{{ e.student.id }}">
+                                    <!-- JS will fill this -->
+                                </td>
+
+                                <!-- DISCIPLINE BUTTONS -->
+                                <td>
+                                    {% for s in status_choices %}
+                                        {% if s.code in DISCIPLINE_CODES %}
+                                            {% if s.code == "IB" or can_override %}
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-{{ s.color }} disciplineBtn"
+                                                    data-student="{{ e.student.id }}"
+                                                    data-code="{{ s.code }}">
+                                                {{ s.code }}
+                                            </button>
+                                            {% endif %}
+                                        {% endif %}
                                     {% endfor %}
                                 </td>
                             </tr>
-                            {% endwith %}
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
 
-                <div class="text-end mt-4">
-                    <button type="submit" class="btn btn-success btn-lg px-5">
-                        Smart Attendance
-                    </button> 
-                    <button type="submit" class="btn btn-success btn-lg px-5">
-                        Save Attendance
-                    </button>
-                </div>
-            </form>
-            {% else %}
-                <div class="text-center text-muted py-5">
-                    No students enrolled for this lesson.
-                </div>
-            {% endif %}
+                    <div class="mt-3">
+                        <button class="btn btn-primary"
+                                id="saveAttendanceBtn"
+                                {% if attendance_locked and not can_override %}disabled{% endif %}>
+                            Save Attendance
+                        </button>
+                        <button type="button" class="btn btn-success ms-2"
+                                id="smartAttendanceBtn"
+                                {% if attendance_locked %}disabled{% endif %}>
+                            Smart Attendance
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
-</section>
 
-<!-- ───────────────── MODAL ───────────────── -->
-<div class="modal fade" id="disciplineModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4">
-            <div class="modal-header">
-                <h5 class="modal-title">Discipline Record Required</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p><strong>Student:</strong> <span id="modalStudent"></span></p>
-                <p><strong>Status:</strong> <span id="modalStatus"></span></p>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Description *</label>
-                    <textarea id="modalDescription" class="form-control" rows="3"></textarea>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Severity</label>
-                    <select id="modalSeverity" class="form-select">
-                        <option value="minor">Minor</option>
-                        <option value="major">Major</option>
-                        <option value="critical">Critical</option>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Action Taken</label>
-                    <textarea id="modalAction" class="form-control" rows="2"></textarea>
-                </div>
-
-                <input type="hidden" id="modalEnrollment">
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-danger" id="saveDiscipline">Save</button>
+        <!-- RIGHT SIDE SUMMARY -->
+        <div class="col-md-3">
+            <div class="card shadow-sm rounded-4 p-3">
+                <h6>Status Summary</h6>
+                <ul class="list-group" id="statusSummary">
+                    {% for s in status_choices %}
+                        {% if s.code not in DISCIPLINE_CODES %}
+                        <li class="list-group-item d-flex justify-content-between">
+                            {{ s.label }}
+                            <span class="badge bg-secondary" id="summary_{{ s.code|lower }}">0</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ───────────── Hidden discipline fields ───────────── -->
-{% for enrollment in enrollments %}
-<input type="hidden" name="description_{{ enrollment.id }}" id="desc_{{ enrollment.id }}">
-<input type="hidden" name="severity_{{ enrollment.id }}" id="sev_{{ enrollment.id }}">
-<input type="hidden" name="action_{{ enrollment.id }}" id="act_{{ enrollment.id }}">
-{% endfor %}
+<!-- NOTIFICATION TOAST -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
+    <div id="notificationToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="toastMessage"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
 
+<!-- DISCIPLINE MODAL -->
+<div class="modal fade" id="disciplineModal" tabindex="-1" aria-labelledby="disciplineModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title" id="disciplineModalLabel">Record Discipline / Incident</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="disciplineStudent">
+                <input type="hidden" id="disciplineCode">
+                <textarea id="modalDesc" class="form-control mb-3" rows="3" placeholder="Description of incident"></textarea>
+                <select id="modalType" class="form-select mb-3">
+                    {% for value, label in INCIDENT_TYPE_CHOICES %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select id="modalSeverity" class="form-select mb-3">
+                    {% for value, label in SEVERITY_CHOICES %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <textarea id="modalAction" class="form-control" rows="2" placeholder="Action taken (optional)"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveDisciplineBtn">Save Incident</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT -->
 <script>
-const seriousStatuses = ['IB', '18', '20'];
-let activeRadio = null;
+    // Constants
+    const ATTENDANCE_CODES = {{ ATTENDANCE_CODES|safe }};
+    const DISCIPLINE_CODES = {{ DISCIPLINE_CODES|safe }};
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-document.querySelectorAll('.status-radio').forEach(radio => {
-    radio.addEventListener('change', function () {
-        if (!seriousStatuses.includes(this.value)) return;
+    // ─── HELPERS ────────────────────────────────────────────────────────
+    function showNotification(type, message) {
+        const toastEl = document.getElementById('notificationToast');
+        const msgEl = document.getElementById('toastMessage');
+        
+        msgEl.textContent = message;
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        
+        const toast = new bootstrap.Toast(toastEl, { delay: 4500 });
+        toast.show();
+    }
 
-        activeRadio = this;
-        const row = this.closest('tr');
-        const student = row.querySelector('strong').textContent;
+    // ─── STUDENT SEARCH ─────────────────────────────────────────────────
+    document.getElementById('studentSearch').onkeyup = function() {
+        const value = this.value.toLowerCase();
+        document.querySelectorAll('#studentsTable tr').forEach(row => {
+            row.style.display = row.dataset.name.includes(value) ? '' : 'none';
+        });
+    };
 
-        document.getElementById('modalStudent').textContent = student;
-        document.getElementById('modalStatus').textContent = this.dataset.label;
-        document.getElementById('modalEnrollment').value = this.dataset.enrollment;
+    // ─── UPDATE SUMMARY + TRENDS ────────────────────────────────────────
+    function updateSummaryAndTrends() {
+        const counts = {};
+        ATTENDANCE_CODES.forEach(c => {
+            if (!DISCIPLINE_CODES.includes(c)) counts[c] = 0;
+        });
 
-        document.getElementById('modalDescription').value = '';
-        document.getElementById('modalAction').value = '';
-        document.getElementById('modalSeverity').value = 'minor';
+        document.querySelectorAll('input[type=radio]:checked').forEach(radio => {
+            if (counts[radio.value] !== undefined) {
+                counts[radio.value]++;
+            }
+        });
 
-        new bootstrap.Modal(
-            document.getElementById('disciplineModal')
-        ).show();
+        // Update summary badges
+        for (const code in counts) {
+            const el = document.getElementById(`summary_${code.toLowerCase()}`);
+            if (el) el.textContent = counts[code];
+        }
+
+        // Update trends per student
+        document.querySelectorAll('.trendsCell').forEach(cell => {
+            const studentId = cell.dataset.studentId;
+            const radios = document.querySelectorAll(`input[name="status_${studentId}"]:checked`);
+            const total = document.querySelectorAll(`input[name^="status_"]`).length / ATTENDANCE_CODES.length || 1;
+
+            let html = '';
+            ATTENDANCE_CODES.forEach(code => {
+                if (DISCIPLINE_CODES.includes(code)) return;
+                const count = Array.from(radios).filter(r => r.value === code).length;
+                const pct = Math.round((count / total) * 100);
+                const color = (code === 'P') ? 'success' : (['ET','UT'].includes(code) ? 'warning' : 'danger');
+
+                html += `
+                    <div class="mb-2">
+                        <span class="badge bg-${color}">${code} ${pct}%</span>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-${color}" style="width: ${pct}%"></div>
+                        </div>
+                    </div>`;
+            });
+            cell.innerHTML = html || '<small class="text-muted">No data</small>';
+        });
+    }
+
+    // ─── SMART ATTENDANCE ───────────────────────────────────────────────
+    document.getElementById('smartAttendanceBtn')?.addEventListener('click', () => {
+        fetch("{% url 'school:teacher-attendance-smart' lesson.id %}", {
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                showNotification('danger', data.error || 'Smart attendance failed');
+                return;
+            }
+
+            for (const enrollmentId in data.statuses) {
+                const radios = document.getElementsByName(`status_${enrollmentId}`);
+                radios.forEach(r => {
+                    if (r.value === data.statuses[enrollmentId]) {
+                        r.checked = true;
+                    }
+                });
+            }
+            updateSummaryAndTrends();
+            showNotification('success', 'Smart attendance applied');
+        })
+        .catch(err => {
+            showNotification('danger', 'Error loading smart attendance');
+            console.error(err);
+        });
     });
-});
 
-document.getElementById('saveDiscipline').onclick = () => {
-    const id = document.getElementById('modalEnrollment').value;
-    const desc = document.getElementById('modalDescription').value.trim();
+    // ─── SAVE ATTENDANCE ────────────────────────────────────────────────
+    document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
 
-    if (!desc) {
-        alert('Description is required');
-        return;
-    }
+        const formData = new FormData(this);
 
-    document.getElementById(`desc_${id}`).value = desc;
-    document.getElementById(`sev_${id}`).value =
-        document.getElementById('modalSeverity').value;
-    document.getElementById(`act_${id}`).value =
-        document.getElementById('modalAction').value;
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => Promise.reject(err));
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showNotification('success', 'Attendance saved successfully');
+                updateSummaryAndTrends();
+            } else {
+                showNotification('danger', data.error || 'Failed to save attendance');
+            }
+        })
+        .catch(err => {
+            showNotification('danger', err.error || 'Network error - please try again');
+            console.error('Save error:', err);
+        });
+    });
 
-    bootstrap.Modal.getInstance(
-        document.getElementById('disciplineModal')
-    ).hide();
-};
+    // ─── DISCIPLINE MODAL ───────────────────────────────────────────────
+    document.querySelectorAll('.disciplineBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('disciplineStudent').value = btn.dataset.student;
+            document.getElementById('disciplineCode').value = btn.dataset.code;
+            new bootstrap.Modal(document.getElementById('disciplineModal')).show();
+        });
+    });
 
-document.getElementById('disciplineModal')
-.addEventListener('hidden.bs.modal', () => {
-    const id = document.getElementById('modalEnrollment').value;
-    if (activeRadio && !document.getElementById(`desc_${id}`).value) {
-        activeRadio.checked = false;
-    }
-    activeRadio = null;
-});
+    document.getElementById('saveDisciplineBtn')?.addEventListener('click', () => {
+        const studentId = document.getElementById('disciplineStudent').value;
+        const code = document.getElementById('disciplineCode').value;
+        const description = document.getElementById('modalDesc').value.trim();
+        const incidentType = document.getElementById('modalType').value;
+        const severity = document.getElementById('modalSeverity').value;
+        const action = document.getElementById('modalAction').value.trim();
+
+        if (!description) {
+            showNotification('warning', 'Please enter a description');
+            return;
+        }
+
+        fetch("{% url 'school:teacher-discipline-create-ajax' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                student_id: studentId,
+                code: code,
+                description: description,
+                incident_type: incidentType,
+                severity: severity,
+                action: action
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('success', 'Discipline record saved');
+                bootstrap.Modal.getInstance(document.getElementById('disciplineModal')).hide();
+                // Optional: clear fields
+                document.getElementById('modalDesc').value = '';
+                document.getElementById('modalAction').value = '';
+            } else {
+                showNotification('danger', data.error || 'Failed to save discipline record');
+            }
+        })
+        .catch(() => {
+            showNotification('danger', 'Error saving discipline record');
+        });
+    });
+
+    // ─── INITIAL LOAD ───────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', updateSummaryAndTrends);
 </script>
+
 {% endblock %}

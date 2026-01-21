@@ -210,4 +210,6 @@ urlpatterns = [
     path('mpesa/payment-callback/', views.mpesa_payment_callback, name='mpesa-payment-callback'),
     
     path('exams/', views.school_exams, name='school-exams'),
+    path("teacher/attendance/<int:lesson_id>/smart/", views.teacher_attendance_smart, name="teacher-attendance-smart"),
+    path("teacher/discipline/create/ajax/", views.teacher_discipline_create_ajax, name="teacher-discipline-create-ajax"),
 ]
