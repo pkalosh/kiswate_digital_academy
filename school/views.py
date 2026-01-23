@@ -3554,15 +3554,28 @@ def school_discipline(request):
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('school:dashboard')
-    
+
     query = request.GET.get('q', '')
-    records = DisciplineRecord.objects.filter(school=school).select_related('student', 'teacher')
+    records_qs = (
+        DisciplineRecord.objects
+        .filter(school=school)
+        .select_related('student__user', 'teacher__user')
+        .order_by('-date')
+    )
+
     if query:
-        records = records.filter(
-            Q(student__user__first_name__icontains=query) | Q(description__icontains=query)
+        records_qs = records_qs.filter(
+            Q(student__user__first_name__icontains=query) |
+            Q(student__user__last_name__icontains=query) |
+            Q(description__icontains=query)
         )
-    
+
+    paginator = Paginator(records_qs, 10)  # 10 per page
+    page_number = request.GET.get('page')
+    records = paginator.get_page(page_number)
+
     form = DisciplineRecordForm(school=school)
+
     context = {
         'records': records,
         'form': form,
@@ -3570,6 +3583,7 @@ def school_discipline(request):
         'query': query,
     }
     return render(request, 'school/discipline.html', context)
+
 
 @login_required
 def discipline_create(request):

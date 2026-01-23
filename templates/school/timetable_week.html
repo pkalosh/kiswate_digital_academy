@@ -6,14 +6,15 @@
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <a href="{% url 'school:generate_timetable' %}" class="btn btn-success">Generate Timetable</a>
         <h4>Weekly Timetable <small class="text-muted">(week of {{ week_days.0|date:"D, M j" }})</small></h4>
-        <form method="get" class="d-flex gap-2">
+        <form method="get" class="d-flex gap-2 flex-wrap">
             <input type="date" name="date" value="{{ focus_date }}" class="form-control" style="width: 160px;">
             <button type="submit" class="btn btn-outline-primary">Go</button>
         </form>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-bordered">
+    <!-- Horizontal scroll wrapper -->
+    <div class="table-responsive" style="overflow-x:auto;">
+        <table class="table table-bordered mb-0">
             <thead class="table-light text-center">
                 <tr>
                     <th style="width:140px;">Time</th>
@@ -25,7 +26,7 @@
             <tbody>
                 {% for slot in time_slots %}
                 <tr>
-                    <td class="fw-bold text-center align-middle">
+                    <td class="fw-bold text-center align-middle" style="white-space: nowrap;">
                         {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
                     </td>
                     {% for day in week_days %}
@@ -38,9 +39,7 @@
                                         {% for lesson in lessons %}
                                         <div class="p-2 mb-2 rounded" 
                                              style="background-color: {{ subject_colors|get_item:lesson.subject.id|default:'#f8f9fa' }};">
-                                            <!-- Subject -->
                                             <div class="fw-bold mb-1">{{ lesson.subject.name|default:"—" }}</div>
-                                            <!-- Grade • Stream -->
                                             <div class="small mb-1">
                                                 {% if lesson.stream.grade %}
                                                     {{ lesson.stream.grade.name|default:"(no grade)" }}
@@ -51,9 +50,7 @@
                                                 {% endif %}
                                                 • {{ lesson.stream_name }}
                                             </div>
-                                            <!-- Teacher -->
                                             <div class="mb-1">{{ lesson.teacher.user.get_full_name|default:"—" }}</div>
-                                            <!-- Room -->
                                             <div class="small text-muted">
                                                 Room: <strong>{{ lesson.room|default:"—" }}</strong>
                                             </div>
@@ -88,4 +85,22 @@
         </div>
     </div>
 </div>
+
+<!-- Optional: Make table scroll nicely on mobile with shadow -->
+<style>
+.table-responsive {
+    position: relative;
+}
+.table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+}
+.table-responsive::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.05);
+}
+</style>
+
 {% endblock %}

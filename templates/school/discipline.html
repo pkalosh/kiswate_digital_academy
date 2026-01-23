@@ -1,8 +1,8 @@
 {% extends 'school/base.html' %}
-{% block title %}Discipline | {{ school.name }}{% endblock %}
+{% block title %}Discipline | {{ school.school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
+<header class="header d-flex align-items-center justify-content-between mb-3 flex-wrap">
   <div class="d-flex align-items-center gap-2">
     <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
     <div>
@@ -16,9 +16,9 @@
     </div>
   </div>
 
-  <div class="d-flex align-items-center gap-2">
-    <form method="get" class="d-inline">
-      <div class="input-group input-group-sm" style="width:250px;">
+  <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0 flex-wrap">
+    <form method="get" class="d-inline flex-grow-1 flex-lg-auto">
+      <div class="input-group input-group-sm" style="min-width:200px;">
         <input type="text" name="q" class="form-control" placeholder="Search records..." value="{{ query }}">
         <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
       </div>
@@ -26,7 +26,7 @@
   </div>
 </header>
 
-<section class="content container-fluid py-4">
+<section class="content container-fluid py-2">
 
   {% if messages %}
   <div class="row">
@@ -42,9 +42,9 @@
   {% endif %}
 
   <div class="card shadow-sm border-0 rounded-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i> Discipline Records ({{ records.count }})</h5>
-      <div class="d-flex gap-2">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+      <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i> Discipline Records ({{ records.paginator.count }})</h5>
+      <div class="d-flex gap-2 mt-2 mt-md-0 flex-wrap">
         <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#disciplineModal" data-mode="create">
           <i class="bi bi-plus"></i> Add Record
         </button>
@@ -52,9 +52,9 @@
       </div>
     </div>
 
-    <div class="card-body">
+    <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>Student</th>
@@ -70,14 +70,14 @@
           <tbody>
             {% for record in records %}
             <tr>
-              <td>{{ record.student.user.get_full_name }}</td>
-              <td>{{ record.teacher.user.get_full_name }}</td>
-              <td>{{ record.incident_type }}</td>
-              <td>{{ record.description }}</td>
-              <td>{{ record.severity }}</td>
-              <td>{{ record.action_taken|default:"-" }}</td>
-              <td>{{ record.date }}</td>
-              <td>
+              <td data-label="Student">{{ record.student.user.get_full_name }}</td>
+              <td data-label="Teacher">{{ record.teacher.user.get_full_name }}</td>
+              <td data-label="Type">{{ record.incident_type }}</td>
+              <td data-label="Description">{{ record.description }}</td>
+              <td data-label="Severity">{{ record.severity }}</td>
+              <td data-label="Action Taken">{{ record.action_taken|default:"-" }}</td>
+              <td data-label="Date">{{ record.date }}</td>
+              <td data-label="Actions" class="d-flex flex-wrap gap-1 justify-content-end">
                 <button class="btn btn-sm btn-outline-primary"
                         data-bs-toggle="modal"
                         data-bs-target="#disciplineModal"
@@ -85,13 +85,14 @@
                         data-id="{{ record.id }}"
                         data-student="{{ record.student.id }}"
                         data-teacher="{{ record.teacher.id }}"
-                        data-incident_type="{{ record.incident_type}}"
-                        data-description="{{ record.description}}"
+                        data-incident_type="{{ record.incident_type }}"
+                        data-description="{{ record.description }}"
                         data-severity="{{ record.severity }}"
-                        data-action_taken="{{ record.action_taken}}"
+                        data-action_taken="{{ record.action_taken }}"
                         data-date="{{ record.date }}">
                   <i class="bi bi-pencil"></i>
                 </button>
+
                 <button class="btn btn-sm btn-outline-danger"
                         data-bs-toggle="modal"
                         data-bs-target="#deleteModal"
@@ -112,79 +113,118 @@
     </div>
   </div>
 
-  <!-- Discipline Modal -->
-  <div class="modal fade" id="disciplineModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="disciplineModalTitle">Add Discipline Record</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
+  <!-- Pagination -->
+  {% if records.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-center flex-wrap">
+      {% if records.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ records.previous_page_number }}{% if query %}&q={{ query }}{% endif %}">Previous</a>
+      </li>
+      {% endif %}
 
-        <form method="post" id="disciplineForm" action="{% url 'school:discipline-create' %}">
-          {% csrf_token %}
-          <input type="hidden" name="mode" id="mode">
+      {% for num in records.paginator.page_range %}
+        {% if records.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > records.number|add:'-3' and num < records.number|add:'3' %}
+          <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}">{{ num }}</a></li>
+        {% endif %}
+      {% endfor %}
 
-          <div class="modal-body">
-            <div class="row">
-              <div class="col-md-6 mb-3">{{ form.student.label_tag }}{{ form.student }}</div>
-              <div class="col-md-6 mb-3">{{ form.teacher.label_tag }}{{ form.teacher }}</div>
-              <div class="col-md-6 mb-3">{{ form.incident_type.label_tag }}{{ form.incident_type }}</div>
-              <div class="col-md-6 mb-3">{{ form.date.label_tag }}{{ form.date }}</div>
-              <div class="col-md-6 mb-3">{{ form.severity.label_tag }}{{ form.severity }}</div>
-              <div class="col-12 mb-3">{{ form.description.label_tag }}{{ form.description }}</div>
-              <div class="col-12 mb-3">{{ form.action_taken.label_tag }}{{ form.action_taken }}</div>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button class="btn btn-success">Save Changes</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Delete Modal -->
-  <div class="modal fade" id="deleteModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Delete Record</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <form method="post" id="deleteForm">{% csrf_token %}
-          <div class="modal-body">
-            <p>Are you sure you want to delete the discipline record for <strong id="deleteName"></strong>?</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button class="btn btn-danger">Delete</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <!-- Export Modal -->
-  <div class="modal fade" id="exportModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Export Discipline Records</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p>Export as CSV or PDF?</p>
-          <a href="#" class="btn btn-outline-primary me-2">CSV</a>
-          <a href="#" class="btn btn-outline-secondary">PDF</a>
-        </div>
-      </div>
-    </div>
-  </div>
+      {% if records.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ records.next_page_number }}{% if query %}&q={{ query }}{% endif %}">Next</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
 
 </section>
+
+<!-- Discipline Modal -->
+<div class="modal fade" id="disciplineModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="disciplineModalTitle">Add Discipline Record</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form method="post" id="disciplineForm" action="{% url 'school:discipline-create' %}">
+        {% csrf_token %}
+        <input type="hidden" name="mode" id="mode">
+
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-6 mb-3">{{ form.student.label_tag }}{{ form.student }}</div>
+            <div class="col-md-6 mb-3">{{ form.teacher.label_tag }}{{ form.teacher }}</div>
+            <div class="col-md-6 mb-3">{{ form.incident_type.label_tag }}{{ form.incident_type }}</div>
+            <div class="col-md-6 mb-3">{{ form.date.label_tag }}{{ form.date }}</div>
+            <div class="col-md-6 mb-3">{{ form.severity.label_tag }}{{ form.severity }}</div>
+            <div class="col-12 mb-3">{{ form.description.label_tag }}{{ form.description }}</div>
+            <div class="col-12 mb-3">{{ form.action_taken.label_tag }}{{ form.action_taken }}</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete Record</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="deleteForm">{% csrf_token %}
+        <div class="modal-body">
+          <p>Are you sure you want to delete the discipline record for <strong id="deleteName"></strong>?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Export Discipline Records</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Export as CSV or PDF?</p>
+        <a href="#" class="btn btn-outline-primary me-2">CSV</a>
+        <a href="#" class="btn btn-outline-secondary">PDF</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Responsive Table CSS -->
+<style>
+@media (max-width: 768px) {
+  .table thead { display: none; }
+  .table, .table tbody, .table tr, .table td { display: block; width: 100%; }
+  .table tr { margin-bottom: 1rem; border: 1px solid #dee2e6; border-radius: 0.75rem; padding: 0.75rem; background: #fff; }
+  .table td { display: flex; justify-content: space-between; align-items: flex-start; border: none; border-bottom: 1px solid #f1f1f1; padding: 0.4rem 0; gap: 0.5rem; text-align: right; }
+  .table td::before { content: attr(data-label); font-weight: 600; color: #444; text-align: left; flex: 0 0 40%; white-space: nowrap; }
+  .table td:last-child { border-bottom: none; }
+}
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -203,20 +243,16 @@ document.addEventListener('DOMContentLoaded', function () {
         disciplineModalTitle.textContent = 'Add Discipline Record';
         disciplineForm.action = "{% url 'school:discipline-create' %}";
         disciplineForm.reset();
-        document.querySelector('#id_severity').value = 'minor';  // default
+        document.querySelector('#id_severity').value = 'minor';
       } else {
         disciplineModalTitle.textContent = 'Edit Discipline Record';
         const id = button.dataset.id;
         disciplineForm.action = "{% url 'school:discipline-edit' 0 %}".replace('0', id);
-
-
-
         document.querySelector('#id_student').value = button.dataset.student;
         document.querySelector('#id_teacher').value = button.dataset.teacher;
         document.querySelector('#id_incident_type').value = button.dataset.incident_type;
         document.querySelector('#id_date').value = button.dataset.date;
         document.querySelector('#id_severity').value = button.dataset.severity;
-
         document.querySelector('textarea[name="description"]').value = button.dataset.description;
         document.querySelector('textarea[name="action_taken"]').value = button.dataset.action_taken;
       }
