@@ -1,0 +1,191 @@
+{% extends "school/policy/base.html" %}
+
+{% block title %}Policymaker Dashboard{% endblock %}
+
+{% block content %}
+
+<style>
+  .stat-card { border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:0.2s; }
+  .stat-card:hover { transform: translateY(-4px); }
+  .badge-rank { font-size:1.1rem; min-width:60px; }
+  .low-attendance-card { cursor:pointer; }
+  .modal-header { background:#ffc107; color:#fff; }
+  @media(max-width:768px){ .table-responsive{ font-size:0.9rem; } .stat-card .h4{ font-size:1.6rem; } }
+</style>
+
+<div class="container-fluid py-4">
+
+  <h2 class="mb-4 fw-bold">Education Oversight Dashboard</h2>
+
+  <!-- Stats Cards -->
+  <div class="row g-3 mb-5">
+    {% for card in stats_cards %}
+    <div class="col-6 col-md-3">
+      <div class="card stat-card text-center bg-white border-0 h-100 p-3">
+        <i class="bi {{ card.icon }} fs-1 text-{{ card.color }} mb-2"></i>
+        <h4 class="fw-bold mb-1">
+          {{ card.value }}
+          {% if card.value == 0 or card.value == "0.0%" %}
+          <span class="badge bg-secondary ms-2">No data</span>
+          {% endif %}
+        </h4>
+        <div class="text-muted small">{{ card.title }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Filters -->
+  <div class="card shadow-sm border-0 mb-5">
+    <div class="card-body">
+      <form method="get" class="row g-3">
+        <div class="col-6 col-md-3">
+          <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
+        </div>
+        <div class="col-12 col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-funnel-fill me-2"></i> Apply Filters
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- School Rankings -->
+  <div class="card shadow-sm border-0 mb-5">
+    <div class="card-header bg-success text-white">
+      <h5 class="mb-0">School Attendance Ranking</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Rank</th>
+              <th>School Name</th>
+              <th>Avg Attendance</th>
+              <th>Avg Absenteeism</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for school in page_obj %}
+            <tr>
+              <td><span class="badge bg-success badge-rank">{{ page_obj.start_index|add:forloop.counter0 }}</span></td>
+              <td>{{ school.enrollment__student__stream__grade__school__name|default:"Unknown" }}</td>
+              <td>{{ school.avg_attendance|floatformat:1 }}%</td>
+              <td>{{ school.avg_absenteeism|floatformat:1 }}%</td>
+              <td>
+                {% if school.avg_attendance >= 90 %}
+                <span class="badge bg-success">Excellent</span>
+                {% elif school.avg_attendance >= 80 %}
+                <span class="badge bg-info">Good</span>
+                {% else %}
+                <span class="badge bg-danger">Needs Attention</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center py-5 text-muted">No schools with data in selected filters</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+          {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">Previous</a>
+          </li>
+          {% endif %}
+          {% for num in page_obj.paginator.page_range %}
+          <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">{{ num }}</a>
+          </li>
+          {% endfor %}
+          {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">Next</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Low Attendance Card with Modal -->
+  {% if low_attendance_schools %}
+  <div class="card shadow-sm mb-5 low-attendance-card" data-bs-toggle="modal" data-bs-target="#lowAttendanceModal">
+    <div class="card-body bg-warning text-dark">
+      <h5 class="mb-0 fw-bold">⚠️ Schools Requiring Immediate Attention</h5>
+      <small>Click to view list</small>
+    </div>
+  </div>
+
+  <div class="modal fade" id="lowAttendanceModal" tabindex="-1" aria-labelledby="lowAttendanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="lowAttendanceModalLabel">Schools with Low Attendance</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <ul class="list-group">
+            {% for s in low_attendance_schools %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              {{ s.enrollment__student__stream__grade__school__name|default:"Unknown" }}
+              <span class="badge bg-danger rounded-pill">{{ s.avg_attendance|floatformat:1 }}%</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Subject Performance -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-success text-white">
+      <h5 class="mb-0">Subject Attendance & Time Utilization</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Subject</th>
+              <th>Sessions</th>
+              <th>Present Rate</th>
+              <th>Absent Rate</th>
+              <th>Time Utilized (hrs)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for subj in subject_stats %}
+            <tr>
+              <td>{{ subj.enrollment__lesson__subject__name|default:"—" }}</td>
+              <td>{{ subj.sessions|default:0 }}</td>
+              <td>{{ subj.present_rate|floatformat:1 }}%</td>
+              <td>{{ subj.absent_rate|floatformat:1 }}%</td>
+              <td>{{ subj.total_hours|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center py-5 text-muted">No subjects with attendance data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

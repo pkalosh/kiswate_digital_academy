@@ -7,6 +7,7 @@ from django.utils import timezone
 from userauths.models import User
 from django.core.exceptions import ValidationError
 import os
+from django.contrib.auth.models import Group
 
 # KDADTR-Specific Choice Constants 
 GENDER_CHOICES = [
@@ -299,6 +300,7 @@ class Student(models.Model):
     parents = models.ManyToManyField(Parent, blank=True, related_name='children')
     profile_picture = models.ImageField(upload_to='students/', blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.student_id}) - {self.school.name}"
@@ -1097,3 +1099,24 @@ class AbstractBaseModel(models.Model):
 class MpesaResponseBody(AbstractBaseModel):
     body = models.JSONField()
 
+class PolicymakerProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='policymaker_profile')
+    county = models.ForeignKey(County, on_delete=models.SET_NULL, null=True, blank=True)  # optional - scope to county
+    role = models.CharField(max_length=100, choices=[('county_officer', 'County Officer'), ('national', 'National'), ('other', 'Other')])
+    phone = models.CharField(max_length=15, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.role}"
+
+# Optional: Alert/Notification model
+class AttendanceAlert(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    sent_to = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='received_alerts')  # principal
+    message = models.TextField()
+    attendance_rate = models.DecimalField(max_digits=5, decimal_places=2)  # e.g. 72.50%
+    sent_at = models.DateTimeField(auto_now_add=True)
+    is_resolved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Alert for {self.school} - {self.attendance_rate}%"

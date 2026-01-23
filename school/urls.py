@@ -12,6 +12,7 @@ app_name = 'school'
 urlpatterns = [
     # Dashboard (Admin/General)
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('policy-dashboard/', views.policymaker_dashboard, name='policy-dashboard'),
     
     # Grades Management
     path('grades/', views.school_grades, name='school-grades'),

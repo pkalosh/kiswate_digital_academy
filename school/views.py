@@ -26,6 +26,10 @@ from .services.timetable_generator import generate_for_stream
 from collections import defaultdict
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db.models import Count, Avg, Case, When, Value, FloatField, F,Func, ExpressionWrapper
+from django.db.models.functions import Coalesce
+from django.db.models.functions import Extract
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponseForbidden
 from collections import defaultdict
 from django.shortcuts import render, redirect, get_object_or_404
@@ -54,9 +58,9 @@ from django.utils.timezone import localdate
 import uuid
 from userauths.models import User
 from .models import (
-    Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
+    Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson, PolicymakerProfile, AttendanceAlert,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
-    Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile,
+    Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear
 )
 from .forms import (
@@ -4295,3 +4299,170 @@ def assign_class_teacher_for_teacher(request, teacher_id):
         'streams': streams,
         'assignments': assignments
     })
+
+
+
+
+def is_policymaker(user):
+    return user.groups.filter(name='policymakers').exists()
+
+@login_required
+@user_passes_test(is_policymaker)
+def policymaker_dashboard(request):
+    today = date.today()
+
+    # ───────────────────────────────
+    # Filters from GET
+    # ───────────────────────────────
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    selected_county = request.GET.get('county')
+    selected_school = request.GET.get('school')
+    selected_grade = request.GET.get('grade')
+    selected_stream = request.GET.get('stream')
+    selected_subject = request.GET.get('subject')
+    selected_teacher = request.GET.get('teacher')
+
+    # Date filter
+    date_filter = Q(date__range=[start_date, end_date]) if start_date and end_date else Q(date__gte=today - timedelta(days=30))
+
+    # Filtered attendance queryset
+    attendance_qs = Attendance.objects.filter(date_filter).select_related(
+        'enrollment__student__stream__grade__school',
+        'enrollment__lesson__subject',
+        'enrollment__lesson__teacher',
+        'enrollment__lesson__time_slot'
+    )
+
+    if selected_county:
+        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade__school__county_id=selected_county)
+    if selected_school:
+        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade__school_id=selected_school)
+    if selected_grade:
+        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade_id=selected_grade)
+    if selected_stream:
+        attendance_qs = attendance_qs.filter(enrollment__student__stream_id=selected_stream)
+    if selected_subject:
+        attendance_qs = attendance_qs.filter(enrollment__lesson__subject_id=selected_subject)
+    if selected_teacher:
+        attendance_qs = attendance_qs.filter(enrollment__lesson__teacher_id=selected_teacher)
+
+    attendance_count = attendance_qs.count()
+
+    # ───────────────────────────────
+    # Global totals (unfiltered)
+    # ───────────────────────────────
+    total_schools = School.objects.filter(is_active=True).count()
+    total_teachers = StaffProfile.objects.filter(position='teacher').count()
+    total_students = Student.objects.filter(is_active=True).count()
+
+    # Attendance rate
+    attendance_stats = attendance_qs.aggregate(
+        total_sessions=Count('id'),
+        present_count=Count('id', filter=Q(status__in=['P','ET','UT'])),
+        absent_count=Count('id', filter=Q(status__in=['EA','UA']))
+    )
+
+    total_sessions = attendance_stats['total_sessions'] or 1
+    attendance_rate = ((attendance_stats['present_count']) / total_sessions) * 100
+    absenteeism_rate = ((attendance_stats['absent_count']) / total_sessions) * 100
+
+    stats_cards = [
+        {'title': 'Schools', 'value': total_schools, 'icon': 'bi-building', 'color': 'success'},
+        {'title': 'Teachers', 'value': total_teachers, 'icon': 'bi-person-badge', 'color': 'success'},
+        {'title': 'Students', 'value': total_students, 'icon': 'bi-people', 'color': 'success'},
+        {'title': 'Avg Attendance', 'value': f"{attendance_rate:.1f}%", 'icon': 'bi-check-circle', 'color': 'success' if attendance_rate >= 80 else 'warning'},
+        # {'title': 'Avg Absenteeism', 'value': f"{absenteeism_rate:.1f}%", 'icon': 'bi-exclamation-triangle', 'color': 'danger' if absenteeism_rate > 20 else 'info'},
+    ]
+
+    # ───────────────────────────────
+    # School Rankings
+    # ───────────────────────────────
+    school_rankings = (
+        attendance_qs
+        .values('enrollment__student__stream__grade__school__id',
+                'enrollment__student__stream__grade__school__name')
+        .annotate(
+            avg_attendance=Avg(
+                Case(
+                    When(status__in=['P','ET','UT'], then=Value(1.0)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                )
+            ) * 100,
+            avg_absenteeism=Avg(
+                Case(
+                    When(status__in=['EA','UA'], then=Value(1.0)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                )
+            ) * 100,
+            total_sessions=Count('id')
+        )
+        .order_by('-avg_attendance')
+    )
+
+    low_attendance_schools = [s for s in school_rankings if s['avg_attendance'] < 75]
+
+    # Pagination
+    page_number = request.GET.get('page', 1)
+    paginator = Paginator(list(school_rankings), 10)
+    page_obj = paginator.get_page(page_number)
+
+    # ───────────────────────────────
+    # Subject stats
+    # ───────────────────────────────
+    subject_stats_qs = (
+        attendance_qs
+        .values('enrollment__lesson__subject__id', 'enrollment__lesson__subject__name')
+        .annotate(
+            sessions=Count('id'),
+            present_rate=Avg(
+                Case(
+                    When(status__in=['P','ET','UT'], then=Value(100.0)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                )
+            ),
+            absent_rate=Avg(
+                Case(
+                    When(status__in=['EA','UA'], then=Value(100.0)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                )
+            )
+        )
+        .order_by('-present_rate')
+    )
+
+    subject_stats = []
+    for subj in subject_stats_qs:
+        subj_copy = dict(subj)
+        # Calculate total hours
+        subj_att_qs = attendance_qs.filter(enrollment__lesson__subject__id=subj['enrollment__lesson__subject__id'])
+        total_minutes = 0
+        for att in subj_att_qs:
+            slot = att.enrollment.lesson.time_slot
+            if slot and slot.start_time and slot.end_time:
+                start_dt = datetime.datetime.combine(date.today(), slot.start_time)
+                end_dt = datetime.datetime.combine(date.today(), slot.end_time)
+                total_minutes += (end_dt - start_dt).total_seconds() / 60
+        subj_copy['total_hours'] = round(total_minutes / 60.0, 2)
+        subject_stats.append(subj_copy)
+
+    # ───────────────────────────────
+    # Context
+    # ───────────────────────────────
+    context = {
+        'stats_cards': stats_cards,
+        'page_obj': page_obj,
+        'low_attendance_schools': low_attendance_schools,
+        'subject_stats': subject_stats,
+        'counties': County.objects.all(),
+        'filters': request.GET,
+        'attendance_count': attendance_count,
+        'has_data': attendance_count > 0,
+        'all_time_attendance_count': Attendance.objects.count(),
+    }
+
+    return render(request, 'school/policy/dashboard.html', context)

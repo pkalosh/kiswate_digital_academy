@@ -46,7 +46,6 @@ def LoginView(request):
         email = request.POST.get("email")
         password = request.POST.get("password")
 
-        # Authenticate user
         user = authenticate(request, email=email, password=password)
         if user is None:
             messages.warning(request, "Invalid email or password")
@@ -55,36 +54,55 @@ def LoginView(request):
         login(request, user)
         messages.success(request, f"Welcome back, {user.get_full_name()}!")
 
-        # Role-based redirects (order matters)
-        if getattr(user, "is_superuser", False):
+        # Role-based redirects — check in priority order
+        if user.is_superuser:
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
+
+        # Check groups (recommended for policymakers and future roles)
+        if user.groups.filter(name="policymakers").exists():
+            return redirect("school:policy-dashboard")  # ← your policymaker dashboard
+
+        # Boolean fields on User (your current style)
         elif getattr(user, "is_parent", False):
             return redirect("userauths:parent-dashboard")
+
         elif getattr(user, "is_student", False):
             return redirect("userauths:student-dashboard")
+
         elif getattr(user, "is_teacher", False) or getattr(user, "school_staff", False):
             if getattr(user, "is_teacher", False):
                 return redirect("userauths:teacher-dashboard")
             return redirect("school:dashboard")
+
         elif getattr(user, "is_admin", False):
             return redirect("school:dashboard")
+
+        # Default/fallback
         else:
             return redirect("school:dashboard")
 
-    # GET request: Redirect if already logged in
+    # GET request: if already logged in, redirect based on role
     if request.user.is_authenticated:
-        if getattr(request.user, "is_superuser", False):
+        if request.user.is_superuser:
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
+
+        if request.user.groups.filter(name="policymakers").exists():
+            return redirect("school:policy-dashboard")
+
         elif getattr(request.user, "is_parent", False):
             return redirect("userauths:parent-dashboard")
+
         elif getattr(request.user, "is_student", False):
             return redirect("userauths:student-dashboard")
+
         elif getattr(request.user, "is_teacher", False) or getattr(request.user, "school_staff", False):
             if getattr(request.user, "is_teacher", False):
                 return redirect("userauths:teacher-dashboard")
             return redirect("school:dashboard")
+
         elif getattr(request.user, "is_admin", False):
             return redirect("school:dashboard")
+
         else:
             return redirect("school:dashboard")
 
