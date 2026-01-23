@@ -267,24 +267,30 @@ def dashboard(request):
     today = timezone.now().date()
     today_weekday = today.strftime('%A').lower()
 
-    # Get filters — convert empty strings to None
-    grade_id    = request.GET.get('grade') or None
-    stream_id   = request.GET.get('stream') or None
-    teacher_id  = request.GET.get('teacher') or None
-    weekday     = request.GET.get('weekday') or None
-    slot_id     = request.GET.get('slot') or None
+    # ---------------- Filters ----------------
+    grade_id   = request.GET.get('grade') or None
+    stream_id  = request.GET.get('stream') or None
+    teacher_id = request.GET.get('teacher') or None
+    weekday    = request.GET.get('weekday') or None
+    slot_id    = request.GET.get('slot') or None
 
-    # Base query: all weekdays for this school
+    ALL_WEEKDAYS = [
+        'monday', 'tuesday', 'wednesday',
+        'thursday', 'friday', 'saturday', 'sunday'
+    ]
+
+    # ---------------- Lessons Query ----------------
     lessons_qs = Lesson.objects.filter(
         Q(timetable__school=school) |
         Q(stream__school=school) |
         Q(teacher__school=school),
-        day_of_week__in=['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        day_of_week__in=ALL_WEEKDAYS
     ).select_related(
-        'subject', 'subject__grade', 'stream', 'teacher__user', 'time_slot'
+        'subject', 'subject__grade',
+        'stream', 'teacher__user',
+        'time_slot'
     )
 
-    # Apply filters only if value is truthy (not None and not empty string)
     if grade_id:
         lessons_qs = lessons_qs.filter(subject__grade_id=grade_id)
     if stream_id:
@@ -298,21 +304,20 @@ def dashboard(request):
 
     lessons = list(lessons_qs)
 
-    # Build table_data
+    # ---------------- Build Timetable ----------------
     table_data = defaultdict(lambda: defaultdict(list))
     conflicts = set()
     seen = set()
 
     for lesson in lessons:
-        if lesson.teacher and lesson.day_of_week and lesson.time_slot:
-            key = (lesson.teacher_id, lesson.day_of_week, lesson.time_slot_id)
-            if key in seen:
-                conflicts.add(lesson.id)
-            seen.add(key)
+        key = (lesson.teacher_id, lesson.day_of_week, lesson.time_slot_id)
+        if key in seen:
+            conflicts.add(lesson.id)
+        seen.add(key)
 
-            table_data[lesson.day_of_week][lesson.time_slot].append(lesson)
+        table_data[lesson.day_of_week][lesson.time_slot].append(lesson)
 
-    # Sort by grade name
+    # Sort lessons inside cells
     for day in table_data:
         for slot in table_data[day]:
             table_data[day][slot].sort(
@@ -320,14 +325,21 @@ def dashboard(request):
             )
 
     context = {
+        # Timetable
         'time_slots': TimeSlot.objects.filter(school=school).order_by('start_time'),
         'weekdays': [
-            ('monday', 'Monday'), ('tuesday', 'Tuesday'), ('wednesday', 'Wednesday'),
-            ('thursday', 'Thursday'), ('friday', 'Friday')
+            ('monday', 'Monday'),
+            ('tuesday', 'Tuesday'),
+            ('wednesday', 'Wednesday'),
+            ('thursday', 'Thursday'),
+            ('friday', 'Friday'),
+            ('saturday', 'Saturday'),
+            ('sunday', 'Sunday'),
         ],
         'table_data': dict(table_data),
         'conflicts': conflicts,
         'today_weekday': today_weekday,
+        'today': today,
 
         # KPIs
         'total_teachers': StaffProfile.objects.filter(school=school, position='teacher').count(),
@@ -335,12 +347,15 @@ def dashboard(request):
         'total_parents': Parent.objects.filter(school=school).count(),
         'total_discipline_cases': DisciplineRecord.objects.filter(school=school).count(),
 
-        # For template dropdowns
+        # Filters
         'grades': Grade.objects.filter(school=school),
         'streams': Streams.objects.filter(school=school),
-        'teachers': StaffProfile.objects.filter(school=school, position__in=['teacher', 'hod']),
+        'teachers': StaffProfile.objects.filter(
+            school=school,
+            position__in=['teacher', 'hod']
+        ),
 
-        # Preserve selected values (including empty ones correctly)
+        # Selected
         'selected_grade': grade_id,
         'selected_stream': stream_id,
         'selected_teacher': teacher_id,
@@ -349,6 +364,7 @@ def dashboard(request):
     }
 
     return render(request, 'school/dashboard.html', context)
+
     
 
 @login_required
@@ -1075,30 +1091,19 @@ def generate_timetable_view(request):
         'school': school,
     })
 
-
-
-WEEKDAY_MAP = {
-    "monday": 0,
-    "tuesday": 1,
-    "wednesday": 2,
-    "thursday": 3,
-    "friday": 4,
-    "saturday": 5,
-    "sunday": 6,
-}
 @login_required
 def view_timetable_week(request):
     user = request.user
-    school = user.staffprofile.school
+    school = getattr(user, "staffprofile", None)
+    if not school:
+        return render(request, "school/error.html", {"message": "No staff profile found."})
+    school = school.school
 
     # ── Focus date ───────────────────────────────────────────────────────────
     focus_date_str = request.GET.get("date")
-    if focus_date_str:
-        try:
-            focus_date = datetime.datetime.strptime(focus_date_str, "%Y-%m-%d").date()
-        except (ValueError, TypeError):
-            focus_date = timezone.localdate()
-    else:
+    try:
+        focus_date = datetime.datetime.strptime(focus_date_str, "%Y-%m-%d").date() if focus_date_str else timezone.localdate()
+    except (ValueError, TypeError):
         focus_date = timezone.localdate()
 
     # ── Week range (Monday → Friday) ─────────────────────────────────────────
@@ -1125,16 +1130,24 @@ def view_timetable_week(request):
     streams = Streams.objects.filter(school=school)
     streams_dict = {s.id: s for s in streams}
 
-    # ── Build calendar ───────────────────────────────────────────────────────
+    # ── Build calendar safely ────────────────────────────────────────────────
     calendar = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     for lesson in lessons_qs:
         date_str = lesson.lesson_date.strftime("%Y-%m-%d")
-        # Precompute stream name for template
-        lesson.stream_name = streams_dict.get(lesson.stream.id).name if streams_dict.get(lesson.stream.id) else "(stream missing)"
-        calendar[lesson.time_slot.id][date_str][lesson.stream.id].append(lesson)
 
-    # Convert defaultdict → plain dict for template iteration
+        # Skip lessons without time_slot or stream
+        if not lesson.time_slot or not lesson.stream:
+            continue
+
+        stream_id = lesson.stream.id
+        # Precompute stream name safely
+        lesson.stream_name = streams_dict.get(stream_id).name if streams_dict.get(stream_id) else "(stream missing)"
+
+        # Append lesson to calendar
+        calendar[lesson.time_slot.id][date_str][stream_id].append(lesson)
+
+    # Convert defaultdict → plain dict
     calendar_plain = {
         slot_id: {
             date_str: dict(stream_dict)
@@ -1164,7 +1177,6 @@ def view_timetable_week(request):
     }
 
     return render(request, "school/timetable_week.html", context)
-
 
 @login_required
 def teacher_timetable_view(request):
@@ -1523,7 +1535,7 @@ def upload_grade_file(request):
                     defaults={
                         'name': row.get('name'),
                         'description': row.get('description', ''),
-                        'capacity': int(row.get('capacity', 30)),
+                        'capacity': int(row.get('capacity', 50)),
                     }
                 )
                 if created:

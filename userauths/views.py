@@ -1,11 +1,12 @@
 from django.shortcuts import render, redirect,get_object_or_404
 from django.contrib.auth import authenticate, login, logout,update_session_auth_hash
 from django.contrib import messages
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from school.models import (
-    Timetable,TeacherStreamAssignment,Streams, Term, Lesson, Session, Enrollment, 
-    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment
+    Timetable,TeacherStreamAssignment,Streams, Term, Lesson, Session, Enrollment, Subject,
+    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment, Notification
 )
 from django.utils import timezone
 from collections import defaultdict
@@ -35,60 +36,60 @@ def demo(request):
     return render(request, "landing/demo.html",{})
 
 # Integrated LoginView with Role-Based Redirects
+from django.contrib.auth import authenticate, login
+from django.contrib import messages
+from django.shortcuts import redirect, render
+from django.contrib.auth.models import User
+
 def LoginView(request):
     if request.method == "POST":
         email = request.POST.get("email")
         password = request.POST.get("password")
-        try:
-            user = User.objects.get(email=email)
-            user = authenticate(request, email=email, password=password)
-            if user is not None:
-                login(request, user)
-                messages.success(request, "Welcome Back!")
-                print("User authenticated successfully")
-                # Role-based redirects using boolean fields
-                if user.is_superuser:
-                    return redirect("kiswate_digital_app:kiswate_admin_dashboard")
-                elif user.is_parent:  # Parent role
-                    return redirect("userauths:parent-dashboard")
-                elif user.is_student:  # Student role
-                    return redirect("userauths:student-dashboard")
-                elif user.is_teacher or user.school_staff:  # Teacher/Staff role
-                    if user.is_teacher:  # Specific teacher check
-                        return redirect("userauths:teacher-dashboard")
-                    else:
-                        return redirect("school:dashboard")  # Other staff to general dashboard
-                elif user.is_admin:
-                    return redirect("school:dashboard")  # Admin dashboard
-                else:
-                    return redirect("school:dashboard")  # Default for other users
-            else:
-                messages.warning(request, "Username or password does not exist")
-                return redirect("userauths:sign-in")
-        except User.DoesNotExist:
-            messages.warning(request, "User does not exist")
+
+        # Authenticate user
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            messages.warning(request, "Invalid email or password")
             return redirect("userauths:sign-in")
-    
-    # GET request: Handle already authenticated users
-    if request.user.is_authenticated:
-        # Redirect based on current role (using booleans)
-        if request.user.is_superuser:
+
+        login(request, user)
+        messages.success(request, f"Welcome back, {user.get_full_name()}!")
+
+        # Role-based redirects (order matters)
+        if getattr(user, "is_superuser", False):
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
-        elif request.user.is_parent:
+        elif getattr(user, "is_parent", False):
             return redirect("userauths:parent-dashboard")
-        elif request.user.is_student:
+        elif getattr(user, "is_student", False):
             return redirect("userauths:student-dashboard")
-        elif request.user.is_teacher or request.user.school_staff:
-            if request.user.is_teacher:
+        elif getattr(user, "is_teacher", False) or getattr(user, "school_staff", False):
+            if getattr(user, "is_teacher", False):
                 return redirect("userauths:teacher-dashboard")
-            else:
-                return redirect("school:dashboard")
-        elif request.user.is_admin:
+            return redirect("school:dashboard")
+        elif getattr(user, "is_admin", False):
             return redirect("school:dashboard")
         else:
             return redirect("school:dashboard")
-    
-    return render(request, "landing/login.html", {})
+
+    # GET request: Redirect if already logged in
+    if request.user.is_authenticated:
+        if getattr(request.user, "is_superuser", False):
+            return redirect("kiswate_digital_app:kiswate_admin_dashboard")
+        elif getattr(request.user, "is_parent", False):
+            return redirect("userauths:parent-dashboard")
+        elif getattr(request.user, "is_student", False):
+            return redirect("userauths:student-dashboard")
+        elif getattr(request.user, "is_teacher", False) or getattr(request.user, "school_staff", False):
+            if getattr(request.user, "is_teacher", False):
+                return redirect("userauths:teacher-dashboard")
+            return redirect("school:dashboard")
+        elif getattr(request.user, "is_admin", False):
+            return redirect("school:dashboard")
+        else:
+            return redirect("school:dashboard")
+
+    return render(request, "landing/login.html")
+
 
 # Updated Dashboard Views (Adjusted for User Model Booleans and Profile Access)
 # Note: Assumes OneToOneFields (e.g., user.parent for is_parent=True users).
@@ -119,138 +120,90 @@ def generate_timetable_grid(student, timetable):
 
     return grid
 
-
-WEEKDAY_CHOICES = [
-    ('monday', 'Monday'),
-    ('tuesday', 'Tuesday'),
-    ('wednesday', 'Wednesday'),
-    ('thursday', 'Thursday'),
-    ('friday', 'Friday'),
-    ('saturday', 'Saturday'),
-    ('sunday', 'Sunday'),
-]
-
+from django.utils.timezone import now, timedelta
+from django.db.models import Avg
 
 @login_required
 def parent_dashboard(request):
-    """
-    Parent Dashboard:
-    - Children overview
-    - Lessons & Sessions
-    - Attendance Summary (P/A included)
-    - Discipline Summary
-    - Fee Overview
-    """
-    user = request.user
+    parent = getattr(request.user, "parent", None)
+    if not parent:
+        return render(request, "school/parent/dashboard.html", {"schools": {}, "today": now().date()})
 
-    if not hasattr(user, "parent"):
-        messages.error(request, "Access denied: Parent account required.")
-        return redirect("userauths:sign-in")
+    today = now().date()
+    next_7_days = [today + timedelta(days=i) for i in range(7)]
 
-    parent = user.parent
-    children = parent.children.all()
+    # Get current active term per school
+    active_terms = {t.school_id: t for t in Term.objects.filter(is_active=True)}
 
-    if not children.exists():
-        return render(
-            request,
-            "school/parent/dashboard.html",
-            {"message": "No children enrolled under your account.", "children": []},
-        )
+    # Get all students for this parent
+    students = Student.objects.filter(parents=parent)
 
-    today = timezone.now().date()
-    child_data = []
+    schools = defaultdict(list)  # {school: [student_data, ...]}
 
-    for child in children:
-        # ------------------------
-        # ACTIVE TIMETABLE
-        # ------------------------
-        active_timetable = (
-            Timetable.objects.filter(
-                school=parent.school,
-                grade=child.grade_level,
-                start_date__lte=today,
-                end_date__gte=today,
+    for student in students:
+        # Get active enrollments for current term
+        student_enrollments = Enrollment.objects.filter(
+            student=student,
+            status="active",
+            school__in=active_terms.keys()
+        ).select_related("school", "lesson")
+
+        if not student_enrollments.exists():
+            continue
+
+        # Group enrollments by school
+        enrollments_by_school = defaultdict(list)
+        for enr in student_enrollments:
+            enrollments_by_school[enr.school].append(enr)
+
+        for school, enrollments in enrollments_by_school.items():
+            term = active_terms.get(school.id)
+            
+            # Stats
+            total_lessons = len(enrollments)
+            
+            # Attendance: count Present (P)
+            attendance_qs = Attendance.objects.filter(
+                enrollment__in=enrollments,
+                date__lte=today,
+                date__gte=term.start_date if term else today - timedelta(days=30)
             )
-            .first()
-        )
+            attended = attendance_qs.filter(status="P").count()
 
-        if active_timetable and hasattr(child, "stream") and child.stream:
-            lessons = (
-                Lesson.objects.filter(timetable=active_timetable, stream=child.stream)
-                .select_related("subject", "teacher", "time_slot")
-                .order_by("lesson_date", "time_slot__start_time")
-            )
-        else:
-            lessons = []
+            # Discipline count
+            discipline_count = DisciplineRecord.objects.filter(
+                student=student,
+                school=school
+            ).count()
 
-        # ------------------------
-        # ATTENDANCE
-        # ------------------------
-        attendance_qs = Attendance.objects.filter(enrollment__student=child)
-        status_keys = ["P", "A", "ET", "UT", "EA", "UA", "IB", "18", "20"]
-        status_counts = {key: attendance_qs.filter(status=key).count() for key in status_keys}
-        status_counts["total"] = attendance_qs.count()
-        status_counts["present_percentage"] = int((status_counts.get("P", 0) / status_counts["total"] * 100) if status_counts["total"] else 0)
+            # Upcoming lessons next 7 days
+            upcoming_lessons = Lesson.objects.filter(
+                l_enrollments__in=enrollments,
+                lesson_date__range=[today, today + timedelta(days=6)],
+                is_canceled=False
+            ).select_related("subject", "teacher", "time_slot", "timetable").order_by("lesson_date", "time_slot__start_time")
 
-        # ------------------------
-        # DISCIPLINE
-        # ------------------------
-        if hasattr(child, "discipline_records"):
-            discipline_list = child.discipline_records.all().order_by("-date")
-            discipline_score = 0
-        else:
-            discipline_list = []
-            discipline_score = 0
+            # Notifications per school
+            notifications = Notification.objects.filter(
+                recipient=request.user,
+                school=school
+            ).order_by("-sent_at")[:10]
 
-        # ------------------------
-        # SUBJECT ENROLLMENTS
-        # ------------------------
-        enrollments = child.enrollments.filter(status="active").select_related("lesson__subject")
-
-        # ------------------------
-        # FEE OVERVIEW
-        # ------------------------
-        fee_total = getattr(child, "fee_total", 0) or 0
-        fee_paid = getattr(child, "fee_paid", 0) or 0
-        fee_balance = fee_total - fee_paid
-        fee_percentage = int((fee_paid / fee_total * 100) if fee_total else 0)
-
-        # ------------------------
-        # Bundle child data
-        # ------------------------
-        child_data.append(
-            {
-                "child": child,
-                "lessons": lessons,
-                "attendance": status_counts,
-                "discipline_records": discipline_list,
-                "discipline_score": discipline_score,
-                "enrollments": enrollments,
-                "active_term": f"Term {active_timetable.term} {active_timetable.year}" if active_timetable else "N/A",
-                "fee_total": fee_total,
-                "fee_paid": fee_paid,
-                "fee_balance": fee_balance,
-                "fee_percentage": fee_percentage,
+            # Build student data
+            student_data = {
+                "student": student,
+                "total_lessons": total_lessons,
+                "attended": attended,
+                "discipline_count": discipline_count,
+                "upcoming_lessons": upcoming_lessons,
+                "notifications": notifications,
             }
-        )
 
-    # ------------------------
-    # CHILD SELECTION
-    # ------------------------
-    requested_child_id = request.GET.get("child_id")
-    selected_child = None
-    if requested_child_id:
-        for data in child_data:
-            if str(data["child"].id) == requested_child_id:
-                selected_child = data["child"]
-                break
-    if not selected_child:
-        selected_child = children.first()
+            schools[school].append(student_data)
 
     context = {
-        "children": children,
-        "child_data": child_data,
-        "selected_child": selected_child,
+        "schools": dict(schools),
+        "today": today,
     }
 
     return render(request, "school/parent/dashboard.html", context)
@@ -262,89 +215,159 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from school.models import Lesson, TimeSlot, Enrollment, Session, Term
+WEEKDAYS = [
+    ("monday", "Monday"),
+    ("tuesday", "Tuesday"),
+    ("wednesday", "Wednesday"),
+    ("thursday", "Thursday"),
+    ("friday", "Friday"),
+    ("saturday", "Saturday"),
+    ("sunday", "Sunday"),
+]
 
 @login_required
 def student_dashboard(request):
     user = request.user
+
     try:
-        # Ensure the user is a student
         student = user.student
     except Student.DoesNotExist:
         messages.error(request, "Student profile not found.")
         return redirect("userauths:sign-in")
-    student = user.student
+
     today = timezone.now().date()
+    today_weekday = today.strftime("%A").lower()  # "monday", "tuesday", ...
 
-    # Get active enrollments
-    enrollments = student.enrollments.filter(status='active').select_related('lesson__subject', 'lesson__teacher', 'lesson__time_slot', 'lesson__stream')
+    enrollments = (
+        student.enrollments
+        .filter(status="active")
+        .select_related(
+            "lesson__subject",
+            "lesson__teacher__user",
+            "lesson__time_slot",
+            "lesson__stream"
+        )
+    )
 
-    # Extract lesson IDs from enrollments
-    lesson_ids = enrollments.values_list('lesson_id', flat=True)
+    lesson_ids = enrollments.values_list("lesson_id", flat=True)
 
-    # Filter lessons
-    lessons_qs = Lesson.objects.filter(
-        id__in=lesson_ids,
-        timetable__school=student.school
-    ).select_related('subject', 'teacher', 'time_slot', 'stream').prefetch_related('sessions')
+    start_week = today - timedelta(days=today.weekday())
+    end_week = start_week + timedelta(days=6)
 
-    # Apply filters
-    term_id = request.GET.get('term')
-    lesson_id = request.GET.get('lesson')
-    session_id = request.GET.get('session')
-    date_filter = request.GET.get('date')
+    lessons_qs = (
+        Lesson.objects
+        .filter(
+            id__in=lesson_ids,
+            lesson_date__range=[start_week, end_week],
+            timetable__school=student.school
+        )
+        .select_related(
+            "subject",
+            "teacher__user",
+            "time_slot",
+            "stream"
+        )
+        .order_by("day_of_week", "time_slot__start_time")
+    )
 
-    if term_id:
-        lessons_qs = lessons_qs.filter(timetable__term_id=term_id)
-    if lesson_id:
-        lessons_qs = lessons_qs.filter(id=lesson_id)
-    if session_id:
-        lessons_qs = lessons_qs.filter(sessions__id=session_id)
-    if date_filter:
-        lessons_qs = lessons_qs.filter(lesson_date=date_filter)
+    time_slots = TimeSlot.objects.filter(
+        school=student.school
+    ).order_by("start_time")
 
-    lessons_qs = lessons_qs.order_by('day_of_week', 'time_slot__start_time')
+    timetable_grid = {key: {} for key, _ in WEEKDAYS}
 
-    # Prepare timetable grid
-    time_slots = TimeSlot.objects.filter(school=student.school).order_by('start_time')
-    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-    # Initialize timetable_grid
-    timetable_grid = {day: {} for day in weekdays}
     for lesson in lessons_qs:
-        if lesson.day_of_week and lesson.time_slot:
-            day = lesson.day_of_week.capitalize()  # normalize weekday
-            timetable_grid[day].setdefault(lesson.time_slot.id, []).append(lesson)
+        if not lesson.day_of_week or not lesson.time_slot:
+            continue
+        day = lesson.day_of_week.lower()
+        timetable_grid[day].setdefault(lesson.time_slot.id, []).append(lesson)
 
-    # Stats cards
+    # ATTENDANCE HEATMAP (week)
+    attendance_records = (
+        Attendance.objects
+        .filter(
+            enrollment__student=student,
+            date__range=[start_week, end_week]
+        )
+        .values("date", "status")
+    )
+
+    attendance_map = {record["date"]: record["status"] for record in attendance_records}
+
+    heatmap = []
+    for i in range(7):
+        date = start_week + timedelta(days=i)
+        raw_status = attendance_map.get(date, "absent")
+        status = str(raw_status).lower().strip() if raw_status else "absent"
+        heatmap.append({
+            "date": date,
+            "status": status
+        })
+
+    student_subject_ids = (
+        enrollments
+        .values_list("lesson__subject_id", flat=True)
+        .distinct()
+    )
+
+    assignments_due = (
+        Assignment.objects
+        .filter(
+            subject_id__in=student_subject_ids,
+            school=student.school,
+            due_date__gte=today
+        )
+        .exclude(submissions__enrollment__student=student)
+        .distinct()
+        .count()
+    )
+
+    # Stats
     stats = [
-        {'title': "Today's Schedule", 'value': lessons_qs.filter(lesson_date=today).count(), 'icon': 'bi-calendar-day', 'color': 'success'},
-        {'title': "Subjects", 'value': enrollments.count(), 'icon': 'bi-book', 'color': 'success'},
-        {'title': "Attendance Rate", 'value': '95%', 'icon': 'bi-bar-chart-line', 'color': 'success'},
-        {'title': "Assignments Due", 'value': 2, 'icon': 'bi-journal-check', 'color': 'success'},
+        {
+            "title": "This Week",
+            "value": lessons_qs.count(),
+            "icon": "bi-calendar-week",
+            "color": "success",
+            "url": ""
+        },
+        {
+            "title": "Subjects",
+            "value": enrollments.count(),
+            "icon": "bi-book",
+            "color": "primary",
+            "url": ""
+        },
+        {
+            "title": "Attendance",
+            "value": "95%",  # ← replace with real calculation if available
+            "icon": "bi-bar-chart-line",
+            "color": "info",
+            "url": ""
+        },
+        {
+            "title": "Assignments Due",
+            "value": assignments_due,
+            "icon": "bi-exclamation-circle",
+            "color": "danger",
+            "url": ""
+        },
     ]
 
-    # For filters
-    terms = Timetable.objects.filter(school=student.school).order_by('start_date')
-    lessons_list = lessons_qs
-    sessions_list = Session.objects.filter(lesson__in=lessons_qs).distinct()
-
     context = {
-        'student': student,
-        'grade': student.grade_level,
-        'enrollments': enrollments,
-        'today_lessons': lessons_qs.filter(lesson_date=today),
-        'timetable_grid': timetable_grid,
-        'time_slots': time_slots,
-        'weekdays': weekdays,
-        'stats': stats,
-        'terms': terms,
-        'lessons_list': lessons_list,
-        'sessions_list': sessions_list,
-        'request': request,
+        "student": student,
+        "weekdays": WEEKDAYS,
+        "time_slots": time_slots,
+        "timetable_grid": timetable_grid,
+        "stats": stats,
+        "teachers": StaffProfile.objects.filter(position="teacher"),
+        "subjects": Subject.objects.filter(id__in=lesson_ids),
+        "heatmap": heatmap,
+        "today_weekday": today_weekday,
+        "grade": student.stream.grade if hasattr(student.stream, 'grade') else None,
     }
 
-    return render(request, 'school/student/dashboard.html', context)
-
+    return render(request, "school/student/dashboard.html", context)
 
 from datetime import timedelta
 import datetime

@@ -1,162 +1,132 @@
 {% extends 'school/parent/base.html' %}
-{% block title %}Parent Dashboard | {{ request.user.parent.school.name }}{% endblock %}
+{% load static %}
+{% block title %}Parent Dashboard | {{ request.user.get_full_name }}{% endblock %}
 
 {% block content %}
-<section class="py-4 bg-light">
-    <div class="container">
+<section class="container-fluid py-4">
 
-        {% if children %}
-        <!-- CHILD TABS -->
-        <ul class="nav nav-tabs mb-4" id="childTabs" role="tablist">
-            {% for data in child_data %}
-            <li class="nav-item" role="presentation">
-                <button class="nav-link {% if data.child.id == selected_child.id %}active{% endif %}"
-                        id="child-{{ data.child.id }}-tab"
-                        data-bs-toggle="tab"
-                        data-bs-target="#child-{{ data.child.id }}"
-                        type="button">
-                    {{ data.child.user.get_full_name }} ({{ data.child.grade_level.name }})
-                </button>
-            </li>
-            {% endfor %}
-        </ul>
+<h3 class="mb-4">Welcome, {{ request.user.get_full_name }}</h3>
 
-        <!-- TAB CONTENT -->
-        <div class="tab-content" id="childTabsContent">
-            {% for data in child_data %}
-            <div class="tab-pane fade {% if data.child.id == selected_child.id %}show active{% endif %}"
-                 id="child-{{ data.child.id }}">
+<div class="accordion" id="schoolAccordion">
+    {% for school, students in schools.items %}
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                {{ school.name }}
+                <span class="ms-3">
+                    {% for student_data in students %}
+                        <span class="badge bg-success me-1">{{ student_data.student.user.get_full_name }} (Grade: {{ student_data.student.grade_level.name }}, Admission No: {{ student_data.student.student_id }})</span>
+                    {% endfor %}
+                </span>
+            </button>
+        </h2>
+        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#schoolAccordion">
+            <div class="accordion-body">
 
-                <div class="row g-4 mb-4">
-                    <!-- Attendance -->
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0 text-center">
-                            <div class="card-body">
-                                <div class="text-secondary small">Attendance</div>
-                                <div class="h4 fw-bold mt-1">{{ data.attendance.P }}/{{ data.attendance.total }}</div>
-                                <div class="progress mt-2" style="height:6px;">
-                                    <div class="progress-bar bg-success" role="progressbar"
-                                         style="width:{{ data.attendance.present_percentage }}%">
+                <!-- Student Tabs -->
+                {% if students|length > 1 %}
+                <ul class="nav nav-tabs" id="studentTabs{{ forloop.counter }}" role="tablist">
+                    {% for student_data in students %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if forloop.first %}active{% endif %}" id="student-tab-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" data-bs-toggle="tab" data-bs-target="#student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" type="button" role="tab" aria-controls="student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+                            {{ student_data.student.user.get_full_name }} - {{ student_data.student.grade_level.name }} {{ student_data.student.stream.name }}
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <div class="tab-content mt-3" id="studentTabsContent{{ forloop.counter }}">
+                    {% for student_data in students %}
+                    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" role="tabpanel" aria-labelledby="student-tab-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">
+
+                        <!-- Stats -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3 col-6">
+                                <div class="card text-center shadow-sm">
+                                    <div class="card-body">
+                                        <i class="bi bi-book-fill fs-3 text-success"></i>
+                                        <div class="small text-muted mt-1">Lessons</div>
+                                        <div class="h5 fw-bold">{{ student_data.total_lessons }}</div>
                                     </div>
                                 </div>
-                                <small class="text-muted">Present</small>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Discipline -->
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0 text-center">
-                            <div class="card-body">
-                                <div class="text-secondary small">Discipline Score</div>
-                                <div class="h4 fw-bold mt-1">{{ data.discipline_score }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Subjects -->
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0 text-center">
-                            <div class="card-body">
-                                <div class="text-secondary small">Subjects</div>
-                                <div class="h4 fw-bold mt-1">{{ data.enrollments|length }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Fee -->
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0 text-center">
-                            <div class="card-body">
-                                <div class="text-secondary small">Fee Paid</div>
-                                <div class="h4 fw-bold mt-1">KES {{ data.fee_paid }} / {{ data.fee_total }}</div>
-                                <div class="progress mt-2" style="height:6px;">
-                                    <div class="progress-bar bg-success" role="progressbar"
-                                         style="width:{{ data.fee_percentage }}%">
+                            <div class="col-md-3 col-6">
+                                <div class="card text-center shadow-sm">
+                                    <div class="card-body">
+                                        <i class="bi bi-check-circle-fill fs-3 text-success"></i>
+                                        <div class="small text-muted mt-1">Attendance</div>
+                                        <div class="h5 fw-bold">{{ student_data.attended }}/{{ student_data.total_lessons }}</div>
                                     </div>
                                 </div>
-                                <small class="text-muted">Paid Percentage</small>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="card text-center shadow-sm">
+                                    <div class="card-body">
+                                        <i class="bi bi-exclamation-triangle-fill fs-3 text-success"></i>
+                                        <div class="small text-muted mt-1">Discipline</div>
+                                        <div class="h5 fw-bold">{{ student_data.discipline_count }}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Upcoming Lessons Table -->
+                        <h6>Upcoming Lessons (Next 7 Days)</h6>
+                        <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Subject</th>
+                                    <th>Teacher</th>
+                                    <th>Time</th>
+                                    <th>Room</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lesson in student_data.upcoming_lessons %}
+                                <tr>
+                                    <td>{{ lesson.lesson_date|date:"M. d, Y" }}</td>
+                                    <td>{{ lesson.subject.name }}</td>
+                                    <td>{{ lesson.teacher.get_full_name }}</td>
+                                    <td>{{ lesson.time_slot.start_time|time:"g:i a" }} - {{ lesson.time_slot.end_time|time:"g:i a" }}</td>
+                                    <td>{{ lesson.room }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-muted text-center">No upcoming lessons</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        </div>
+
+                        <!-- Notifications -->
+                        <h6 class="mt-3">Notifications</h6>
+                        <ul class="list-group">
+                            {% for note in student_data.notifications %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ note.title }}
+                                {% if note.is_read %}
+                                <span class="badge bg-secondary">Read</span>
+                                {% else %}
+                                <span class="badge bg-success">New</span>
+                                {% endif %}
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item text-muted">No notifications</li>
+                            {% endfor %}
+                        </ul>
+
                     </div>
-                </div>
-
-                <!-- Lessons Table -->
-                <h5>Upcoming Lessons</h5>
-                <div class="table-responsive mb-4">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Date/Time</th>
-                                <th>Subject</th>
-                                <th>Teacher</th>
-                                <th>Platform</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for lesson in data.lessons %}
-                            <tr>
-                                <td>{{ lesson.lesson_date|date:"M d, Y" }} {{ lesson.time_slot.start_time|time:"h:i A" }}</td>
-                                <td>{{ lesson.subject.name }}</td>
-                                <td>{{ lesson.teacher.user.get_full_name }}</td>
-                                <td>
-                                    {% if lesson.sessions.exists %}
-                                        {% for session in lesson.sessions.all %}
-                                            <span class="badge bg-info">{{ session.platform }}</span>
-                                            <a href="{{ session.meeting_link }}" target="_blank" class="small">Join</a>
-                                        {% endfor %}
-                                    {% else %}
-                                        <span class="text-muted small">Offline</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-success">Scheduled</span></td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">No upcoming lessons</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Discipline Records Table -->
-                <h5>Discipline Records</h5>
-                <div class="table-responsive">
-                    <table class="table table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th>Remark</th>
-                                <th>Points</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in data.discipline_records|slice:":5" %}
-                            <tr>
-                                <td>{{ record.date|date:"M d, Y" }}</td>
-                                <td>{{ record.category }}</td>
-                                <td>{{ record.remark }}</td>
-                                <td>{{ record.points }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No discipline records</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    {% endfor %}
                 </div>
 
             </div>
-            {% endfor %}
         </div>
-        {% else %}
-        <p class="text-muted">No children enrolled under your account.</p>
-        {% endif %}
-
     </div>
-</section>
+    {% endfor %}
+</div>
+
 {% endblock %}

@@ -127,12 +127,14 @@ DISBURSEMENT_METHOD_CHOICES = [
 ]
 
 WEEKDAY_CHOICES = [
-    ('monday', 'Monday'),
-    ('tuesday', 'Tuesday'),
-    ('wednesday', 'Wednesday'),
-    ('thursday', 'Thursday'),
-    ('friday', 'Friday'),
-]
+        ("monday", "Monday"),
+        ("tuesday", "Tuesday"),
+        ("wednesday", "Wednesday"),
+        ("thursday", "Thursday"),
+        ("friday", "Friday"),
+        ("saturday", "Saturday"),
+        ("sunday", "Sunday"),
+    ]
 
 class County(models.Model):
     name = models.CharField(max_length=100, unique=True, blank=True, null=True)
@@ -470,7 +472,7 @@ class UploadedFile(models.Model):
     ]
 
     upload_file_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
-    file = models.FileField(upload_to='uploads/%Y/%m/%d/', validators=[validate_file])
+    file = models.FileField(upload_to='uploads/%Y/%m/%d/')
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     file_size = models.PositiveIntegerField(editable=False)
