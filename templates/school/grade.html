@@ -1,312 +1,232 @@
 {% extends 'school/base.html' %}
-{% block title %}Grades | {{ school.name }}{% endblock %}
-
+{% load static %}
 {% block content %}
 
-<header class="header d-flex align-items-center justify-content-between">
-  <div class="d-flex align-items-center gap-2">
-    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-    <div>
-      <h6 class="m-0 fw-bold">Grades</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Grades</li>
-        </ol>
-      </nav>
-    </div>
+<div class="container-fluid py-3">
+
+  <!-- ================= HEADER ================= -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="bi bi-layers"></i> Grades
+    </h4>
   </div>
-</header>
 
-<section class="content container-fluid py-4">
-
-  {% if messages %}
-  <div class="row">
-    {% for message in messages %}
-    <div class="col-12">
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  <div class="card shadow-sm border-0 rounded-4">
-    <div class="card-header card-success d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Active Grades ({{ grades.count }})</h5>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#gradeModal" data-mode="create">
-          <i class="bi bi-plus"></i> Add Grade
-        </button>
-        <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#uploadGradeModal">
-  <i class="bi bi-upload"></i> Upload Excel
-</button>
-      </div>
-    </div>
-
+  <!-- ================= SEARCH & ACTIONS ================= -->
+  <div class="card shadow-sm mb-3">
     <div class="card-body">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-6">
+          <form method="get" class="d-flex gap-2">
+            <input type="text"
+                   name="q"
+                   class="form-control"
+                   placeholder="🔍 Search grade by name or code"
+                   value="{{ query }}">
+            <button class="btn btn-primary" type="submit">
+              Search
+            </button>
+          </form>
+        </div>
+
+        <div class="col-12 col-md-6 text-md-end">
+          <div class="d-flex gap-2 justify-content-md-end flex-wrap">
+            <button class="btn btn-success btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#gradeModal">
+              <i class="bi bi-plus"></i> Add Grade
+            </button>
+
+            <button class="btn btn-info btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#uploadGradeModal">
+              <i class="bi bi-upload"></i> Upload Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= GRADES TABLE ================= -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle">
+        <table class="table table-hover align-middle mb-0 mobile-stack">
           <thead class="table-light">
             <tr>
               <th>Name</th>
               <th>Code</th>
               <th>Capacity</th>
-              <th>Subjects</th>
-              <th>Description</th>
+              <th>Subjects / Term</th>
               <th>Status</th>
-              <th>Streams</th>
-              <th>Actions</th>
+              <th class="text-end">Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {% for grade in grades %}
             <tr>
-              <td><strong>{{ grade.name }}</strong></td>
-              <td><code>{{ grade.code }}</code></td>
-              <td>{{ grade.capacity }}</td>
-              <td>{{ grade.lessons_per_term }}</td>
-              <td>{{ grade.description|truncatewords:10 }}</td>
-              <td>
+              <td data-label="Name"><strong>{{ grade.name }}</strong></td>
+              <td data-label="Code"><code>{{ grade.code }}</code></td>
+              <td data-label="Capacity">{{ grade.capacity }}</td>
+              <td data-label="Lessons">{{ grade.lessons_per_term }}</td>
+
+              <td data-label="Status">
                 {% if grade.is_active %}
-                <span class="badge bg-success">Active</span>
+                  <span class="badge bg-success">Active</span>
                 {% else %}
-                <span class="badge bg-secondary">Inactive</span>
+                  <span class="badge bg-secondary">Inactive</span>
                 {% endif %}
               </td>
-              <td>
-                <button class="btn btn-sm btn-outline-info"
-                        data-bs-toggle="modal"
-                        data-bs-target="#streamModal-{{ grade.id }}">
-                  <i class="bi bi-diagram-3"></i> Streams
-                </button>
 
-                <!-- STREAM MODAL PER GRADE -->
-                <div class="modal fade" id="streamModal-{{ grade.id }}" tabindex="-1">
-                  <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                      <div class="modal-header">
-                        <h5 class="modal-title">Streams for {{ grade.name }}</h5>
-                        <button class="btn-close" data-bs-dismiss="modal"></button>
-                      </div>
-                      <div class="modal-body">
+              <td data-label="Actions">
+                <div class="d-flex gap-1 justify-content-end">
+                  <button class="btn btn-sm btn-outline-primary"
+                          data-bs-toggle="modal"
+                          data-bs-target="#gradeModal"
+                          data-id="{{ grade.id }}"
+                          data-name="{{ grade.name|escapejs }}"
+                          data-code="{{ grade.code|escapejs }}"
+                          data-capacity="{{ grade.capacity }}"
+                          data-lessons="{{ grade.lessons_per_term }}"
+                          data-active="{{ grade.is_active }}">
+                    <i class="bi bi-pencil"></i>
+                  </button>
 
-                        <h6 class="fw-bold">Existing Streams</h6>
-                        {% if grade.streams.exists %}
-                          <ul class="list-group mb-3">
-                            {% for stream in grade.streams.all %}
-                              <li class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ stream.name }}
-                                <a class="text-danger small" href="{% url 'school:stream-delete' stream.id %}">Delete</a>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        {% else %}
-                          <p class="text-muted">No streams found.</p>
-                        {% endif %}
-
-                        <hr>
-
-                        <h6>Add New Stream</h6>
-                        <form method="post" action="{% url 'school:stream-create' grade.id %}">
-                          {% csrf_token %}
-                          {{ stream_form.name.label_tag }}
-                          {{ stream_form.name }}
-                          {{ stream_form.capacity }}
-                          <input type="hidden" name="grade_id" value="{{ grade.id }}">
-                          <button class="btn btn-success btn-sm mt-2">Add Stream</button>
-                        </form>
-
-                      </div>
-                    </div>
-                  </div>
+                  <button class="btn btn-sm btn-outline-danger"
+                          data-bs-toggle="modal"
+                          data-bs-target="#deleteModal"
+                          data-id="{{ grade.id }}"
+                          data-name="{{ grade.name|escapejs }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </div>
-                <!-- END STREAM MODAL -->
-
-              </td>
-
-              <td>
-                <button class="btn btn-sm btn-outline-primary"
-                  data-bs-toggle="modal"
-                  data-bs-target="#gradeModal"
-                  data-mode="edit"
-                  data-id="{{ grade.id }}"
-                  data-name="{{ grade.name|escapejs }}"
-                  data-code="{{ grade.code|escapejs }}"
-                  data-description="{{ grade.description|escapejs }}"
-                  data-capacity="{{ grade.capacity }}"
-                  data-is_active="{{ grade.is_active }}">
-            <i class="bi bi-pencil"></i>
-          </button>
-
-
-                <button class="btn btn-sm btn-outline-danger"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteModal"
-                        data-id="{{ grade.id }}"
-                        data-name="{{ grade.name|escapejs }}">
-                  <i class="bi bi-trash"></i>
-                </button>
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="7" class="text-center text-muted py-4">No grades found.</td></tr>
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">
+                No grades found.
+              </td>
+            </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
   </div>
-<!-- Upload Grades Excel Modal -->
-<div class="modal fade" id="uploadGradeModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+
+  <!-- ================= PAGINATION ================= -->
+  {% if grades.paginator.num_pages > 1 %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-center flex-wrap">
+
+      {% if grades.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?q={{ query }}&page={{ grades.previous_page_number }}">
+            Previous
+          </a>
+        </li>
+      {% endif %}
+
+      {% for num in grades.paginator.page_range %}
+        {% if grades.number == num %}
+          <li class="page-item active">
+            <span class="page-link">{{ num }}</span>
+          </li>
+        {% elif num > grades.number|add:'-3' and num < grades.number|add:'3' %}
+          <li class="page-item">
+            <a class="page-link" href="?q={{ query }}&page={{ num }}">
+              {{ num }}
+            </a>
+          </li>
+        {% endif %}
+      {% endfor %}
+
+      {% if grades.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?q={{ query }}&page={{ grades.next_page_number }}">
+            Next
+          </a>
+        </li>
+      {% endif %}
+
+    </ul>
+  </nav>
+  {% endif %}
+
+</div>
+
+<!-- ================= ADD / EDIT GRADE MODAL ================= -->
+<div class="modal fade" id="gradeModal" tabindex="-1">
+  <div class="modal-dialog">
     <div class="modal-content">
-      <form method="post" enctype="multipart/form-data" action="{% url 'school:upload-grade-file' %}">
+      <form method="post">
         {% csrf_token %}
-        <div class="modal-header bg-info text-white">
-          <h5 class="modal-title">Upload Grades via Excel</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="modal-header">
+          <h5 class="modal-title">Grade</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
-          <p class="text-muted">Upload an Excel file (.xls or .xlsx) with columns: <code>name, code, description, capacity</code>. Max file size: 5MB.</p>
-          <div class="mb-3">
-            {{ upload_form.file.label_tag }}
-            {{ upload_form.file }}
-            {% if upload_form.file.errors %}{{ upload_form.file.errors }}{% endif %}
-          </div>
+          {{ form.as_p }}
         </div>
-
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-info">Upload File</button>
+          <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-  <!-- GRADE MODALS (CREATE/EDIT + DELETE) -->
-      <!-- Grade Modal (Create/Edit) -->
-    <div class="modal fade" id="gradeModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="gradeModalTitle">Add New Grade</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <form method="post" id="gradeForm" action="{% url 'school:grade-create' %}">
-            {% csrf_token %}
-            <input type="hidden" name="mode" id="mode" value="create">
-            <div class="modal-body">
-              {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                  {{ form.non_field_errors }}
-                </div>
-              {% endif %}
-              <div class="mb-3">
-                {{ form.name.label_tag }}
-                {{ form.name }}
-                {% if form.name.errors %}{{ form.name.errors }}{% endif %}
-              </div>
-              <div class="mb-3">
-                {{ form.code.label_tag }}
-                {{ form.code }}
-                {% if form.code.errors %}{{ form.code.errors }}{% endif %}
-              </div>
-              <div class="mb-3">
-                {{ form.description.label_tag }}
-                {{ form.description }}
-                {% if form.description.errors %}{{ form.description.errors }}{% endif %}
-              </div>
-              <div class="mb-3">
-                {{ form.capacity.label_tag }}
-                {{ form.capacity }}
-                {% if form.capacity.errors %}{{ form.capacity.errors }}{% endif %}
-              </div>
-              <div class="mb-3 form-check">
-                {{ form.is_active }}
-                {{ form.is_active.label_tag }}
-                {% if form.is_active.errors %}{{ form.is_active.errors }}{% endif %}
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-success">Save Changes</button>
-            </div>
-          </form>
+<!-- ================= UPLOAD MODAL ================= -->
+<div class="modal fade" id="uploadGradeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title">Upload Grades</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-      </div>
-    </div>
-
-    <!-- Delete Modal -->
-    <div class="modal fade" id="deleteModal" tabindex="-1">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Delete Grade</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <form method="post" id="deleteForm">
-            {% csrf_token %}
-            <div class="modal-body">
-              <p>Are you sure you want to delete <strong id="deleteName"></strong>? This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-danger">Delete</button>
-            </div>
-          </form>
+        <div class="modal-body">
+          {{ upload_form.as_p }}
         </div>
-      </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success">Upload</button>
+        </div>
+      </form>
     </div>
+  </div>
+</div>
 
-</section>
+<!-- ================= DELETE MODAL ================= -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post">
+        {% csrf_token %}
+        <div class="modal-body text-center">
+          <p>Delete <strong id="deleteGradeName"></strong>?</p>
+          <input type="hidden" name="grade_id" id="deleteGradeId">
+          <div class="d-flex gap-2 justify-content-center">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger">Delete</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-
-  const gradeModal = document.getElementById("gradeModal");
-  const gradeForm = document.getElementById("gradeForm");
-  const gradeModalTitle = document.getElementById("gradeModalTitle");
-  const modeInput = document.getElementById("mode");
-
-  gradeModal.addEventListener("show.bs.modal", function (event) {
-    const button = event.relatedTarget;
-    const mode = button.dataset.mode;
-    modeInput.value = mode;
-
-    if (mode === "create") {
-      gradeModalTitle.textContent = "Add New Grade";
-      gradeForm.action = "{% url 'school:grade-create' %}";
-      gradeForm.reset();
-    } else if (mode === "edit") {
-      const id = button.dataset.id;
-      const name = button.dataset.name;
-      gradeModalTitle.textContent = `Edit Grade: ${name}`;
-      gradeForm.action = "{% url 'school:edit-grade' 0 %}".replace("0", id);
-
-      document.querySelector("#id_name").value = name || "";
-      document.querySelector("#id_code").value = button.dataset.code || "";
-      document.querySelector("#id_description").value = button.dataset.description || "";
-      document.querySelector("#id_capacity").value = button.dataset.capacity || "";
-      document.querySelector("#id_is_active").checked = button.dataset.is_active === "true";
-    }
-  });
-  // DELETE modal
-  const deleteModal = document.getElementById("deleteModal");
-  const deleteForm = document.getElementById("deleteForm");
-
-  deleteModal.addEventListener("show.bs.modal", function (event) {
-    const button = event.relatedTarget;
-    const id = button.dataset.id;
-    const name = button.dataset.name;
-    document.getElementById("deleteName").textContent = name;
-    deleteForm.action = "{% url 'school:delete-grade' 0 %}".replace("0", id);
-  });
-
-});
+document.getElementById('deleteModal')?.addEventListener('show.bs.modal', function (event) {
+  const btn = event.relatedTarget
+  document.getElementById('deleteGradeId').value = btn.dataset.id
+  document.getElementById('deleteGradeName').innerText = btn.dataset.name
+})
 </script>
 
 {% endblock %}
