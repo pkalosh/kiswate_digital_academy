@@ -17,6 +17,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
 from django.core.mail import send_mail
+from itertools import cycle
 import random
 import string
 from django.utils.dateparse import parse_date
@@ -61,7 +62,8 @@ from .models import (
     Grade, School, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson, PolicymakerProfile, AttendanceAlert,
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
-    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear
+    ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear,
+    SubjectEnrollment
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -667,63 +669,54 @@ def paginate(request, queryset, per_page=10):
 
 @login_required
 def school_users(request):
+    """
+    Unified view for managing school members (teachers, staff, students, parents).
+    Handles listing with search/filter across tabs.
+    Handles creation via POST from modals (separate forms for flexibility).
+    """
     school = None
 
     try:
+        # Fix: Get the actual School instance from admin profile
         school = request.user.school_admin_profile.school
     except AttributeError:
         try:
             school = request.user.staffprofile.school
         except AttributeError as e:
             logger.warning(f"Permission denied for user {request.user.email}: {e}")
-            messages.error(request, "You do not have permission to access this page.")
+            messages.error(
+                request,
+                f"You do not have permission to access this page. (User: {request.user.email})"
+            )
             return redirect('userauths:sign-in')
 
-    query = request.GET.get('q', '').strip()
+    # Common search query
+    query = request.GET.get('q', '')
 
-    # ===================== TEACHERS =====================
-    teachers_qs = (
-        StaffProfile.objects
-        .filter(school=school, position='teacher')
-        .select_related('user')
-        .order_by('-user__created_at')
-    )
-
+    # Fetch teachers (StaffProfile with position='teacher')
+    teachers = StaffProfile.objects.filter(school=school, position='teacher').select_related('user').order_by('-user__created_at')
     if query:
-        teachers_qs = teachers_qs.filter(
+        teachers = teachers.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query)
         )
+    teachers_page = paginate(request, teachers)
 
-    teachers_page = paginate(request, teachers_qs)
-
-    # ===================== OTHER STAFF =====================
-    staff_qs = (
-        StaffProfile.objects
-        .filter(school=school)
-        .exclude(position='teacher')
-        .select_related('user')
-        .order_by('-user__created_at')
-    )
+    # Fetch other staff
+    other_staff = StaffProfile.objects.filter(school=school).exclude(position='teacher').select_related('user').order_by('-user__created_at')
 
     if query:
-        staff_qs = staff_qs.filter(
+        other_staff = other_staff.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query)
         )
+    staff_page = paginate(request, other_staff)
 
-    staff_page = paginate(request, staff_qs)
-
-    # ===================== STUDENTS =====================
-    students_qs = (
-        Student.objects
-        .filter(school=school)
-        .select_related('user', 'grade_level')
-        .order_by('-user__created_at')
-    )
+    # Fetch students
+    students = Student.objects.filter(school=school).select_related('user', 'grade_level').order_by('-user__created_at')
 
     if query:
-        students_qs = students_qs.filter(
+        students = students.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query) |
             Q(student_id__icontains=query) |
@@ -731,63 +724,172 @@ def school_users(request):
             Q(user__email__icontains=query) |
             Q(grade_level__name__icontains=query)
         )
+    students_page = paginate(request, students)
 
-    students_page = paginate(request, students_qs)
-
-    # ===================== PARENTS =====================
-    parents_qs = (
-        Parent.objects
-        .filter(school=school)
-        .select_related('user')
-        .order_by('-user__created_at')
-    )
+    # Fetch parents
+    parents = Parent.objects.filter(school=school).select_related('user').order_by('-user__created_at')
 
     if query:
-        parents_qs = parents_qs.filter(
+        parents = parents.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query) |
             Q(parent_id__icontains=query) |
             Q(phone__icontains=query) |
             Q(user__email__icontains=query)
         )
+    parents_page = paginate(request, parents)
 
-    parents_page = paginate(request, parents_qs)
-
-    # ===================== UPDATE FORMS =====================
-    staff_update_forms = {
-        s.id: StaffUpdateForm(instance=s)
-        for s in list(teachers_qs) + list(staff_qs)
-    }
-
-    student_update_forms = {
-        st.id: StudentUpdateForm(instance=st)
-        for st in students_qs
-    }
-
-    parent_update_forms = {
-        p.id: ParentUpdateForm(instance=p)
-        for p in parents_qs
-    }
+    # Bound update forms for modals
+    student_update_forms = {st.id: StudentUpdateForm(instance=st) for st in students}
+    parent_update_forms = {p.id: ParentUpdateForm(instance=p) for p in parents}
+    staff_update_forms = {s.id: StaffUpdateForm(instance=s) for s in list(other_staff) + list(teachers)}
 
     context = {
         'school': school,
         'query': query,
-
+        'teachers': teachers,
         'teachers_page': teachers_page,
+        'other_staff': other_staff,
         'staff_page': staff_page,
+        'students': students,
         'students_page': students_page,
+        'parents': parents,
         'parents_page': parents_page,
+        # Forms - pass school for queryset filtering
 
-        'staff_update_forms': staff_update_forms,
         'student_update_forms': student_update_forms,
         'parent_update_forms': parent_update_forms,
-
+        'staff_update_forms': staff_update_forms,
         'student_form': StudentCreationForm(school=school),
         'parent_form': ParentCreationForm(school=school),
         'parent_student_form': ParentStudentCreationForm(school=school),
         'assign_form': AssignParentStudentForm(school=school),
         'staff_form': StaffCreationForm(school=school),
     }
+
+    # Handle POST for creations
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+
+        if action == 'create_student':
+            form = StudentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        # Unpack tuple from form.save() (student, password)
+                        student, password = form.save()
+                        # Ensure school_id is set (form should already set via self.school)
+                        if not student.school_id:
+                            student.school_id = school.id
+                            student.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Student "{student.user.get_full_name()}" ({student.student_id}). '
+                            f'Grade: {student.grade_level}. '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        # Map parents if selected
+                        for parent in form.cleaned_data.get('parents', []):
+                            student.parents.add(parent)
+                        return redirect('school:school-users')
+                except Exception as e:
+                    messages.error(request, f"Failed to create Student: {str(e)}")
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['student_form'] = form
+
+        elif action == 'create_parent':
+            form = ParentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        # Unpack tuple
+                        parent, password = form.save()
+                        # Ensure school_id is set
+                        if not parent.school_id:
+                            parent.school_id = school.id
+                            parent.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Parent "{parent.user.get_full_name()}" ({parent.parent_id}). '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
+                except Exception as e:
+                    messages.error(request, f"Failed to create Parent: {str(e)}")
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['parent_form'] = form
+
+        elif action == 'create_parent_student':
+            form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        # Unpack 4-tuple
+                        parent, student, parent_password, student_password = form.save()
+                        # Ensure school_id on both (form should set via self.school)
+                        if not parent.school_id:
+                            parent.school_id = school.id
+                            parent.save(update_fields=['school_id'])
+                        if not student.school_id:
+                            student.school_id = school.id
+                            student.save(update_fields=['school_id'])
+                        # Link
+                        student.parents.add(parent)
+                        messages.success(
+                            request,
+                            f'Successfully created Parent "{parent.user.get_full_name()}" and Student "{student.user.get_full_name()}". '
+                            f'They have been linked. Emails sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
+                except Exception as e:
+                    messages.error(request, f"Failed to create Parent and Student: {str(e)}")
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['parent_student_form'] = form
+
+        elif action == 'create_staff':
+            form = StaffCreationForm(request.POST, request.FILES, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        # Unpack tuple
+                        staff, password = form.save()
+                        # Ensure school_id is set
+                        if not staff.school_id:
+                            staff.school_id = school.id
+                            staff.save(update_fields=['school_id'])
+                        messages.success(
+                            request,
+                            f'Successfully created Staff "{staff.user.get_full_name()}". '
+                            f'Temporary password: <strong>{password}</strong>. '
+                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
+                        )
+                        return redirect('school:school-users')
+                except Exception as e:
+                    messages.error(request, f"Failed to create Staff: {str(e)}")
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['staff_form'] = form
+
+        elif action == 'assign_parent_student':
+            form = AssignParentStudentForm(request.POST, school=school)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        parent = form.cleaned_data['parent']
+                        student = form.cleaned_data['student']
+                        student.parents.add(parent)
+                        messages.success(request, f'Successfully assigned student "{student.user.get_full_name()}" to parent "{parent.user.get_full_name()}".')
+                        return redirect('school:school-users')
+                except Exception as e:
+                    messages.error(request, f"Failed to assign: {str(e)}")
+            else:
+                messages.error(request, "Please correct the form errors below.")
+                context['assign_form'] = form
 
     return render(request, 'school/staff.html', context)
 
@@ -4410,3 +4512,431 @@ def policymaker_dashboard(request):
     }
 
     return render(request, 'school/policy/dashboard.html', context)
+
+
+
+
+#FIle Upload
+
+
+import random
+import string
+
+def generate_password(length=8):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+
+def safe_email(value, fallback):
+    return value.strip().lower() if value else fallback
+
+def generate_time_slots(school, staff_user):
+    start = datetime.datetime.strptime("08:00", "%H:%M")
+    end = datetime.datetime.strptime("16:00", "%H:%M")
+
+    slots = []
+    current = start
+    count = 0
+
+    while current < end:
+        duration = 45
+        description = "Lesson"
+
+        if count == 3:
+            duration = 20
+            description = "Break"
+        elif count == 6:
+            duration = 45
+            description = "Lunch"
+
+        next_time = current + timedelta(minutes=duration)
+
+        slot, _ = TimeSlot.objects.get_or_create(
+            school=school,
+            start_time=current.time(),
+            end_time=next_time.time(),
+            defaults={
+                "description": description,
+                "created_by": staff_user
+            }
+        )
+
+        if description == "Lesson":
+            slots.append(slot)
+
+        current = next_time
+        count += 1
+
+    return slots
+
+def populate_student_lesson_enrollments(school, grade=None, stream=None):
+    """
+    Create Enrollment records by matching:
+    Student -> SubjectEnrollment -> Lesson
+    """
+
+    students = Student.objects.filter(
+        school=school,
+        is_active=True
+    )
+
+    if grade:
+        students = students.filter(grade_level=grade)
+
+    if stream:
+        students = students.filter(stream=stream)
+
+    for student in students:
+        subject_ids = student.subject_enrollments.values_list(
+            "subject_id", flat=True
+        )
+
+        lessons = Lesson.objects.filter(
+            subject_id__in=subject_ids,
+            timetable__school=school,
+            stream=student.stream,
+            is_canceled=False
+        )
+
+        for lesson in lessons:
+            Enrollment.objects.get_or_create(
+                student=student,
+                lesson=lesson,
+                school=school,
+                defaults={"status": "active"}
+            )
+
+
+SUBJECT_CODE_MAP = {
+    "MAT": "Mathematics",
+    "ENG": "English",
+    "KISW": "Kiswahili",
+    "CHEM": "Chemistry",
+    "BIO": "Biology",
+    "PHYC": "Physics",
+    "CRE": "Christian Religious Education",
+    "GEO": "Geography",
+    "HIST": "History",
+    "BST": "Business Studies",
+    "AGRI": "Agriculture",
+    "MUSIC": "Music",
+}
+
+
+# ================= HELPERS =================
+
+def normalize_phone(phone):
+    phone = str(phone).strip()
+    return phone if phone.startswith("0") else f"0{phone}"
+
+def generate_lesson_dates(term, weekday):
+    weekday_map = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+    }
+
+    target = weekday_map[weekday.lower()]
+    current = term.start_date
+
+    while current.weekday() != target:
+        current += timedelta(days=1)
+
+    dates = []
+    while current <= term.end_date:
+        if current.weekday() < 5:
+            dates.append(current)
+        current += timedelta(days=7)
+
+    return dates
+
+
+# ================= MAIN VIEW =================
+@require_POST
+@login_required
+def universal_excel_upload(request):
+    excel_file = request.FILES.get("file")
+    category = request.POST.get("category")
+
+    if not excel_file or not category:
+        return JsonResponse({"error": "File and category required"}, status=400)
+
+    try:
+        df = pd.read_excel(excel_file)
+    except Exception as e:
+        return JsonResponse({"error": f"Invalid Excel file: {str(e)}"}, status=400)
+
+    school = getattr(request.user, "school_admin_profile", None)
+    if not school:
+        return JsonResponse({"error": "You are not assigned to a school"}, status=400)
+
+    results = {"created": 0, "errors": []}
+
+    with transaction.atomic():
+
+        # ================= STUDENTS =================
+        if category == "students":
+            required = [
+                "admin_no","first_name","last_name","gender",
+                "parent_phone","parent_email","parent_first_name",
+                "parent_last_name","subjects","grade","stream","date_of_birth"
+            ]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            active_term = Term.objects.filter(school=school, is_active=True).first()
+
+            for i, row in df.iterrows():
+                try:
+                    admin_no = str(row["admin_no"]).strip()
+                    student_email = f"{admin_no}@gmail.com"
+                    student_pass = generate_password()
+
+                    user, created = User.objects.get_or_create(
+                        email=student_email,
+                        defaults={
+                            "phone_number": admin_no,
+                            "first_name": row["first_name"],
+                            "last_name": row["last_name"],
+                            "is_student": True,
+                        }
+                    )
+                    if created:
+                        user.set_password(student_pass)
+                        user.save()
+
+                    grade = Grade.objects.get(name=row["grade"], school=school)
+                    stream = Streams.objects.get(name=row["stream"], school=school)
+
+                    student, _ = Student.objects.get_or_create(
+                        user=user,
+                        student_id=admin_no,
+                        school=school,
+                        defaults={
+                            "date_of_birth": row["date_of_birth"],
+                            "enrollment_date": timezone.now().date(),
+                            "grade_level": grade,
+                            "stream": stream,
+                        }
+                    )
+
+                    parent_phone = normalize_phone(row["parent_phone"])
+                    parent_email = safe_email(row["parent_email"], f"{parent_phone}@gmail.com")
+                    parent_pass = generate_password()
+
+                    p_user, p_created = User.objects.get_or_create(
+                        email=parent_email,
+                        defaults={
+                            "phone_number": parent_phone,
+                            "first_name": row["parent_first_name"],
+                            "last_name": row["parent_last_name"],
+                            "is_parent": True,
+                        }
+                    )
+                    if p_created:
+                        p_user.set_password(parent_pass)
+                        p_user.save()
+
+                    parent, _ = Parent.objects.get_or_create(user=p_user, school=school)
+                    student.parents.add(parent)
+
+                    subject_codes = str(row["subjects"]).replace(" ", "").split(",")
+                    for code in subject_codes:
+                        subject, _ = Subject.objects.get_or_create(
+                            school=school,
+                            code=code,
+                            defaults={
+                                "name": SUBJECT_CODE_MAP.get(code, code),
+                                "grade": grade,
+                                "start_date": active_term.start_date,
+                                "end_date": active_term.end_date,
+                            }
+                        )
+                        SubjectEnrollment.objects.get_or_create(student=student, subject=subject)
+
+                    msg = f"Student Login\nEmail: {student_email}\nPassword: {student_pass}"
+                    send_email(parent_email, "Student Credentials", msg)
+                    _send_sms_via_eujim(parent_phone, msg)
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    logger.exception(f"Student row {i + 2} error")
+                    results["errors"].append({"row": i + 2, "error": str(e)})
+
+        # ================= SUBJECTS =================
+        elif category == "subjects":
+            required = ["code", "name", "lessons_per_week"]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            active_term = Term.objects.filter(school=school, is_active=True).first()
+
+            for i, row in df.iterrows():
+                try:
+                    Subject.objects.update_or_create(
+                        school=school,
+                        code=row["code"],
+                        defaults={
+                            "name": row["name"],
+                            "sessions_per_week": int(row["lessons_per_week"]),
+                            "start_date": active_term.start_date,
+                            "end_date": active_term.end_date,
+                        }
+                    )
+                    results["created"] += 1
+                except Exception as e:
+                    logger.exception(f"Subject row {i + 2} error")
+                    results["errors"].append({"row": i + 2, "error": str(e)})
+
+        # ================= TEACHERS =================
+        elif category == "teachers":
+            required = [
+                "phone","email","first_name","last_name",
+                "subjects","streams","class_teacher"
+            ]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            for i, row in df.iterrows():
+                try:
+                    phone = normalize_phone(row["phone"])
+                    email = safe_email(row["email"], f"{phone}@gmail.com")
+                    password = generate_password()
+
+                    user, created = User.objects.get_or_create(
+                        email=email,
+                        defaults={
+                            "phone_number": phone,
+                            "first_name": row["first_name"],
+                            "last_name": row["last_name"],
+                            "is_teacher": True,
+                        }
+                    )
+
+                    if created:
+                        user.set_password(password)
+                        user.save()
+
+                    staff, _ = StaffProfile.objects.get_or_create(user=user, school=school)
+
+                    subject_codes = str(row["subjects"]).replace(" ", "").split(",")
+                    for code in subject_codes:
+                        subject = Subject.objects.filter(code=code, school=school).first()
+                        if subject:
+                            staff.subjects.add(subject)
+
+                    streams = Streams.objects.filter(
+                        name__in=str(row["streams"]).replace(" ", "").split(","),
+                        school=school
+                    )
+
+                    if str(row["class_teacher"]).upper() == "YES":
+                        for stream in streams:
+                            TeacherStreamAssignment.objects.get_or_create(
+                                teacher=staff,
+                                stream=stream,
+                                school=school
+                            )
+
+                    msg = f"Teacher Login\nEmail: {email}\nPassword: {password}"
+                    send_email(email, "Teacher Credentials", msg)
+                    _send_sms_via_eujim(phone, msg)
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    logger.exception(f"Teacher row {i + 2} error")
+                    results["errors"].append({"row": i + 2, "error": str(e)})
+
+        # ================= TIMETABLE =================
+        elif category == "timetable":
+            required = ["grade","stream","term","year","subject_code","teacher_phone","room"]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            grade = Grade.objects.get(name=df.iloc[0]["grade"], school=school)
+            stream = Streams.objects.get(name=df.iloc[0]["stream"], school=school)
+            term = Term.objects.get(name=str(df.iloc[0]["term"]), school=school)
+
+            timetable, _ = Timetable.objects.get_or_create(
+                school=school,
+                grade=grade,
+                stream=stream,
+                term=term,
+                year=int(df.iloc[0]["year"]),
+                defaults={"start_date": term.start_date, "end_date": term.end_date}
+            )
+
+            # Generate slots
+            slots = generate_time_slots(school, request.user.staffprofile)
+
+            weekdays = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+
+            # Track assigned lessons to avoid conflicts
+            assigned = {}
+
+            for i, row in df.iterrows():
+                try:
+                    phone = normalize_phone(row["teacher_phone"])
+                    teacher = StaffProfile.objects.get(user__phone_number=phone)
+                    subject = Subject.objects.get(code=row["subject_code"], school=school)
+                    room = row["room"]
+                    lesson_count = subject.sessions_per_week
+
+                    # Generate lesson dates sequentially across the term
+                    lesson_dates = []
+                    current_date = term.start_date
+                    while len(lesson_dates) < lesson_count:
+                        if current_date.weekday() < 7:
+                            lesson_dates.append(current_date)
+                        current_date += timedelta(days=1)
+
+                    slot_cycle = cycle(slots)
+                    for lesson_date in lesson_dates:
+                        # pick next free slot for this stream
+                        for _ in range(len(slots)):
+                            slot = next(slot_cycle)
+                            key = (lesson_date, stream.id, slot.id)
+                            if key not in assigned:
+                                assigned[key] = True
+                                day_of_week = weekdays[lesson_date.weekday()]
+                                Lesson.objects.update_or_create(
+                                    timetable=timetable,
+                                    subject=subject,
+                                    stream=stream,
+                                    teacher=teacher,
+                                    day_of_week=day_of_week,
+                                    time_slot=slot,
+                                    room=room,
+                                    defaults={"lesson_date": lesson_date}
+                                )
+                                break
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    logger.exception(f"Timetable row {i + 2} error")
+                    results["errors"].append({"row": i + 2, "error": str(e)})
+
+            populate_student_lesson_enrollments(school, grade, stream)
+
+        else:
+            return JsonResponse({"error": "Invalid category"}, status=400)
+
+    return JsonResponse({
+        "status": "success",
+        "category": category,
+        "results": results
+    })
+
+
+@login_required
+def upload_excel_page(request):
+    """Renders the Excel upload page."""
+    return render(request, 'school/file_upload.html')

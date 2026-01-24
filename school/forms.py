@@ -633,7 +633,7 @@ class StaffCreationForm(BaseForm):
 class SubjectForm(BaseForm):
     class Meta:
         model = Subject
-        fields = ['name', 'description', 'code', 'grade', 'start_date', 'end_date', 'is_active']
+        fields = ['name', 'description', 'code', 'grade','pathway', 'start_date', 'end_date', 'is_active', 'is_elective']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'start_date': forms.DateInput(attrs={'type': 'date'}),

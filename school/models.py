@@ -171,6 +171,8 @@ class Ward(models.Model):
     def __str__(self):
         return self.name
 
+
+
 # School model
 
 class School(models.Model):
@@ -208,6 +210,17 @@ class Grade(models.Model):
     def __str__(self):
         return f"{self.name} - {self.school.name}"
 
+class Pathway(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='pathways')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='pathways')
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.grade.name}"
+
+
 class Streams(models.Model):
     name = models.CharField(max_length=50)
     grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='streams')
@@ -236,17 +249,26 @@ class Subject(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     code = models.CharField(max_length=100, blank=True)
+
     school = models.ForeignKey(School, on_delete=models.CASCADE)
     grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
+    pathway = models.ForeignKey(
+        Pathway,
+        on_delete=models.CASCADE,
+        related_name='subjects',
+        blank=True,
+        null=True
+    )
+
     start_date = models.DateField()
     end_date = models.DateField(blank=True, null=True)
     sessions_per_week = models.PositiveIntegerField(default=2)
 
+    is_elective = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.name} - {self.grade.name}"
-
+        return f"{self.name} ({self.pathway})"
 
 
 
@@ -291,11 +313,21 @@ class Parent(models.Model):
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     student_id = models.CharField(max_length=50, unique=True, db_index=True)
-    date_of_birth = models.DateField()
+    date_of_birth = models.DateField(blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
-    enrollment_date = models.DateField()
+    enrollment_date = models.DateField(blank=True, null=True)
+
     grade_level = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='students')
     stream = models.ForeignKey(Streams, on_delete=models.CASCADE, related_name='student_stream', blank=True, null=True)
+
+    pathway = models.ForeignKey(
+        Pathway,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='students'
+    )
+
     bio = models.TextField(blank=True)
     parents = models.ManyToManyField(Parent, blank=True, related_name='children')
     profile_picture = models.ImageField(upload_to='students/', blank=True)
@@ -303,7 +335,30 @@ class Student(models.Model):
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.user.get_full_name()} ({self.student_id}) - {self.school.name}"
+        return f"{self.user.get_full_name()} ({self.student_id})"
+
+
+class SubjectEnrollment(models.Model):
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='subject_enrollments'
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name='enrollments'
+    )
+
+    is_elective = models.BooleanField(default=False)
+    enrolled_on = models.DateField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('student', 'subject')
+
+    def __str__(self):
+        return f"{self.student} → {self.subject}"
 
 
 class TeacherStreamAssignment(models.Model):
@@ -469,8 +524,10 @@ def validate_file(file):
 class UploadedFile(models.Model):
     CATEGORY_CHOICES = [
         ('grade', 'Grade'),
-        ('staff', 'Staff'),
+        ('users', 'users'),
         ('subjects', 'Subjects'),
+        ('timetable', 'timetable'),
+        
     ]
 
     upload_file_category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)

@@ -152,7 +152,18 @@
 
         {% if user.is_authenticated %}
         <li class="nav-item ms-lg-2">
+          {% if user.is_admin %}
           <a class="btn btn-success px-3" href="{% url 'school:dashboard' %}">
+            {% elif user.is_teacher %}
+                <a class="btn btn-success px-3" href="{% url 'userauths:teacher-dashboard' %}">
+            {% elif user.is_student %}
+                <a class="btn btn-success px-3" href="{% url 'userauths:student-dashboard' %}">
+            {% elif user.is_parent %}
+                <a class="btn btn-success px-3" href="{% url 'userauths:parent-dashboard' %}">
+          {% else %}
+                <a class="btn btn-success px-3" href="{% url 'school:policy-dashboard' %}">
+
+            {% endif %}
             Dashboard
           </a>
         </li>

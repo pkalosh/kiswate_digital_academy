@@ -220,11 +220,15 @@
             <div class="col-md-6 mb-3">{{ form.name.label_tag }}{{ form.name }}</div>
             <div class="col-md-6 mb-3">{{ form.code.label_tag }}{{ form.code }}</div>
             <div class="col-md-6 mb-3">{{ form.grade.label_tag }}{{ form.grade }}</div>
+            <div class="col-md-6 mb-3">{{ form.pathway.label_tag }}{{ form.pathway }}</div>
             <div class="col-md-6 mb-3">{{ form.start_date.label_tag }}{{ form.start_date }}</div>
             <div class="col-md-6 mb-3">{{ form.end_date.label_tag }}{{ form.end_date }}</div>
             <div class="col-12 mb-3">{{ form.description.label_tag }}{{ form.description }}</div>
             <div class="col-12 form-check">
               {{ form.is_active }} {{ form.is_active.label_tag }}
+            </div>
+            <div class="col-12 form-check">
+              {{ form.is_elective }} {{ form.is_elective.label_tag }}
             </div>
           </div>
         </div>
@@ -303,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
       id_code.value = btn.dataset.code;
       id_description.value = btn.dataset.description;
       id_grade.value = btn.dataset.grade;
+      id_pathway.value = btn.dataset.pathway;
       id_start_date.value = btn.dataset.start_date;
       id_end_date.value = btn.dataset.end_date;
       document.querySelector('input[name="is_active"]').checked =
