@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from userauths.models import User
 from .models import Grade, School, Parent,StaffProfile,Student, ScanLog, SmartID,Scholarship
 import logging
+from django.db import IntegrityError
 import os
 from django.db.models import Q
 from collections import defaultdict
