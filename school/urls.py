@@ -214,5 +214,5 @@ urlpatterns = [
     path("teacher/attendance/<int:lesson_id>/smart/", views.teacher_attendance_smart, name="teacher-attendance-smart"),
     path("teacher/discipline/create/ajax/", views.teacher_discipline_create_ajax, name="teacher-discipline-create-ajax"),
     path('upload-excel/', views.universal_excel_upload, name='universal_excel_upload'),
-    # path('upload-page/', views.upload_excel_page, name='upload_excel_page'),  # GET page
+    path('upload-page/', views.upload_excel_page, name='upload_excel_page')
 ]

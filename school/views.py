@@ -4978,7 +4978,7 @@ def universal_excel_upload(request):
     })
 
 
-# @login_required
-# def upload_excel_page(request):
-#     """Renders the Excel upload page."""
-#     return render(request, 'school/file_upload.html')
+@login_required
+def upload_excel_page(request):
+    """Renders the Excel upload page."""
+    return render(request, 'school/file_upload.html')
