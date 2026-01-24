@@ -4572,38 +4572,59 @@ def populate_student_lesson_enrollments(school, grade=None, stream=None):
     """
     Create Enrollment records by matching:
     Student -> SubjectEnrollment -> Lesson
+    Optimized with bulk_create and minimal queries.
     """
+    import logging
+    logger = logging.getLogger(__name__)
 
     students = Student.objects.filter(
         school=school,
         is_active=True
-    )
+    ).select_related('grade_level','stream')
 
     if grade:
         students = students.filter(grade_level=grade)
-
     if stream:
         students = students.filter(stream=stream)
 
+    enrollments_to_create = []
+
+    # Bulk fetch lessons per stream
+    lessons_map = {}  # subject_id -> list of lessons
+    lessons_qs = Lesson.objects.filter(
+        timetable__school=school,
+        stream=stream,
+        is_canceled=False
+    ).select_related('time_slot', 'subject')
+
+    for lesson in lessons_qs:
+        lessons_map.setdefault(lesson.subject.id, []).append(lesson)
+
+    # Bulk fetch subject enrollments
+    subject_enrollments_map = {}  # student_id -> list of subject ids
     for student in students:
-        subject_ids = student.subject_enrollments.values_list(
-            "subject_id", flat=True
-        )
+        subject_ids = list(student.subject_enrollments.values_list('subject_id', flat=True))
+        subject_enrollments_map[student.id] = subject_ids
 
-        lessons = Lesson.objects.filter(
-            subject_id__in=subject_ids,
-            timetable__school=school,
-            stream=student.stream,
-            is_canceled=False
-        )
+    for student in students:
+        subject_ids = subject_enrollments_map.get(student.id, [])
+        for sid in subject_ids:
+            lessons = lessons_map.get(sid, [])
+            for lesson in lessons:
+                enrollments_to_create.append(
+                    Enrollment(
+                        student=student,
+                        lesson=lesson,
+                        school=school,
+                        status='active'
+                    )
+                )
 
-        for lesson in lessons:
-            Enrollment.objects.get_or_create(
-                student=student,
-                lesson=lesson,
-                school=school,
-                defaults={"status": "active"}
-            )
+    Enrollment.objects.bulk_create(enrollments_to_create, ignore_conflicts=True)
+
+    # Summary
+    print(f"[SUMMARY] Total Students: {students.count()} | Total Lessons: {lessons_qs.count()} | Total Enrollments Created: {len(enrollments_to_create)}")
+    logger.info(f"[SUMMARY] Total Students: {students.count()} | Total Lessons: {lessons_qs.count()} | Total Enrollments Created: {len(enrollments_to_create)}")
 
 
 SUBJECT_CODE_MAP = {
@@ -4656,6 +4677,14 @@ def generate_lesson_dates(term, weekday):
 @require_POST
 @login_required
 def universal_excel_upload(request):
+    """
+    Universal Excel Upload: Students, Parents, Teachers, Subjects, Timetable
+    Optimized: bulk operations, weekly repeated lessons, student enrollments
+    """
+    import logging
+    from itertools import cycle
+    logger = logging.getLogger(__name__)
+
     excel_file = request.FILES.get("file")
     category = request.POST.get("category")
 
@@ -4674,7 +4703,6 @@ def universal_excel_upload(request):
     results = {"created": 0, "errors": []}
 
     with transaction.atomic():
-
         # ================= STUDENTS =================
         if category == "students":
             required = [
@@ -4873,57 +4901,70 @@ def universal_excel_upload(request):
                 defaults={"start_date": term.start_date, "end_date": term.end_date}
             )
 
-            # Generate slots
             slots = generate_time_slots(school, request.user.staffprofile)
-
             weekdays = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
+            slot_cycle = cycle(slots)
 
-            # Track assigned lessons to avoid conflicts
-            assigned = {}
+            subject_map = {s.code: s for s in Subject.objects.filter(school=school)}
+            staff_map = {s.user.phone_number: s for s in StaffProfile.objects.filter(school=school)}
+
+            total_lessons_created = 0
 
             for i, row in df.iterrows():
                 try:
                     phone = normalize_phone(row["teacher_phone"])
-                    teacher = StaffProfile.objects.get(user__phone_number=phone)
-                    subject = Subject.objects.get(code=row["subject_code"], school=school)
+                    teacher = staff_map.get(phone)
+                    subject = subject_map.get(row["subject_code"])
                     room = row["room"]
-                    lesson_count = subject.sessions_per_week
+                    lesson_count = subject.sessions_per_week if subject else 0
+                    if not subject or not teacher:
+                        results["errors"].append({"row": i + 2, "error": "Teacher or Subject not found"})
+                        continue
 
-                    # Generate lesson dates sequentially across the term
+                    # Calculate first week lesson dates and repeat weekly
                     lesson_dates = []
                     current_date = term.start_date
                     while len(lesson_dates) < lesson_count:
-                        if current_date.weekday() < 7:
-                            lesson_dates.append(current_date)
+                        lesson_dates.append(current_date)
                         current_date += timedelta(days=1)
 
-                    slot_cycle = cycle(slots)
-                    for lesson_date in lesson_dates:
-                        # pick next free slot for this stream
-                        for _ in range(len(slots)):
-                            slot = next(slot_cycle)
-                            key = (lesson_date, stream.id, slot.id)
-                            if key not in assigned:
-                                assigned[key] = True
-                                day_of_week = weekdays[lesson_date.weekday()]
-                                Lesson.objects.update_or_create(
-                                    timetable=timetable,
-                                    subject=subject,
-                                    stream=stream,
-                                    teacher=teacher,
-                                    day_of_week=day_of_week,
-                                    time_slot=slot,
-                                    room=room,
-                                    defaults={"lesson_date": lesson_date}
-                                )
-                                break
+                    assigned = {}
+                    lessons_to_create = []
 
-                    results["created"] += 1
+                    for base_date in lesson_dates:
+                        lesson_date = base_date
+                        while lesson_date <= term.end_date:
+                            for _ in range(len(slots)):
+                                slot = next(slot_cycle)
+                                key = (lesson_date, stream.id, slot.id)
+                                if key not in assigned:
+                                    assigned[key] = True
+                                    day_of_week = weekdays[lesson_date.weekday()]
+                                    lessons_to_create.append(
+                                        Lesson(
+                                            timetable=timetable,
+                                            subject=subject,
+                                            stream=stream,
+                                            teacher=teacher,
+                                            day_of_week=day_of_week,
+                                            time_slot=slot,
+                                            room=room,
+                                            lesson_date=lesson_date
+                                        )
+                                    )
+                                    break
+                            lesson_date += timedelta(days=7)
+
+                    Lesson.objects.bulk_create(lessons_to_create, ignore_conflicts=True)
+                    total_lessons_created += len(lessons_to_create)
 
                 except Exception as e:
                     logger.exception(f"Timetable row {i + 2} error")
                     results["errors"].append({"row": i + 2, "error": str(e)})
 
+            results["created"] += total_lessons_created
+
+            # ================= POPULATE STUDENT ENROLLMENTS =================
             populate_student_lesson_enrollments(school, grade, stream)
 
         else:
