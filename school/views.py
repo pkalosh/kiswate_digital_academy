@@ -4949,7 +4949,7 @@ def universal_excel_upload(request):
                     phone = normalize_phone(row["mobile"])
                     admin_no = str(row["admin_no"]).strip()
 
-                    email = f"{phone}@{school.slug}.com"
+                    email = f"{phone}@{school.name}.com"
                     password = generate_password()
 
                     user, created = User.objects.get_or_create(
