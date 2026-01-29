@@ -709,8 +709,8 @@ def school_users(request):
     teachers = StaffProfile.objects.filter(
         school=school, position='teacher'
     ).select_related('user').only(
-        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'created_at'
-    ).order_by('-user__created_at')
+        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number'
+    ).order_by('-id')
     if query:
         teachers = teachers.filter(
             Q(user__first_name__icontains=query) |
