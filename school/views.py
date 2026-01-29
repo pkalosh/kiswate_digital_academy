@@ -64,7 +64,7 @@ from .models import (
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear,
-    SubjectEnrollment
+    SubjectEnrollment,AcademicYear
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -115,7 +115,10 @@ SEVERITY_CHOICES = [
 # SMS + EMAIL HELPERS
 # =========================
 
-def _send_sms_via_eujim(to_phone_number: str, message: str) -> bool:
+import time
+import requests
+
+def _send_sms_via_eujim(to_phone_number: str, message: str, retries=3, delay=5) -> bool:
     if not to_phone_number:
         return False
 
@@ -135,15 +138,25 @@ def _send_sms_via_eujim(to_phone_number: str, message: str) -> bool:
         "mobile": phone,
     }
 
-    try:
-        response = requests.post('https://quicksms.advantasms.com/api/services/sendsms/', json=payload, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            r = data.get("responses", [{}])[0]
-            return r.get("response-code") == 200
-    except Exception as e:
-        print("SMS Error:", e)
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.post(
+                'https://quicksms.advantasms.com/api/services/sendsms/',
+                json=payload,
+                timeout=15
+            )
+            if response.status_code == 200:
+                data = response.json()
+                r = data.get("responses", [{}])[0]
+                return r.get("response-code") == 200
+            else:
+                print(f"[SMS] Attempt {attempt}: HTTP {response.status_code} → {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"[SMS] Attempt {attempt} failed:", e)
+        if attempt < retries:
+            time.sleep(delay)  # wait before retrying
     return False
+
 
 
 def send_email(to_email: str, subject: str, message: str) -> bool:
@@ -4569,63 +4582,77 @@ def generate_time_slots(school, staff_user):
 
     return slots
 
-def populate_student_lesson_enrollments(school, grade=None, stream=None):
+def populate_student_lesson_enrollments(school, grade=None, stream=None, term=None):
     """
-    Create Enrollment records by matching:
-    Student -> SubjectEnrollment -> Lesson
-    Optimized with bulk_create and minimal queries.
+    Create Enrollment records for all lessons in a term based on student's subject enrollments.
     """
     import logging
     logger = logging.getLogger(__name__)
 
-    students = Student.objects.filter(
-        school=school,
-        is_active=True
-    ).select_related('grade_level','stream')
-
+    # ── Students
+    students = Student.objects.filter(school=school, is_active=True)
     if grade:
         students = students.filter(grade_level=grade)
     if stream:
         students = students.filter(stream=stream)
 
-    enrollments_to_create = []
-
-    # Bulk fetch lessons per stream
-    lessons_map = {}  # subject_id -> list of lessons
+    # ── Lessons within term
     lessons_qs = Lesson.objects.filter(
         timetable__school=school,
-        stream=stream,
         is_canceled=False
-    ).select_related('time_slot', 'subject')
+    )
+    if stream:
+        lessons_qs = lessons_qs.filter(stream=stream)
+    if term:
+        lessons_qs = lessons_qs.filter(
+            lesson_date__gte=term.start_date,
+            lesson_date__lte=term.end_date
+        )
 
-    for lesson in lessons_qs:
-        lessons_map.setdefault(lesson.subject.id, []).append(lesson)
+    # Map lessons by subject
+    lessons_map = defaultdict(list)
+    for lesson in lessons_qs.select_related('subject', 'stream'):
+        lessons_map[lesson.subject_id].append(lesson)
 
-    # Bulk fetch subject enrollments
-    subject_enrollments_map = {}  # student_id -> list of subject ids
+    # Prefetch student's subject enrollments
+    students = students.prefetch_related('subject_enrollments__subject')
+
+    enrollments_to_create = []
+
     for student in students:
-        subject_ids = list(student.subject_enrollments.values_list('subject_id', flat=True))
-        subject_enrollments_map[student.id] = subject_ids
+        try:
+            subject_ids = list(student.subject_enrollments.values_list('subject_id', flat=True))
+            if not subject_ids:
+                logger.warning(f"Student {student.student_id} has no subject enrollments")
+                continue
 
-    for student in students:
-        subject_ids = subject_enrollments_map.get(student.id, [])
-        for sid in subject_ids:
-            lessons = lessons_map.get(sid, [])
-            for lesson in lessons:
-                enrollments_to_create.append(
-                    Enrollment(
-                        student=student,
-                        lesson=lesson,
-                        school=school,
-                        status='active'
+            # For each subject, get all lessons for this term & stream
+            for sid in subject_ids:
+                lessons = lessons_map.get(sid, [])
+                for lesson in lessons:
+                    enrollments_to_create.append(
+                        Enrollment(
+                            student=student,
+                            lesson=lesson,
+                            school=school,
+                            status='active'
+                        )
                     )
-                )
 
-    Enrollment.objects.bulk_create(enrollments_to_create, ignore_conflicts=True)
+        except Exception as e:
+            logger.exception(f"Failed to process enrollments for student {student.student_id}")
+            print(f"[ERROR] Student {student.student_id}: {e}")
 
-    # Summary
-    print(f"[SUMMARY] Total Students: {students.count()} | Total Lessons: {lessons_qs.count()} | Total Enrollments Created: {len(enrollments_to_create)}")
-    logger.info(f"[SUMMARY] Total Students: {students.count()} | Total Lessons: {lessons_qs.count()} | Total Enrollments Created: {len(enrollments_to_create)}")
+    if enrollments_to_create:
+        Enrollment.objects.bulk_create(enrollments_to_create, ignore_conflicts=True)
+
+    # Debug print
+    total_students = students.count()
+    total_lessons = lessons_qs.count()
+    total_enrollments = len(enrollments_to_create)
+    print(f"[SUMMARY] Students={total_students} Lessons={total_lessons} Enrollments={total_enrollments}")
+    logger.info(f"[SUMMARY] Students={total_students} Lessons={total_lessons} Enrollments={total_enrollments}")
+
 
 
 SUBJECT_CODE_MAP = {
@@ -4674,18 +4701,64 @@ def generate_lesson_dates(term, weekday):
     return dates
 
 
-# ================= MAIN VIEW =================
+
+def normalize_weekday(day_str: str) -> str | None:
+    day_str = day_str.strip().lower()
+    mapping = {
+        'mon': 'monday', 'tue': 'tuesday', 'wed': 'wednesday',
+        'thu': 'thursday', 'thur': 'thursday', 'fri': 'friday',
+        'sat': 'saturday', 'sun': 'sunday'
+    }
+    for short, full in mapping.items():
+        if day_str.startswith(short):
+            return full
+    return day_str if day_str in {'monday','tuesday','wednesday','thursday','friday','saturday','sunday'} else None
+
+
+def norm_time(t):
+    """Robust time parser handling AM/PM, HH:MM:SS, H:MM, etc."""
+    if pd.isna(t) or not str(t).strip():
+        return None
+
+    t = str(t).strip().upper().replace(' ', '')
+    am_pm = ''
+    if 'AM' in t:
+        am_pm = 'AM'
+        t = t.replace('AM', '')
+    elif 'PM' in t:
+        am_pm = 'PM'
+        t = t.replace('PM', '')
+
+    t = t.replace('.', ':').replace(';', ':')
+
+    try:
+        if ':' in t:
+            parts = t.split(':')
+            h = parts[0].zfill(2)
+            m = parts[1][:2].zfill(2) if len(parts) > 1 else '00'
+            time_str = f"{h}:{m}"
+
+            h_int = int(h)
+            if am_pm == 'PM' and h_int != 12:
+                h_int += 12
+            elif am_pm == 'AM' and h_int == 12:
+                h_int = 0
+
+            return f"{h_int:02d}:{m}"
+
+        if len(t) == 4 and t.isdigit():
+            h = t[:2]
+            m = t[2:]
+            return f"{h}:{m}"
+
+    except Exception:
+        pass
+
+    return None
+
 @require_POST
 @login_required
 def universal_excel_upload(request):
-    """
-    Universal Excel Upload: Students, Parents, Teachers, Subjects, Timetable
-    Optimized: bulk operations, weekly repeated lessons, student enrollments
-    """
-    import logging
-    from itertools import cycle
-    logger = logging.getLogger(__name__)
-
     excel_file = request.FILES.get("file")
     category = request.POST.get("category")
 
@@ -4694,33 +4767,30 @@ def universal_excel_upload(request):
 
     try:
         df = pd.read_excel(excel_file)
+        df = df.fillna("")
+        df.columns = df.columns.str.strip().str.lower().str.replace(r'[^a-z0-9_]', '_', regex=True)
     except Exception as e:
         return JsonResponse({"error": f"Invalid Excel file: {str(e)}"}, status=400)
 
     school = getattr(request.user, "school_admin_profile", None)
     if not school:
-        return JsonResponse({"error": "You are not assigned to a school"}, status=400)
+        return JsonResponse({"error": "You are not assigned to any school"}, status=403)
 
-    results = {"created": 0, "errors": []}
+    results = {"created": 0, "errors": [], "warnings": []}
 
     with transaction.atomic():
-        # ================= STUDENTS =================
+        active_term = Term.objects.filter(school=school, is_active=True).first()
+        if category in ("students", "subjects", "timetable") and not active_term:
+            return JsonResponse({"error": "No active term found"}, status=400)
+
+        # ─────────────────────────────
+        # STUDENTS
+        # ─────────────────────────────
         if category == "students":
-            required = [
-                "admin_no","first_name","last_name","gender",
-                "parent_phone","parent_email","parent_first_name",
-                "parent_last_name","subjects","grade","stream","date_of_birth"
-            ]
-            missing = [c for c in required if c not in df.columns]
-            if missing:
-                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
-
-            active_term = Term.objects.filter(school=school, is_active=True).first()
-
-            for i, row in df.iterrows():
+            for idx, row in df.iterrows():
                 try:
                     admin_no = str(row["admin_no"]).strip()
-                    student_email = f"{admin_no}@gmail.com"
+                    student_email = f"{admin_no}@student.school.local"
                     student_pass = generate_password()
 
                     user, created = User.objects.get_or_create(
@@ -4751,64 +4821,39 @@ def universal_excel_upload(request):
                         }
                     )
 
-                    parent_phone = normalize_phone(row["parent_phone"])
-                    parent_email = safe_email(row["parent_email"], f"{parent_phone}@gmail.com")
-                    parent_pass = generate_password()
-
-                    p_user, p_created = User.objects.get_or_create(
-                        email=parent_email,
-                        defaults={
-                            "phone_number": parent_phone,
-                            "first_name": row["parent_first_name"],
-                            "last_name": row["parent_last_name"],
-                            "is_parent": True,
-                        }
-                    )
-                    if p_created:
-                        p_user.set_password(parent_pass)
-                        p_user.save()
-
-                    parent, _ = Parent.objects.get_or_create(user=p_user, school=school)
-                    student.parents.add(parent)
-
-                    subject_codes = str(row["subjects"]).replace(" ", "").split(",")
+                    subject_codes = [
+                        c.strip().upper() for c in str(row["subjects"]).split(",") if c.strip()
+                    ]
                     for code in subject_codes:
                         subject, _ = Subject.objects.get_or_create(
                             school=school,
                             code=code,
                             defaults={
-                                "name": SUBJECT_CODE_MAP.get(code, code),
+                                "name": code,
                                 "grade": grade,
                                 "start_date": active_term.start_date,
                                 "end_date": active_term.end_date,
                             }
                         )
-                        SubjectEnrollment.objects.get_or_create(student=student, subject=subject)
-
-                    msg = f"Student Login\nEmail: {student_email}\nPassword: {student_pass}"
-                    send_email(parent_email, "Student Credentials", msg)
-                    _send_sms_via_eujim(parent_phone, msg)
+                        SubjectEnrollment.objects.get_or_create(
+                            student=student,
+                            subject=subject
+                        )
 
                     results["created"] += 1
 
                 except Exception as e:
-                    logger.exception(f"Student row {i + 2} error")
-                    results["errors"].append({"row": i + 2, "error": str(e)})
+                    results["errors"].append({"row": idx + 2, "error": str(e)})
 
-        # ================= SUBJECTS =================
+        # ─────────────────────────────
+        # SUBJECTS
+        # ─────────────────────────────
         elif category == "subjects":
-            required = ["code", "name", "lessons_per_week"]
-            missing = [c for c in required if c not in df.columns]
-            if missing:
-                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
-
-            active_term = Term.objects.filter(school=school, is_active=True).first()
-
-            for i, row in df.iterrows():
+            for idx, row in df.iterrows():
                 try:
                     Subject.objects.update_or_create(
                         school=school,
-                        code=row["code"],
+                        code=row["code"].upper(),
                         defaults={
                             "name": row["name"],
                             "sessions_per_week": int(row["lessons_per_week"]),
@@ -4818,14 +4863,14 @@ def universal_excel_upload(request):
                     )
                     results["created"] += 1
                 except Exception as e:
-                    logger.exception(f"Subject row {i + 2} error")
-                    results["errors"].append({"row": i + 2, "error": str(e)})
+                    results["errors"].append({"row": idx + 2, "error": str(e)})
+
 
         # ================= TEACHERS =================
         elif category == "teachers":
             required = [
-                "phone","email","first_name","last_name",
-                "subjects","streams","class_teacher"
+                "phone", "email", "first_name", "last_name",
+                "subjects", "streams", "class_teacher"
             ]
             missing = [c for c in required if c not in df.columns]
             if missing:
@@ -4833,10 +4878,15 @@ def universal_excel_upload(request):
 
             for i, row in df.iterrows():
                 try:
+                    # Normalize phone and email
                     phone = normalize_phone(row["phone"])
                     email = safe_email(row["email"], f"{phone}@gmail.com")
+                    
+                    # Generate random password
                     password = generate_password()
+                    print(f"Generated password for {email} {phone}: {password}")  # Log the password)
 
+                    # Create or get User
                     user, created = User.objects.get_or_create(
                         email=email,
                         defaults={
@@ -4847,23 +4897,28 @@ def universal_excel_upload(request):
                         }
                     )
 
+                    # Set password if user was created
                     if created:
                         user.set_password(password)
                         user.save()
+                    staff_id = f"TCHR{str(user.id).zfill(5)}"
+                    # Create or get StaffProfile
+                    staff, _ = StaffProfile.objects.get_or_create(user=user,position="Teacher", school=school, defaults={"staff_id": staff_id})
 
-                    staff, _ = StaffProfile.objects.get_or_create(user=user, school=school)
-
+                    # Assign subjects to teacher
                     subject_codes = str(row["subjects"]).replace(" ", "").split(",")
                     for code in subject_codes:
                         subject = Subject.objects.filter(code=code, school=school).first()
                         if subject:
                             staff.subjects.add(subject)
 
+                    # Assign streams
                     streams = Streams.objects.filter(
                         name__in=str(row["streams"]).replace(" ", "").split(","),
                         school=school
                     )
 
+                    # Assign class teacher if applicable
                     if str(row["class_teacher"]).upper() == "YES":
                         for stream in streams:
                             TeacherStreamAssignment.objects.get_or_create(
@@ -4872,6 +4927,7 @@ def universal_excel_upload(request):
                                 school=school
                             )
 
+                    # Send credentials via email and SMS
                     msg = f"Teacher Login\nEmail: {email}\nPassword: {password}"
                     send_email(email, "Teacher Credentials", msg)
                     _send_sms_via_eujim(phone, msg)
@@ -4882,91 +4938,146 @@ def universal_excel_upload(request):
                     logger.exception(f"Teacher row {i + 2} error")
                     results["errors"].append({"row": i + 2, "error": str(e)})
 
-        # ================= TIMETABLE =================
+
+        # ─────────────────────────────
+        # TIMETABLE UPLOAD & LESSON GENERATION
+        # ─────────────────────────────
         elif category == "timetable":
-            required = ["grade","stream","term","year","subject_code","teacher_phone","room"]
+            required = [
+                "grade", "stream", "term", "year",
+                "subject_code", "room",
+                "weekdays", "start_time", "end_time"
+            ]
             missing = [c for c in required if c not in df.columns]
             if missing:
-                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+                return JsonResponse({"error": f"Missing columns: {', '.join(missing)}"}, status=400)
 
-            grade = Grade.objects.get(name=df.iloc[0]["grade"], school=school)
-            stream = Streams.objects.get(name=df.iloc[0]["stream"], school=school)
-            term = Term.objects.get(name=str(df.iloc[0]["term"]), school=school)
+            first = df.iloc[0]
+            term_name = str(first.get("term", "")).strip()
+            excel_year_value = int(str(first.get("year")).strip())
+
+            year_obj = AcademicYear.objects.get(name=excel_year_value)
+            term = Term.objects.get(name=term_name, school=school, year=year_obj)
+
+            grade_name = str(first.get("grade", "")).strip()
+            stream_name = str(first.get("stream", "")).strip()
+
+            grade = Grade.objects.get(name=grade_name, school=school)
+            stream = Streams.objects.get(name=stream_name, school=school)
 
             timetable, _ = Timetable.objects.get_or_create(
                 school=school,
                 grade=grade,
                 stream=stream,
                 term=term,
-                year=int(df.iloc[0]["year"]),
+                year=year_obj.id,
                 defaults={"start_date": term.start_date, "end_date": term.end_date}
             )
 
-            slots = generate_time_slots(school, request.user.staffprofile)
-            weekdays = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]
-            slot_cycle = cycle(slots)
+            # ── Cache subjects, staff, time slots
+            subject_map = {s.code.upper(): s for s in Subject.objects.filter(school=school)}
+            staff_map = {normalize_phone(s.user.phone_number): s for s in StaffProfile.objects.filter(school=school)}
+            slot_cache = {
+                (slot.start_time.strftime('%H:%M'), slot.end_time.strftime('%H:%M')): slot
+                for slot in TimeSlot.objects.filter(school=school)
+                if slot.start_time and slot.end_time
+            }
 
-            subject_map = {s.code: s for s in Subject.objects.filter(school=school)}
-            staff_map = {s.user.phone_number: s for s in StaffProfile.objects.filter(school=school)}
+            lessons_to_create = []
+            seen = set()  # Avoid duplicate lessons
+            weekday_counts = defaultdict(int)
 
-            total_lessons_created = 0
-
-            for i, row in df.iterrows():
+            # ── Loop through CSV rows (one week worth of lessons)
+            for idx, row in df.iterrows():
+                row_num = idx + 2
                 try:
-                    phone = normalize_phone(row["teacher_phone"])
-                    teacher = staff_map.get(phone)
-                    subject = subject_map.get(row["subject_code"])
-                    room = row["room"]
-                    lesson_count = subject.sessions_per_week if subject else 0
-                    if not subject or not teacher:
-                        results["errors"].append({"row": i + 2, "error": "Teacher or Subject not found"})
+                    subj_code = str(row["subject_code"]).strip().upper()
+                    room = str(row.get("room", "")).strip() or "N/A"
+                    subject = subject_map.get(subj_code)
+                    if not subject:
+                        raise ValueError(f"Subject '{subj_code}' not found")
+
+                    teacher = None
+                    if "teacher_phone" in df.columns:
+                        phone = normalize_phone(row.get("teacher_phone", ""))
+                        teacher = staff_map.get(phone)
+                    
+                    if not teacher:
+                        teacher = (
+                            StaffProfile.objects
+                            .filter(
+                                school=school,
+                                position__in=["teacher", "hod"],
+                                subjects=subject
+                            )
+                            .order_by("id")
+                            .first()
+                        )
+
+
+                    # Weekdays for this lesson
+                    raw_days = str(row["weekdays"]).strip()
+                    target_days = {normalize_weekday(d) for d in raw_days.replace(',', ' ').split() if normalize_weekday(d)}
+                    if not target_days:
+                        raise ValueError(f"No valid weekdays: '{raw_days}'")
+
+                    # Time slot
+                    start_norm = norm_time(row["start_time"])
+                    end_norm = norm_time(row["end_time"])
+                    if not start_norm or not end_norm:
+                        raise ValueError(f"Invalid time - start: '{row['start_time']}', end: '{row['end_time']}'")
+                    slot_key = (start_norm, end_norm)
+                    time_slot = slot_cache.get(slot_key)
+                    if not time_slot:
+                        results["warnings"].append({
+                            "row": row_num,
+                            "message": f"Time slot {start_norm}–{end_norm} not found → skipped"
+                        })
                         continue
 
-                    # Calculate first week lesson dates and repeat weekly
-                    lesson_dates = []
-                    current_date = term.start_date
-                    while len(lesson_dates) < lesson_count:
-                        lesson_dates.append(current_date)
-                        current_date += timedelta(days=1)
+                    # ── Generate lessons for all weeks in the term
+                    for wd in target_days:
+                        # Find first occurrence of this weekday in term
+                        current_date = term.start_date
+                        while current_date <= term.end_date and current_date.strftime("%A").lower() != wd:
+                            current_date += timedelta(days=1)
 
-                    assigned = {}
-                    lessons_to_create = []
-
-                    for base_date in lesson_dates:
-                        lesson_date = base_date
-                        while lesson_date <= term.end_date:
-                            for _ in range(len(slots)):
-                                slot = next(slot_cycle)
-                                key = (lesson_date, stream.id, slot.id)
-                                if key not in assigned:
-                                    assigned[key] = True
-                                    day_of_week = weekdays[lesson_date.weekday()]
-                                    lessons_to_create.append(
-                                        Lesson(
-                                            timetable=timetable,
-                                            subject=subject,
-                                            stream=stream,
-                                            teacher=teacher,
-                                            day_of_week=day_of_week,
-                                            time_slot=slot,
-                                            room=room,
-                                            lesson_date=lesson_date
-                                        )
+                        # Repeat weekly until term end
+                        while current_date <= term.end_date:
+                            key = (current_date, stream.id, time_slot.id, subject.id)
+                            if key not in seen:
+                                seen.add(key)
+                                lessons_to_create.append(
+                                    Lesson(
+                                        timetable=timetable,
+                                        subject=subject,
+                                        stream=stream,
+                                        teacher=teacher,
+                                        day_of_week=wd,
+                                        time_slot=time_slot,
+                                        room=room,
+                                        lesson_date=current_date,
                                     )
-                                    break
-                            lesson_date += timedelta(days=7)
-
-                    Lesson.objects.bulk_create(lessons_to_create, ignore_conflicts=True)
-                    total_lessons_created += len(lessons_to_create)
+                                )
+                                weekday_counts[wd] += 1
+                            current_date += timedelta(days=7)  # next week same weekday
 
                 except Exception as e:
-                    logger.exception(f"Timetable row {i + 2} error")
-                    results["errors"].append({"row": i + 2, "error": str(e)})
+                    logger.exception(f"[ROW {row_num}] Failed to process row")
+                    results["errors"].append({"row": row_num, "error": str(e)})
 
-            results["created"] += total_lessons_created
+            # ── Save lessons
+            if lessons_to_create:
+                Lesson.objects.bulk_create(lessons_to_create, ignore_conflicts=True)
+                results["created"] = len(lessons_to_create)
+                logger.info(f"[LESSON CREATION] Total lessons actually created: {len(lessons_to_create)}")
+                for wd, count in weekday_counts.items():
+                    logger.info(f"[LESSON COUNT] {wd}: {count} lessons scheduled")
 
-            # ================= POPULATE STUDENT ENROLLMENTS =================
-            populate_student_lesson_enrollments(school, grade, stream)
+            # ── Auto-enroll students
+            transaction.on_commit(lambda: populate_student_lesson_enrollments(school, grade, stream, term))
+
+
 
         else:
             return JsonResponse({"error": "Invalid category"}, status=400)
@@ -4976,8 +5087,6 @@ def universal_excel_upload(request):
         "category": category,
         "results": results
     })
-
-
 @login_required
 def upload_excel_page(request):
     """Renders the Excel upload page."""

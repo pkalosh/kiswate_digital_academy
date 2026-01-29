@@ -475,7 +475,7 @@ class Lesson(models.Model):
     timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
     stream = models.ForeignKey('Streams', on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
-    teacher = models.ForeignKey('StaffProfile', on_delete=models.CASCADE, related_name='lessons_taught')
+    teacher = models.ForeignKey('StaffProfile', on_delete=models.CASCADE, related_name='lessons_taught', blank=True, null=True)
     day_of_week = models.CharField(max_length=10, choices=WEEKDAY_CHOICES, blank=True, null=True)
     time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE, related_name='lessons', blank=True, null=True)
     room = models.CharField(max_length=50, blank=True)
@@ -485,7 +485,7 @@ class Lesson(models.Model):
 
     class Meta:
         ordering = ['day_of_week','lesson_date', 'time_slot__start_time']
-        unique_together = ['timetable', 'subject', 'day_of_week', 'time_slot', 'stream']
+        unique_together = ['timetable', 'subject', 'day_of_week', 'time_slot', 'stream','lesson_date']
 
     def __str__(self):
         if self.time_slot:
