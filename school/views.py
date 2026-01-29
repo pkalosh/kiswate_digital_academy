@@ -726,8 +726,8 @@ def school_users(request):
     other_staff = StaffProfile.objects.filter(
         school=school
     ).exclude(position='teacher').select_related('user').only(
-        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'position', 'created_at'
-    ).order_by('-user__created_at')
+        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'position'
+    ).order_by('-id')
     if query:
         other_staff = other_staff.filter(
             Q(user__first_name__icontains=query) |
@@ -740,8 +740,8 @@ def school_users(request):
     # STUDENTS
     # ─────────────────────────────
     students = Student.objects.filter(school=school).select_related('user', 'grade_level').only(
-        'id', 'student_id', 'grade_level__name', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'created_at'
-    ).order_by('-user__created_at')
+        'id', 'student_id', 'grade_level__name', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number'
+    ).order_by('-id')
     if query:
         students = students.filter(
             Q(user__first_name__icontains=query) |
@@ -758,8 +758,8 @@ def school_users(request):
     # PARENTS
     # ─────────────────────────────
     parents = Parent.objects.filter(school=school).select_related('user').only(
-        'id', 'parent_id', 'user__first_name', 'user__last_name', 'user__email', 'phone', 'created_at'
-    ).order_by('-user__created_at')
+        'id', 'parent_id', 'user__first_name', 'user__last_name', 'user__email', 'phone'
+    ).order_by('-id')
     if query:
         parents = parents.filter(
             Q(user__first_name__icontains=query) |
