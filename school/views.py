@@ -4938,6 +4938,85 @@ def universal_excel_upload(request):
                     logger.exception(f"Teacher row {i + 2} error")
                     results["errors"].append({"row": i + 2, "error": str(e)})
 
+        # ─────────────────────────────
+        # PARENTS
+        # ─────────────────────────────
+        elif category == "parents":
+            required = ["first_name", "last_name", "mobile", "admin_no"]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            school_domain = school.name.lower().replace(" ", "") + ".com"
+
+            for idx, row in df.iterrows():
+                try:
+                    admin_no = str(row["admin_no"]).strip()
+                    mobile = normalize_phone(row["mobile"])
+
+                    # ── Find student
+                    student = Student.objects.filter(
+                        student_id=admin_no,
+                        school=school
+                    ).first()
+
+                    if not student:
+                        raise ValueError(f"Student with admin_no '{admin_no}' not found")
+
+                    # ── Email fallback
+                    raw_email = str(row.get("email", "")).strip()
+                    email = raw_email if raw_email else f"{mobile}@{school_domain}"
+
+                    password = generate_password()
+
+                    # ── Create / get User
+                    user, created = User.objects.get_or_create(
+                        email=email,
+                        defaults={
+                            "phone_number": mobile,
+                            "first_name": row["first_name"],
+                            "last_name": row["last_name"],
+                            "is_parent": True,
+                            "is_active": True,
+                        }
+                    )
+
+                    if created:
+                        user.set_password(password)
+                        user.save()
+
+                    # ── Create / get Parent profile
+                    parent, _ = Parent.objects.get_or_create(
+                        user=user,
+                        defaults={
+                            "parent_id": f"PAR{str(user.id).zfill(6)}",
+                            "phone": mobile,
+                        }
+                    )
+
+                    # ── Link parent ↔ student (ManyToMany)
+                    student.parents.add(parent)
+
+                    # ── Send credentials only once
+                    if created:
+                        msg = (
+                            f"Parent Portal Access\n"
+                            f"Email: {email}\n"
+                            f"Password: {password}\n"
+                            f"Student: {student.user.get_full_name()}"
+                        )
+                        send_email(email, "Parent Login Credentials", msg)
+                        _send_sms_via_eujim(mobile, msg)
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    logger.exception(f"Parent row {idx + 2} error")
+                    results["errors"].append({
+                        "row": idx + 2,
+                        "error": str(e)
+                    })
+
 
         # ─────────────────────────────
         # TIMETABLE UPLOAD & LESSON GENERATION
@@ -5001,18 +5080,7 @@ def universal_excel_upload(request):
                     if "teacher_phone" in df.columns:
                         phone = normalize_phone(row.get("teacher_phone", ""))
                         teacher = staff_map.get(phone)
-                    
-                    if not teacher:
-                        teacher = (
-                            StaffProfile.objects
-                            .filter(
-                                school=school,
-                                position__in=["teacher", "hod"],
-                                subjects=subject
-                            )
-                            .order_by("id")
-                            .first()
-                        )
+                        
 
 
                     # Weekdays for this lesson
