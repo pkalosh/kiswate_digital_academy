@@ -234,7 +234,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
-SMS_API_KEY = '055937fa1c632de42568afe4ee5ec19b'
-SMS_PARTNERID ='7003'
-SMS_SHORTCODE = 'EUJIM LTD'
-SMS_API_URL = 'https://quicksms.advantasms.com/api/services/sendsms/'
+SMS_API_KEY = ''
+SMS_PARTNERID =''
+SMS_SHORTCODE = ''
+SMS_API_URL = ''
