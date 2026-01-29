@@ -687,48 +687,61 @@ def school_users(request):
     Unified view for managing school members (teachers, staff, students, parents).
     Handles listing with search/filter across tabs.
     Handles creation via POST from modals (separate forms for flexibility).
+    Optimized for large schools: paginated forms, limited query fields.
     """
+    # ── Get school instance
     school = None
-
     try:
-        # Fix: Get the actual School instance from admin profile
-        school = request.user.school_admin_profile.school
+        school = request.user.school_admin_profile
     except AttributeError:
         try:
             school = request.user.staffprofile.school
         except AttributeError as e:
             logger.warning(f"Permission denied for user {request.user.email}: {e}")
-            messages.error(
-                request,
-                f"You do not have permission to access this page. (User: {request.user.email})"
-            )
+            messages.error(request, f"You do not have permission to access this page.")
             return redirect('userauths:sign-in')
 
-    # Common search query
-    query = request.GET.get('q', '')
+    query = request.GET.get('q', '').strip()
 
-    # Fetch teachers (StaffProfile with position='teacher')
-    teachers = StaffProfile.objects.filter(school=school, position='teacher').select_related('user').order_by('-user__created_at')
+    # ─────────────────────────────
+    # TEACHERS
+    # ─────────────────────────────
+    teachers = StaffProfile.objects.filter(
+        school=school, position='teacher'
+    ).select_related('user').only(
+        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'created_at'
+    ).order_by('-user__created_at')
     if query:
         teachers = teachers.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query)
         )
     teachers_page = paginate(request, teachers)
+    # Forms for current page only
+    staff_update_forms = {s.id: StaffUpdateForm(instance=s) for s in teachers_page}
 
-    # Fetch other staff
-    other_staff = StaffProfile.objects.filter(school=school).exclude(position='teacher').select_related('user').order_by('-user__created_at')
-
+    # ─────────────────────────────
+    # OTHER STAFF
+    # ─────────────────────────────
+    other_staff = StaffProfile.objects.filter(
+        school=school
+    ).exclude(position='teacher').select_related('user').only(
+        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'position', 'created_at'
+    ).order_by('-user__created_at')
     if query:
         other_staff = other_staff.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query)
         )
-    staff_page = paginate(request, other_staff)
+    staff_page_other = paginate(request, other_staff)
+    staff_update_forms.update({s.id: StaffUpdateForm(instance=s) for s in staff_page_other})
 
-    # Fetch students
-    students = Student.objects.filter(school=school).select_related('user', 'grade_level').order_by('-user__created_at')
-
+    # ─────────────────────────────
+    # STUDENTS
+    # ─────────────────────────────
+    students = Student.objects.filter(school=school).select_related('user', 'grade_level').only(
+        'id', 'student_id', 'grade_level__name', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'created_at'
+    ).order_by('-user__created_at')
     if query:
         students = students.filter(
             Q(user__first_name__icontains=query) |
@@ -739,10 +752,14 @@ def school_users(request):
             Q(grade_level__name__icontains=query)
         )
     students_page = paginate(request, students)
+    student_update_forms = {st.id: StudentUpdateForm(instance=st) for st in students_page}
 
-    # Fetch parents
-    parents = Parent.objects.filter(school=school).select_related('user').order_by('-user__created_at')
-
+    # ─────────────────────────────
+    # PARENTS
+    # ─────────────────────────────
+    parents = Parent.objects.filter(school=school).select_related('user').only(
+        'id', 'parent_id', 'user__first_name', 'user__last_name', 'user__email', 'phone', 'created_at'
+    ).order_by('-user__created_at')
     if query:
         parents = parents.filter(
             Q(user__first_name__icontains=query) |
@@ -752,25 +769,15 @@ def school_users(request):
             Q(user__email__icontains=query)
         )
     parents_page = paginate(request, parents)
-
-    # Bound update forms for modals
-    student_update_forms = {st.id: StudentUpdateForm(instance=st) for st in students}
-    parent_update_forms = {p.id: ParentUpdateForm(instance=p) for p in parents}
-    staff_update_forms = {s.id: StaffUpdateForm(instance=s) for s in list(other_staff) + list(teachers)}
+    parent_update_forms = {p.id: ParentUpdateForm(instance=p) for p in parents_page}
 
     context = {
         'school': school,
         'query': query,
-        'teachers': teachers,
         'teachers_page': teachers_page,
-        'other_staff': other_staff,
-        'staff_page': staff_page,
-        'students': students,
+        'staff_page_other': staff_page_other,
         'students_page': students_page,
-        'parents': parents,
         'parents_page': parents_page,
-        # Forms - pass school for queryset filtering
-
         'student_update_forms': student_update_forms,
         'parent_update_forms': parent_update_forms,
         'staff_update_forms': staff_update_forms,
