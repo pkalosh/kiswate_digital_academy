@@ -4990,6 +4990,7 @@ def universal_excel_upload(request):
                         user=user,
                         defaults={
                             "parent_id": f"PAR{str(user.id).zfill(6)}",
+                            "school": school,
                             "phone": mobile,
                         }
                     )
