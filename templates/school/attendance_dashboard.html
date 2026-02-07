@@ -32,6 +32,7 @@
 <form method="get" class="card shadow-sm mb-4">
   <div class="card-body">
     <div class="row g-2">
+
       <!-- Academic Year -->
       <div class="col-md-2">
         <label class="form-label">Academic Year</label>
@@ -113,6 +114,7 @@
       <div class="col-md-2 align-self-end">
         <button class="btn btn-success w-100"><i class="fa fa-filter"></i> Apply Filters</button>
       </div>
+
     </div>
   </div>
 </form>
@@ -139,9 +141,9 @@
   </div>
 </div>
 
-<!-- DAILY TREND CHART -->
+<!-- TREND CHARTS -->
 <div class="row mb-4">
-  <div class="col-md-12">
+  <div class="col-md-6">
     <div class="card shadow-sm">
       <div class="card-body">
         <h6>Daily Attendance Trend (Last 30 Days)</h6>
@@ -149,15 +151,30 @@
       </div>
     </div>
   </div>
-</div>
-
-<!-- GRADE TREND CHART -->
-<div class="row mb-4">
-  <div class="col-md-12">
+  <div class="col-md-6">
     <div class="card shadow-sm">
       <div class="card-body">
-        <h6>Attendance Trends by Grade</h6>
+        <h6>Attendance by Grade</h6>
         <canvas id="gradeTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6>Attendance by Stream</h6>
+        <canvas id="streamTrendChart"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6>Attendance by Subject</h6>
+        <canvas id="subjectTrendChart"></canvas>
       </div>
     </div>
   </div>
@@ -188,7 +205,7 @@
             <td>{{ a.enrollment.student.user.get_full_name }}</td>
             <td>{{ a.enrollment.student.grade_level.name }}</td>
             <td>{{ a.enrollment.student.stream.name }}</td>
-            <td>{{ a.enrollment.subject.name }}</td>
+            <td>{{ a.enrollment.lesson.subject.name }}</td>
             <td>{{ a.date|date:"d M Y" }}</td>
             <td class="text-center">
               {% if a.status == 'P' %}
@@ -241,10 +258,9 @@
 
 </div>
 
-<!-- JS -->
+<!-- CHART JS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
 <script>
 /* Grade → Stream dynamic select */
 $('#grade-select').change(function() {
@@ -256,7 +272,7 @@ $('#grade-select').change(function() {
     });
 });
 
-/* DAILY TREND CHART */
+/* DAILY TREND LINE CHART */
 new Chart(document.getElementById('dailyTrendChart'), {
     type: 'line',
     data: {
@@ -266,22 +282,71 @@ new Chart(document.getElementById('dailyTrendChart'), {
             { label: 'Absent', borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.2)', fill: true, data: [{% for d in daily_trend %}{{ d.absent }},{% endfor %}] }
         ]
     },
-    options: { responsive: true, plugins: { legend: { position: 'top' } } }
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } },
+        scales: { y: { beginAtZero: true } }
+    }
 });
 
-/* GRADE TREND CHART */
-new Chart(document.getElementById('gradeTrendChart'), {
-    type: 'bar',
-    data: {
-        labels: [{% for g in grade_trends %}'{{ g.enrollment__student__grade_level__name }}',{% endfor %}],
-        datasets: [
-            { label: 'Present', backgroundColor: '#198754', data: [{% for g in grade_trends %}{{ g.P }},{% endfor %}] },
-            { label: 'Tardy', backgroundColor: '#ffc107', data: [{% for g in grade_trends %}{{ g.Tardy }},{% endfor %}] },
-            { label: 'Absent', backgroundColor: '#dc3545', data: [{% for g in grade_trends %}{{ g.Absent }},{% endfor %}] }
-        ]
-    },
-    options: { responsive: true, plugins: { legend: { position: 'top' } } }
-});
+/* STACKED BAR CHART FUNCTION */
+function createStackedChart(ctxId, labels, present, tardy, absent, title) {
+    new Chart(document.getElementById(ctxId), {
+        type: 'bar',
+        data: { labels: labels, datasets: [
+            { label: 'Present', data: present, backgroundColor: '#198754' },
+            { label: 'Tardy', data: tardy, backgroundColor: '#ffc107' },
+            { label: 'Absent', data: absent, backgroundColor: '#dc3545' }
+        ]},
+        options: {
+            responsive:true,
+            plugins: {
+                legend:{position:'top'},
+                tooltip: {
+                    callbacks:{
+                        label: function(ctx){
+                            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                            const val = ctx.raw;
+                            const perc = total ? ((val/total)*100).toFixed(1) : 0;
+                            return ctx.dataset.label + ': ' + val + ' (' + perc + '%)';
+                        }
+                    }
+                },
+                title: { display:true, text: title }
+            },
+            scales:{ x:{stacked:true}, y:{stacked:true, beginAtZero:true} }
+        }
+    });
+}
+
+/* Grade Trend */
+createStackedChart(
+    'gradeTrendChart',
+    [{% for g in grade_trends %}'{{ g.enrollment__student__grade_level__name }}',{% endfor %}],
+    [{% for g in grade_trends %}{{ g.P }},{% endfor %}],
+    [{% for g in grade_trends %}{{ g.Tardy }},{% endfor %}],
+    [{% for g in grade_trends %}{{ g.Absent }},{% endfor %}],
+    'Attendance by Grade'
+);
+
+/* Stream Trend */
+createStackedChart(
+    'streamTrendChart',
+    [{% for s in stream_trends %}'{{ s.enrollment__student__stream__name }}',{% endfor %}],
+    [{% for s in stream_trends %}{{ s.P }},{% endfor %}],
+    [{% for s in stream_trends %}{{ s.Tardy }},{% endfor %}],
+    [{% for s in stream_trends %}{{ s.Absent }},{% endfor %}],
+    'Attendance by Stream'
+);
+
+/* Subject Trend */
+createStackedChart(
+    'subjectTrendChart',
+    [{% for sub in subject_trends %}'{{ sub.enrollment__lesson__subject__name }}',{% endfor %}],
+    [{% for sub in subject_trends %}{{ sub.P }},{% endfor %}],
+    [{% for sub in subject_trends %}{{ sub.Tardy }},{% endfor %}],
+    [{% for sub in subject_trends %}{{ sub.Absent }},{% endfor %}],
+    'Attendance by Subject'
+);
 </script>
-
 {% endblock %}

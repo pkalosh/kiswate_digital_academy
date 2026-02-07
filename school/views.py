@@ -2882,12 +2882,13 @@ from django.db.models import Count, Q, F
 from django.core.paginator import Paginator
 @login_required
 def attendance_dashboard(request):
+    # ───── USER SCHOOL ─────
     try:
         user_school = request.user.staffprofile.school
     except AttributeError:
         return render(request, 'error/no_school_access.html', status=403)
 
-    # Base queryset
+    # ───── BASE QUERYSET ─────
     qs = Attendance.objects.select_related(
         'enrollment__student__user',
         'enrollment__student__grade_level',
@@ -2898,7 +2899,7 @@ def attendance_dashboard(request):
         'marked_by__user'
     ).filter(enrollment__school=user_school)
 
-    # Filters from GET
+    # ───── FILTERS ─────
     filters = {
         'academic_year': request.GET.get('academic_year', ''),
         'term': request.GET.get('term', ''),
@@ -2932,7 +2933,7 @@ def attendance_dashboard(request):
         if parsed:
             qs = qs.filter(date=parsed)
 
-    # Attendance stats per status
+    # ───── ATTENDANCE STATS ─────
     stats = qs.aggregate(
         P=Count('id', filter=Q(status='P')),
         ET=Count('id', filter=Q(status='ET')),
@@ -2942,14 +2943,13 @@ def attendance_dashboard(request):
     )
     stats = {k: v or 0 for k, v in stats.items()}
 
-    # Prepare KPI cards
     status_cards = [
         {'status': 'P', 'label': 'Present', 'color': 'success', 'count': stats['P']},
         {'status': 'ET', 'label': 'Tardy', 'color': 'warning', 'count': stats['ET'] + stats['UT']},
         {'status': 'EA', 'label': 'Absent', 'color': 'danger', 'count': stats['EA'] + stats['UA']},
     ]
 
-    # Discipline stats
+    # ───── DISCIPLINE STATS ─────
     discipline_qs = DisciplineRecord.objects.filter(linked_attendance__in=qs)
     discipline_stats = discipline_qs.aggregate(
         total=Count('id'),
@@ -2958,30 +2958,42 @@ def attendance_dashboard(request):
     )
     discipline_stats = {k: v or 0 for k, v in discipline_stats.items()}
 
-    # Daily trend (last 30 days)
+    # ───── TRENDS ─────
     today = localdate()
     daily_trend = qs.filter(date__gte=today - timedelta(days=30)).values('date').annotate(
         present=Count('id', filter=Q(status='P')),
         absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
     ).order_by('date')
 
-    # Grade-wise trend
     grade_trends = qs.values('enrollment__student__grade_level__name').annotate(
         P=Count('id', filter=Q(status='P')),
         Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
         Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
     ).order_by('enrollment__student__grade_level__name')
 
-    # Pagination
+    stream_trends = qs.values('enrollment__student__stream__name').annotate(
+        P=Count('id', filter=Q(status='P')),
+        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
+        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
+    ).order_by('enrollment__student__stream__name')
+
+    subject_trends = qs.values('enrollment__lesson__subject__name').annotate(
+        P=Count('id', filter=Q(status='P')),
+        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
+        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
+    ).order_by('enrollment__lesson__subject__name')
+
+    # ───── PAGINATION ─────
     paginator = Paginator(qs.order_by('-date', '-id'), 25)
     page_obj = paginator.get_page(request.GET.get('page'))
 
     context = {
         'attendances': page_obj,
-        'stats': stats,
         'status_cards': status_cards,
         'daily_trend': list(daily_trend),
         'grade_trends': list(grade_trends),
+        'stream_trends': list(stream_trends),
+        'subject_trends': list(subject_trends),
         'discipline_stats': discipline_stats,
         'filters': filters,
         'academic_years': AcademicYear.objects.filter(school=user_school),
