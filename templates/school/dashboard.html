@@ -1,20 +1,10 @@
-{% extends 'school/base.html' %}
-{% load dict_filter %}
+{% extends "school/base.html" %}
+{% load sc_filters %}
 
 {% block content %}
 
 <style>
-/* ==========================================================================
-   Global resets
-   ========================================================================== */
-html, body {
-  overflow-x: hidden;
-  height: 100%;
-}
-
-/* ==========================================================================
-   KPI Cards
-   ========================================================================== */
+/* ================= KPI CARDS ================= */
 .kpi-card {
   background: #ffffff;
   border-radius: 12px;
@@ -22,94 +12,32 @@ html, body {
   box-shadow: 0 4px 12px rgba(0,0,0,0.06);
   text-align: center;
   height: 100%;
-  transition: transform 0.15s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: default;
 }
-
 .kpi-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
 }
-
 .kpi-icon {
-  font-size: 2.6rem;
+  font-size: 2.5rem;
   margin-bottom: 0.8rem;
-  color: #198754;
 }
+.kpi-icon.text-success { color: #198754; }
+.kpi-icon.text-danger { color: #dc3545; }
+.kpi-card h4 { margin-bottom: 0.2rem; font-weight: 600; }
+.kpi-card small { font-size: 0.85rem; color: #6c757d; }
 
-.kpi-icon.danger {
-  color: #dc3545;
-}
-
-/* ==========================================================================
-   Filters
-   ========================================================================== */
-.filter-form .form-select,
-.filter-form .btn {
-  height: 44px; /* better touch target */
-  font-size: 0.95rem;
-}
-
-.filter-row .col-6 {
-  margin-bottom: 0.5rem;
-}
-
-/* ==========================================================================
-   Timetable shared
-   ========================================================================== */
-.lesson-card {
-  background: #f8f9fa;
-  border-left: 4px solid #198754;
-  padding: 0.7rem;
-  border-radius: 8px;
-  margin-bottom: 0.6rem;
-  font-size: 0.9rem;
-  line-height: 1.35;
-}
-
-.lesson-card.conflict {
-  border-left-color: #dc3545;
-  background: rgba(220, 53, 69, 0.07);
-}
-
-.day-label {
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 0.4rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-/* Sticky elements for desktop table */
-.timetable-wrapper {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 1rem;
-}
-
-.timetable-wrapper table {
-  min-width: 960px;
-  width: 100%;
-}
-
-.time-cell {
-  position: sticky;
-  left: 0;
-  background: #f1f3f5;
-  font-weight: 600;
-  z-index: 10;
-  min-width: 80px;
-  box-shadow: 3px 0 8px -4px rgba(0,0,0,0.1);
-}
-
-.day-header {
-  position: sticky;
-  top: 0;
-  background: #f8f9fa;
-  z-index: 9;
-  font-weight: 600;
-}
-
+/* ================= TIMETABLE ================= */
+.timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 1rem; }
+.timetable-wrapper table { min-width: 960px; width: 100%; }
+.time-cell { position: sticky; left: 0; background: #f1f3f5; font-weight: 600; z-index: 10; min-width: 80px; }
+.day-header { position: sticky; top: 0; background: #f8f9fa; z-index: 9; font-weight: 600; }
 .today-header { background: #d4edda !important; }
 .weekend-header { background: #f8d7da !important; }
+.lesson-card { background: #f8f9fa; border-left: 4px solid #198754; padding: 0.7rem; border-radius: 8px; margin-bottom: 0.6rem; font-size: 0.9rem; line-height: 1.35; }
+.lesson-card.conflict { border-left-color: #dc3545; background: rgba(220,53,69,0.07); }
+.day-label { font-weight: 600; color: #495057; margin-bottom: 0.4rem; padding-bottom: 0.3rem; border-bottom: 1px solid #e9ecef; }
 
 /* Mobile improvements */
 @media (max-width: 767px) {
@@ -118,118 +46,99 @@ html, body {
   .lesson-card { font-size: 0.85rem; padding: 0.6rem; }
   .day-label { font-size: 1rem; }
 }
-
-/* Scroll hint */
-.scroll-hint {
-  font-size: 0.9rem;
-  color: #6c757d;
-  text-align: center;
-  margin: 0.75rem 0 1.25rem;
-  font-style: italic;
-}
+.scroll-hint { font-size: 0.9rem; color: #6c757d; text-align: center; margin: 0.75rem 0 1.25rem; font-style: italic; }
 </style>
 
 <div class="container-fluid py-4">
 
-  <!-- KPI Section -->
+  <!-- ================= KPI CARDS ================= -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
       <div class="kpi-card">
-        <div class="kpi-icon"><i class="bi bi-person-badge"></i></div>
+        <div class="kpi-icon text-success"><i class="bi bi-person-badge"></i></div>
         <h4 class="mb-1">{{ total_teachers }}</h4>
         <small class="text-muted">Teachers</small>
       </div>
     </div>
     <div class="col-6 col-md-3">
       <div class="kpi-card">
-        <div class="kpi-icon"><i class="bi bi-people"></i></div>
+        <div class="kpi-icon text-success"><i class="bi bi-people"></i></div>
         <h4 class="mb-1">{{ total_students }}</h4>
         <small class="text-muted">Students</small>
       </div>
     </div>
     <div class="col-6 col-md-3">
       <div class="kpi-card">
-        <div class="kpi-icon"><i class="bi bi-person-hearts"></i></div>
+        <div class="kpi-icon text-success"><i class="bi bi-person-hearts"></i></div>
         <h4 class="mb-1">{{ total_parents }}</h4>
         <small class="text-muted">Parents</small>
       </div>
     </div>
     <div class="col-6 col-md-3">
       <div class="kpi-card">
-        <div class="kpi-icon danger"><i class="bi bi-shield-exclamation"></i></div>
+        <div class="kpi-icon text-danger"><i class="bi bi-shield-exclamation"></i></div>
         <h4 class="mb-1">{{ total_discipline_cases }}</h4>
         <small class="text-muted">Discipline Cases</small>
       </div>
     </div>
   </div>
 
-  <!-- Filters -->
+  <!-- ================= FILTERS ================= -->
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="get" class="filter-form">
-        <div class="row g-3 filter-row">
-          <div class="col-6 col-md-2">
-            <select name="grade" class="form-select">
-              <option value="">All Grades</option>
-              {% for g in grades %}
-              <option value="{{ g.id }}" {% if selected_grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-6 col-md-2">
-            <select name="stream" class="form-select">
-              <option value="">All Streams</option>
-              {% for s in streams %}
-              <option value="{{ s.id }}" {% if selected_stream == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12 col-md-3">
-            <select name="teacher" class="form-select">
-              <option value="">All Teachers</option>
-              {% for t in teachers %}
-              <option value="{{ t.id }}" {% if selected_teacher == t.id|stringformat:"s" %}selected{% endif %}>
-                {{ t.user.get_full_name }}
-              </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-6 col-md-2">
-            <select name="weekday" class="form-select">
-              <option value="">All Days</option>
-              {% for k,v in weekdays %}
-              <option value="{{ k }}" {% if selected_weekday == k %}selected{% endif %}>{{ v }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-6 col-md-2">
-            <select name="slot" class="form-select">
-              <option value="">All Slots</option>
-              {% for s in time_slots %}
-              <option value="{{ s.id }}" {% if selected_slot == s.id|stringformat:"s" %}selected{% endif %}>
-                {{ s.start_time|time:"H:i" }}–{{ s.end_time|time:"H:i" }}
-              </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-12 col-md-1 d-flex align-items-end">
-            <button type="submit" class="btn btn-success w-100">
-              <i class="bi bi-funnel-fill"></i> Filter
-            </button>
-          </div>
+      <form method="get" class="filter-form row g-3">
+        <div class="col-6 col-md-2">
+          <select name="grade" class="form-select">
+            <option value="">All Grades</option>
+            {% for g in grades %}
+            <option value="{{ g.id }}" {% if selected_grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="stream" class="form-select">
+            <option value="">All Streams</option>
+            {% for s in streams %}
+            <option value="{{ s.id }}" {% if selected_stream == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="teacher" class="form-select">
+            <option value="">All Teachers</option>
+            {% for t in teachers %}
+            <option value="{{ t.id }}" {% if selected_teacher == t.id|stringformat:"s" %}selected{% endif %}>{{ t.user.get_full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select name="subject" class="form-select">
+            <option value="">All Subjects</option>
+            {% for sub in subjects %}
+            <option value="{{ sub.id }}" {% if selected_subject == sub.id|stringformat:"s" %}selected{% endif %}>{{ sub.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" class="form-control">
+        </div>
+        <div class="col-6 col-md-2 d-grid">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-funnel-fill"></i> Filter
+          </button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Mobile scroll hint (only for table view) -->
-  <div class="scroll-hint d-md-none d-block">
-    <i class="bi bi-arrow-left-right"></i> Table view scrolls horizontally on larger screens
+  <!-- ================= WEEK NAVIGATION ================= -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="?date={{ prev_week|date:'Y-m-d' }}">← Previous week</a>
+    <strong>{{ week_start|date:"M j" }} – {{ week_end|date:"M j, Y" }}</strong>
+    <a class="btn btn-outline-secondary btn-sm" href="?date={{ next_week|date:'Y-m-d' }}">Next week →</a>
   </div>
 
-  <!-- ====================
-       MOBILE TIMETABLE (cards)
-       ==================== -->
+  <!-- ================= MOBILE TIMETABLE ================= -->
   <div class="d-md-none">
     {% for slot in time_slots %}
     <div class="card shadow-sm mb-3 border-0 rounded-3">
@@ -237,19 +146,17 @@ html, body {
         {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
       </div>
       <div class="card-body p-3">
-        {% for day_key, day_name in weekdays %}
+        {% for day in week_days %}
         <div class="mb-3">
-          <div class="day-label {% if key == today_weekday %}text-success{% endif %}">
-            {{ day_name }}
+          <div class="day-label {% if day == today %}text-success{% endif %}">
+            {{ day|date:"D, M j" }}
           </div>
-          {% with lessons=table_data|dict_get:day_key|dict_get:slot %}
+          {% with lessons=calendar|get_item:slot.id|get_item:day %}
             {% if lessons %}
               {% for lesson in lessons %}
               <div class="lesson-card {% if lesson.id in conflicts %}conflict{% endif %}">
                 <strong>{{ lesson.subject.name }}</strong><br>
-                <small class="text-muted">
-                  {{ lesson.stream.name }} • {{ lesson.teacher.user.get_full_name|truncatechars:22 }}
-                </small>
+                <small class="text-muted">{{ lesson.stream.name }} • {{ lesson.teacher.user.get_full_name|truncatechars:22 }}</small>
               </div>
               {% endfor %}
             {% else %}
@@ -260,22 +167,18 @@ html, body {
         {% endfor %}
       </div>
     </div>
-    {% empty %}
-    <div class="alert alert-info text-center">No time slots available</div>
     {% endfor %}
   </div>
 
-  <!-- ====================
-       DESKTOP/TABLET TIMETABLE (scrollable table)
-       ==================== -->
+  <!-- ================= DESKTOP TIMETABLE ================= -->
   <div class="timetable-wrapper d-none d-md-block">
     <table class="table table-bordered align-middle mb-0">
       <thead class="table-light">
         <tr>
           <th class="time-cell text-center">Time</th>
-          {% for key, name in weekdays %}
-          <th class="day-header text-center {% if key == today_weekday %}today-header{% endif %} {% if key == 'saturday' or key == 'sunday' %}weekend-header{% endif %}">
-            {{ name }}
+          {% for day in week_days %}
+          <th class="day-header text-center {% if day == today %}today-header{% endif %} {% if day|date:'w' in '0,6' %}weekend-header{% endif %}">
+            {{ day|date:"D, M j" }}
           </th>
           {% endfor %}
         </tr>
@@ -287,21 +190,21 @@ html, body {
             {{ slot.start_time|time:"H:i" }}<br>
             <small class="text-muted">{{ slot.end_time|time:"H:i" }}</small>
           </td>
-          {% for day_key, day_name in weekdays %}
-          {% with lessons=table_data|dict_get:day_key|dict_get:slot %}
+          {% for day in week_days %}
           <td class="p-2">
-            {% if lessons %}
-              {% for lesson in lessons %}
-              <div class="lesson-card {% if lesson.id in conflicts %}conflict{% endif %}">
-                <strong>{{ lesson.subject.name }}</strong><br>
-                <small class="text-muted">{{ lesson.stream.name }} • {{ lesson.teacher.user.get_full_name }}</small>
-              </div>
-              {% endfor %}
-            {% else %}
-              <div class="text-center py-2"><small class="text-muted">—</small></div>
-            {% endif %}
+            {% with lessons=calendar|get_item:slot.id|get_item:day %}
+              {% if lessons %}
+                {% for lesson in lessons %}
+                <div class="lesson-card {% if lesson.id in conflicts %}conflict{% endif %}">
+                  <strong>{{ lesson.subject.name }}</strong><br>
+                  <small class="text-muted">{{ lesson.stream.name }} | {{ lesson.teacher.user.get_full_name }}</small>
+                </div>
+                {% endfor %}
+              {% else %}
+                <div class="text-center py-2"><small class="text-muted">—</small></div>
+              {% endif %}
+            {% endwith %}
           </td>
-          {% endwith %}
           {% endfor %}
         </tr>
         {% endfor %}

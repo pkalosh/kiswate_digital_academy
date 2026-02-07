@@ -1,0 +1,12 @@
+{% extends "school/base.html" %}
+
+{% block title %}Error{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="alert alert-danger">
+    <h4>Something went wrong</h4>
+    <p>{{ message|default:"An unexpected error occurred." }}</p>
+  </div>
+</div>
+{% endblock %}

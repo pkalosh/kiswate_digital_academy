@@ -8,10 +8,10 @@
 <!-- HEADER -->
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h3 class="fw-bold mb-0">Attendance Summary</h3>
+    <h3 class="fw-bold mb-0">Attendance Dashboard</h3>
     <small class="text-muted">Real-time attendance & discipline insights</small>
   </div>
-  <a href="{% url 'school:attendance_export_csv' %}" class="btn btn-outline-success">
+  <a href="{% url 'school:attendance_export_csv' %}?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}" class="btn btn-outline-success">
     <i class="fa fa-file-excel"></i> Export CSV
   </a>
 </div>
@@ -32,119 +32,106 @@
 <form method="get" class="card shadow-sm mb-4">
   <div class="card-body">
     <div class="row g-2">
-
+      <!-- Academic Year -->
       <div class="col-md-2">
         <label class="form-label">Academic Year</label>
         <select name="academic_year" class="form-select">
           <option value="">All</option>
           {% for ay in academic_years %}
-          <option value="{{ ay.id }}" {% if filters.academic_year == ay.id|stringformat:"s" %}selected{% endif %}>
-            {{ ay.name }}
-          </option>
+            <option value="{{ ay.id }}" {% if filters.academic_year == ay.id|stringformat:"s" %}selected{% endif %}>
+              {{ ay.name }}
+            </option>
           {% endfor %}
         </select>
       </div>
 
+      <!-- Term -->
       <div class="col-md-2">
         <label class="form-label">Term</label>
         <select name="term" class="form-select">
           <option value="">All</option>
           {% for t in terms %}
-          <option value="{{ t.id }}" {% if filters.term == t.id|stringformat:"s" %}selected{% endif %}>
-            {{ t.name }}
-          </option>
+            <option value="{{ t.id }}" {% if filters.term == t.id|stringformat:"s" %}selected{% endif %}>
+              {{ t.name }}
+            </option>
           {% endfor %}
         </select>
       </div>
 
+      <!-- Grade -->
       <div class="col-md-2">
         <label class="form-label">Grade</label>
         <select name="grade" id="grade-select" class="form-select">
           <option value="">All</option>
           {% for g in grades %}
-          <option value="{{ g.id }}" {% if filters.grade == g.id|stringformat:"s" %}selected{% endif %}>
-            {{ g.name }}
-          </option>
+            <option value="{{ g.id }}" {% if filters.grade == g.id|stringformat:"s" %}selected{% endif %}>
+              {{ g.name }}
+            </option>
           {% endfor %}
         </select>
       </div>
 
+      <!-- Stream -->
       <div class="col-md-2">
         <label class="form-label">Stream</label>
         <select name="stream" id="stream-select" class="form-select">
           <option value="">All</option>
           {% for s in streams %}
-          <option value="{{ s.id }}" {% if filters.stream == s.id|stringformat:"s" %}selected{% endif %}>
-            {{ s.name }}
-          </option>
+            <option value="{{ s.id }}" {% if filters.stream == s.id|stringformat:"s" %}selected{% endif %}>
+              {{ s.name }}
+            </option>
           {% endfor %}
         </select>
       </div>
 
+      <!-- Subject -->
       <div class="col-md-2">
         <label class="form-label">Subject</label>
         <select name="subject" class="form-select">
           <option value="">All</option>
           {% for sub in subjects %}
-          <option value="{{ sub.id }}" {% if filters.subject == sub.id|stringformat:"s" %}selected{% endif %}>
-            {{ sub.name }}
-          </option>
+            <option value="{{ sub.id }}" {% if filters.subject == sub.id|stringformat:"s" %}selected{% endif %}>
+              {{ sub.name }}
+            </option>
           {% endfor %}
         </select>
       </div>
 
+      <!-- Student -->
       <div class="col-md-2">
         <label class="form-label">Student</label>
         <input type="text" name="student" value="{{ filters.student }}" class="form-control" placeholder="Name / Adm No">
       </div>
 
+      <!-- Date -->
       <div class="col-md-2">
         <label class="form-label">Date</label>
         <input type="date" name="date" value="{{ filters.date }}" class="form-control">
       </div>
 
+      <!-- Submit -->
       <div class="col-md-2 align-self-end">
-        <button class="btn btn-success w-100">
-          <i class="fa fa-filter"></i> Apply Filters
-        </button>
+        <button class="btn btn-success w-100"><i class="fa fa-filter"></i> Apply Filters</button>
       </div>
-
     </div>
   </div>
 </form>
 
 <!-- KPI CARDS -->
 <div class="row g-3 mb-4">
-  <div class="col-xl-3 col-md-6">
-    <div class="card shadow border-0 bg-success text-white">
-      <div class="card-body">
-        <h6 class="text-uppercase">Present</h6>
-        <h2>{{ stats.P|default:0 }}</h2>
+  {% for card in status_cards %}
+    <div class="col-xl-2 col-md-4">
+      <div class="card shadow border-0 bg-{{ card.color }} text-white">
+        <div class="card-body text-center">
+          <h6 class="text-uppercase">{{ card.label }}</h6>
+          <h2>{{ card.count }}</h2>
+        </div>
       </div>
     </div>
-  </div>
-
-  <div class="col-xl-3 col-md-6">
-    <div class="card shadow border-0 bg-warning text-dark">
-      <div class="card-body">
-        <h6 class="text-uppercase">Tardy</h6>
-        <h2>{{ stats.ET|default:0|add:stats.UT|default:0 }}</h2>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-xl-3 col-md-6">
-    <div class="card shadow border-0 bg-danger text-white">
-      <div class="card-body">
-        <h6 class="text-uppercase">Absent</h6>
-        <h2>{{ stats.EA|default:0|add:stats.UA|default:0 }}</h2>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-xl-3 col-md-6">
+  {% endfor %}
+  <div class="col-xl-2 col-md-4">
     <div class="card shadow border-0 bg-info text-white">
-      <div class="card-body">
+      <div class="card-body text-center">
         <h6 class="text-uppercase">Total Records</h6>
         <h2>{{ attendances.paginator.count|intcomma }}</h2>
       </div>
@@ -152,59 +139,32 @@
   </div>
 </div>
 
-<!-- DISCIPLINE -->
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
-    <div class="card shadow-sm border-start border-4 border-warning">
+<!-- DAILY TREND CHART -->
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="card shadow-sm">
       <div class="card-body">
-        <h6>Discipline Incidents</h6>
-        <h3>{{ discipline_stats.total|default:0 }}</h3>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card shadow-sm border-start border-4 border-danger">
-      <div class="card-body">
-        <h6>Unresolved Cases</h6>
-        <h3>{{ discipline_stats.unresolved|default:0 }}</h3>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card shadow-sm border-start border-4 border-dark">
-      <div class="card-body">
-        <h6>Severe Incidents</h6>
-        <h3>{{ discipline_stats.severe|default:0 }}</h3>
+        <h6>Daily Attendance Trend (Last 30 Days)</h6>
+        <canvas id="dailyTrendChart"></canvas>
       </div>
     </div>
   </div>
 </div>
 
-<!-- CHARTS -->
+<!-- GRADE TREND CHART -->
 <div class="row mb-4">
-  <div class="col-md-6">
+  <div class="col-md-12">
     <div class="card shadow-sm">
       <div class="card-body">
-        <h6>Attendance Distribution (Selected Period)</h6>
-        <canvas id="trendChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-6">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h6>Absence vs Presence</h6>
-        <canvas id="summaryChart"></canvas>
+        <h6>Attendance Trends by Grade</h6>
+        <canvas id="gradeTrendChart"></canvas>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ATTENDANCE TABLE -->
-<div class="card shadow-sm">
+<div class="card shadow-sm mb-4">
   <div class="card-body table-responsive">
     <table class="table table-bordered table-hover">
       <thead class="table-success text-center">
@@ -223,37 +183,59 @@
       </thead>
       <tbody>
         {% for a in attendances %}
-        <tr>
-          <td>{{ forloop.counter }}</td>
-          <td>{{ a.enrollment.student.user.get_full_name }}</td>
-          <td>{{ a.enrollment.student.grade_level.name }}</td>
-          <td>{{ a.enrollment.student.stream.name }}</td>
-          <td>{{ a.enrollment.subject.name }}</td>
-          <td>{{ a.date|date:"d M Y" }}</td>
-          <td class="text-center">
-            {% if a.status == 'P' %}
-              <span class="text-success fw-bold">✔</span>
-            {% elif a.status in 'ET UT' %}
-              <span class="text-warning fw-bold">⏰</span>
-            {% elif a.status in 'EA UA' %}
-              <span class="text-danger fw-bold">✖</span>
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
-          </td>
-          <td>{{ a.term.name }}</td>
-          <td>{{ a.academic_year.name }}</td>
-          <td>{{ a.marked_by.user.get_full_name }}</td>
-        </tr>
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ a.enrollment.student.user.get_full_name }}</td>
+            <td>{{ a.enrollment.student.grade_level.name }}</td>
+            <td>{{ a.enrollment.student.stream.name }}</td>
+            <td>{{ a.enrollment.subject.name }}</td>
+            <td>{{ a.date|date:"d M Y" }}</td>
+            <td class="text-center">
+              {% if a.status == 'P' %}
+                <span class="badge bg-success">✔ Present</span>
+              {% elif a.status in 'ET UT' %}
+                <span class="badge bg-warning text-dark">⏰ Tardy</span>
+              {% elif a.status in 'EA UA' %}
+                <span class="badge bg-danger">✖ Absent</span>
+              {% else %}
+                <span class="badge bg-secondary">—</span>
+              {% endif %}
+            </td>
+            <td>{{ a.term.name }}</td>
+            <td>{{ a.academic_year.name }}</td>
+            <td>{{ a.marked_by.user.get_full_name }}</td>
+          </tr>
         {% empty %}
-        <tr>
-          <td colspan="10" class="text-center text-muted">
-            No attendance records found
-          </td>
-        </tr>
+          <tr>
+            <td colspan="10" class="text-center text-muted">No attendance records found</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
+
+    <!-- Pagination -->
+    <nav aria-label="Page navigation">
+      <ul class="pagination justify-content-center mt-3">
+        {% if attendances.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ attendances.previous_page_number }}{% for k,v in filters.items %}{% if v %}&{{ k }}={{ v }}{% endif %}{% endfor %}">Previous</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+
+        <li class="page-item disabled"><span class="page-link">Page {{ attendances.number }} of {{ attendances.paginator.num_pages }}</span></li>
+
+        {% if attendances.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ attendances.next_page_number }}{% for k,v in filters.items %}{% if v %}&{{ k }}={{ v }}{% endif %}{% endfor %}">Next</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+
   </div>
 </div>
 
@@ -264,47 +246,41 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
-/* Grade → Stream */
+/* Grade → Stream dynamic select */
 $('#grade-select').change(function() {
     let grade_id = $(this).val();
     $.get("{% url 'school:get_streams_by_grade' %}", { grade: grade_id }, function(data) {
         let $stream = $('#stream-select');
         $stream.empty().append('<option value="">All</option>');
-        data.streams.forEach(s =>
-            $stream.append(`<option value="${s.id}">${s.name}</option>`)
-        );
+        data.streams.forEach(s => $stream.append(`<option value="${s.id}">${s.name}</option>`));
     });
 });
 
-/* PIE: Attendance Distribution */
-new Chart(document.getElementById('trendChart'), {
-  type: 'pie',
-  data: {
-    labels: ['Present', 'Absent'],
-    datasets: [{
-      data: [
-        {{ stats.P|default:0 }},
-        {{ stats.EA|default:0|add:stats.UA|default:0 }}
-      ],
-      backgroundColor: ['#198754', '#dc3545']
-    }]
-  }
+/* DAILY TREND CHART */
+new Chart(document.getElementById('dailyTrendChart'), {
+    type: 'line',
+    data: {
+        labels: [{% for d in daily_trend %}'{{ d.date|date:"d M" }}',{% endfor %}],
+        datasets: [
+            { label: 'Present', borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.2)', fill: true, data: [{% for d in daily_trend %}{{ d.present }},{% endfor %}] },
+            { label: 'Absent', borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.2)', fill: true, data: [{% for d in daily_trend %}{{ d.absent }},{% endfor %}] }
+        ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } } }
 });
 
-/* BAR: Summary */
-new Chart(document.getElementById('summaryChart'), {
-  type: 'bar',
-  data: {
-    labels: ['Present','Tardy','Absent'],
-    datasets: [{
-      data: [
-        {{ stats.P|default:0 }},
-        {{ stats.ET|default:0|add:stats.UT|default:0 }},
-        {{ stats.EA|default:0|add:stats.UA|default:0 }}
-      ],
-      backgroundColor: ['#198754','#ffc107','#dc3545']
-    }]
-  }
+/* GRADE TREND CHART */
+new Chart(document.getElementById('gradeTrendChart'), {
+    type: 'bar',
+    data: {
+        labels: [{% for g in grade_trends %}'{{ g.enrollment__student__grade_level__name }}',{% endfor %}],
+        datasets: [
+            { label: 'Present', backgroundColor: '#198754', data: [{% for g in grade_trends %}{{ g.P }},{% endfor %}] },
+            { label: 'Tardy', backgroundColor: '#ffc107', data: [{% for g in grade_trends %}{{ g.Tardy }},{% endfor %}] },
+            { label: 'Absent', backgroundColor: '#dc3545', data: [{% for g in grade_trends %}{{ g.Absent }},{% endfor %}] }
+        ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' } } }
 });
 </script>
 

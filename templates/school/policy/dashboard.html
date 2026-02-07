@@ -1,191 +1,178 @@
 {% extends "school/policy/base.html" %}
-
-{% block title %}Policymaker Dashboard{% endblock %}
+{% load static %}
+{% load humanize %}
 
 {% block content %}
+<div class="container mt-4">
+    <h2>📊 Policy-Maker Dashboard</h2>
 
-<style>
-  .stat-card { border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08); transition:0.2s; }
-  .stat-card:hover { transform: translateY(-4px); }
-  .badge-rank { font-size:1.1rem; min-width:60px; }
-  .low-attendance-card { cursor:pointer; }
-  .modal-header { background:#ffc107; color:#fff; }
-  @media(max-width:768px){ .table-responsive{ font-size:0.9rem; } .stat-card .h4{ font-size:1.6rem; } }
-</style>
-
-<div class="container-fluid py-4">
-
-  <h2 class="mb-4 fw-bold">Education Oversight Dashboard</h2>
-
-  <!-- Stats Cards -->
-  <div class="row g-3 mb-5">
-    {% for card in stats_cards %}
-    <div class="col-6 col-md-3">
-      <div class="card stat-card text-center bg-white border-0 h-100 p-3">
-        <i class="bi {{ card.icon }} fs-1 text-{{ card.color }} mb-2"></i>
-        <h4 class="fw-bold mb-1">
-          {{ card.value }}
-          {% if card.value == 0 or card.value == "0.0%" %}
-          <span class="badge bg-secondary ms-2">No data</span>
-          {% endif %}
-        </h4>
-        <div class="text-muted small">{{ card.title }}</div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <!-- Filters -->
-  <div class="card shadow-sm border-0 mb-5">
-    <div class="card-body">
-      <form method="get" class="row g-3">
-        <div class="col-6 col-md-3">
-          <input type="date" name="start_date" class="form-control" value="{{ filters.start_date }}">
+    <!-- ───────── KPI CARDS ───────── -->
+    <div class="row mb-4">
+        {% for card in stats_cards %}
+        <div class="col-md-2">
+            <div class="card text-white {% if card.color == 'red' %}bg-danger{% else %}bg-success{% endif %} mb-3">
+                <div class="card-body text-center">
+                    <i class="bi {{ card.icon }} fs-2"></i>
+                    <h5 class="card-title mt-2">{{ card.value }}</h5>
+                    <p class="card-text">{{ card.title }}</p>
+                </div>
+            </div>
         </div>
-        <div class="col-6 col-md-3">
-          <input type="date" name="end_date" class="form-control" value="{{ filters.end_date }}">
+        {% endfor %}
+    </div>
+
+    <!-- ───────── FILTERS ───────── -->
+    <form id="filterForm" class="row g-3 mb-4" method="get">
+        <div class="col-md-2">
+            <label>County</label>
+            <select id="county" name="county" class="form-select">
+                <option value="">All Counties</option>
+                {% for c in counties %}
+                    <option value="{{ c.id }}" {% if filters.county == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
         </div>
-        <div class="col-12 col-md-3 d-flex align-items-end">
-          <button type="submit" class="btn btn-success w-100">
-            <i class="bi bi-funnel-fill me-2"></i> Apply Filters
-          </button>
+        <div class="col-md-2">
+            <label>Subcounty</label>
+            <select id="subcounty" name="subcounty" class="form-select">
+                <option value="">All Subcounties</option>
+            </select>
         </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- School Rankings -->
-  <div class="card shadow-sm border-0 mb-5">
-    <div class="card-header bg-success text-white">
-      <h5 class="mb-0">School Attendance Ranking</h5>
-    </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Rank</th>
-              <th>School Name</th>
-              <th>Avg Attendance</th>
-              <th>Avg Absenteeism</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for school in page_obj %}
-            <tr>
-              <td><span class="badge bg-success badge-rank">{{ page_obj.start_index|add:forloop.counter0 }}</span></td>
-              <td>{{ school.enrollment__student__stream__grade__school__name|default:"Unknown" }}</td>
-              <td>{{ school.avg_attendance|floatformat:1 }}%</td>
-              <td>{{ school.avg_absenteeism|floatformat:1 }}%</td>
-              <td>
-                {% if school.avg_attendance >= 90 %}
-                <span class="badge bg-success">Excellent</span>
-                {% elif school.avg_attendance >= 80 %}
-                <span class="badge bg-info">Good</span>
-                {% else %}
-                <span class="badge bg-danger">Needs Attention</span>
-                {% endif %}
-              </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="5" class="text-center py-5 text-muted">No schools with data in selected filters</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination -->
-      {% if page_obj.has_other_pages %}
-      <nav aria-label="Page navigation" class="mt-4">
-        <ul class="pagination justify-content-center">
-          {% if page_obj.has_previous %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">Previous</a>
-          </li>
-          {% endif %}
-          {% for num in page_obj.paginator.page_range %}
-          <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">{{ num }}</a>
-          </li>
-          {% endfor %}
-          {% if page_obj.has_next %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}">Next</a>
-          </li>
-          {% endif %}
-        </ul>
-      </nav>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Low Attendance Card with Modal -->
-  {% if low_attendance_schools %}
-  <div class="card shadow-sm mb-5 low-attendance-card" data-bs-toggle="modal" data-bs-target="#lowAttendanceModal">
-    <div class="card-body bg-warning text-dark">
-      <h5 class="mb-0 fw-bold">⚠️ Schools Requiring Immediate Attention</h5>
-      <small>Click to view list</small>
-    </div>
-  </div>
-
-  <div class="modal fade" id="lowAttendanceModal" tabindex="-1" aria-labelledby="lowAttendanceModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="lowAttendanceModalLabel">Schools with Low Attendance</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="col-md-2">
+            <label>School</label>
+            <select id="school" name="school" class="form-select">
+                <option value="">All Schools</option>
+            </select>
         </div>
-        <div class="modal-body">
-          <ul class="list-group">
-            {% for s in low_attendance_schools %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              {{ s.enrollment__student__stream__grade__school__name|default:"Unknown" }}
-              <span class="badge bg-danger rounded-pill">{{ s.avg_attendance|floatformat:1 }}%</span>
-            </li>
-            {% endfor %}
-          </ul>
+        <div class="col-md-2">
+            <label>Grade</label>
+            <select id="grade" name="grade" class="form-select">
+                <option value="">All Grades</option>
+            </select>
         </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
+        <div class="col-md-2">
+            <label>Subject</label>
+            <select id="subject" name="subject" class="form-select">
+                <option value="">All Subjects</option>
+                {% for s in subjects %}
+                    <option value="{{ s.id }}" {% if filters.subject == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
+        </div>
+    </form>
 
-  <!-- Subject Performance -->
-  <div class="card shadow-sm border-0">
-    <div class="card-header bg-success text-white">
-      <h5 class="mb-0">Subject Attendance & Time Utilization</h5>
+    <!-- ───────── CHARTS ───────── -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h5>📈 Top Schools Attendance</h5>
+            <canvas id="topSchoolsChart" height="120"></canvas>
+        </div>
+        <div class="col-md-6">
+            <h5>📊 Lesson Hours per Subject</h5>
+            <canvas id="lessonHoursChart" height="120"></canvas>
+        </div>
     </div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Subject</th>
-              <th>Sessions</th>
-              <th>Present Rate</th>
-              <th>Absent Rate</th>
-              <th>Time Utilized (hrs)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for subj in subject_stats %}
-            <tr>
-              <td>{{ subj.enrollment__lesson__subject__name|default:"—" }}</td>
-              <td>{{ subj.sessions|default:0 }}</td>
-              <td>{{ subj.present_rate|floatformat:1 }}%</td>
-              <td>{{ subj.absent_rate|floatformat:1 }}%</td>
-              <td>{{ subj.total_hours|floatformat:2 }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="5" class="text-center py-5 text-muted">No subjects with attendance data</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h5>📊 Grade-level Comparison</h5>
+            <canvas id="gradeChart" height="120"></canvas>
+        </div>
+        <div class="col-md-6">
+            <h5>📊 Subject-level Comparison</h5>
+            <canvas id="subjectChart" height="120"></canvas>
+        </div>
+    </div>
 </div>
 
+<!-- ───────── SCRIPTS ───────── -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+function loadSubcounties(county_id, selected=null){
+    $.get("{% url 'school:ajax-subcounties' %}", {county_id}, function(data){
+        let html = '<option value="">All Subcounties</option>';
+        data.forEach(s => html += `<option value="${s.id}" ${selected == s.id ? 'selected' : ''}>${s.name}</option>`);
+        $('#subcounty').html(html);
+        $('#school').html('<option value="">All Schools</option>');
+        $('#grade').html('<option value="">All Grades</option>');
+    });
+}
+
+function loadSchools(subcounty_id, selected=null){
+    $.get("{% url 'school:ajax-schools' %}", {subcounty_id}, function(data){
+        let html = '<option value="">All Schools</option>';
+        data.forEach(s => html += `<option value="${s.id}" ${selected == s.id ? 'selected' : ''}>${s.name}</option>`);
+        $('#school').html(html);
+        $('#grade').html('<option value="">All Grades</option>');
+    });
+}
+
+function loadGrades(school_id, selected=null){
+    $.get("{% url 'school:ajax-grades' %}", {school_id}, function(data){
+        let html = '<option value="">All Grades</option>';
+        data.forEach(g => html += `<option value="${g.id}" ${selected == g.id ? 'selected' : ''}>${g.name}</option>`);
+        $('#grade').html(html);
+    });
+}
+
+// Initialize dropdowns with current filter values
+$(document).ready(function(){
+    const filters = {{ filters|safe }};
+    if(filters.county) loadSubcounties(filters.county, filters.subcounty);
+    if(filters.subcounty) loadSchools(filters.subcounty, filters.school);
+    if(filters.school) loadGrades(filters.school, filters.grade);
+});
+
+// Update dependent dropdowns dynamically
+$('#county').change(function(){ loadSubcounties($(this).val()); });
+$('#subcounty').change(function(){ loadSchools($(this).val()); });
+$('#school').change(function(){ loadGrades($(this).val()); });
+
+// ───────── CHARTS ─────────
+function safeChartData(labels, data1=[], data2=[]){
+    if(!labels.length) labels=['No Data'];
+    if(!data1.length) data1=[0];
+    if(!data2.length) data2=[0];
+    return {labels, data1, data2};
+}
+
+let topSchoolsData = safeChartData({{ chart_labels|safe }}, {{ chart_present|safe }}, {{ chart_absent|safe }});
+new Chart(document.getElementById('topSchoolsChart'), {
+    type:'bar',
+    data:{
+        labels: topSchoolsData.labels,
+        datasets:[
+            { label: 'Present %', data: topSchoolsData.data1, backgroundColor:'green' },
+            { label: 'Absent %', data: topSchoolsData.data2, backgroundColor:'red' }
+        ]
+    },
+    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
+});
+
+let lessonHoursData = safeChartData({{ lesson_labels|safe }}, {{ lesson_hours|safe }});
+new Chart(document.getElementById('lessonHoursChart'), {
+    type:'bar',
+    data:{ labels: lessonHoursData.labels, datasets:[{label:'Total Hours', data: lessonHoursData.data1, backgroundColor:'green'}] },
+    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}} }
+});
+
+let gradeData = safeChartData({{ grade_chart_labels|safe }}, {{ grade_present|safe }}, {{ grade_absent|safe }});
+new Chart(document.getElementById('gradeChart'), {
+    type:'bar',
+    data:{ labels: gradeData.labels, datasets:[{label:'Present %', data:gradeData.data1, backgroundColor:'green'},{label:'Absent %', data:gradeData.data2, backgroundColor:'red'}] },
+    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
+});
+
+let subjectData = safeChartData({{ subject_chart_labels|safe }}, {{ subject_present|safe }}, {{ subject_absent|safe }});
+new Chart(document.getElementById('subjectChart'), {
+    type:'bar',
+    data:{ labels: subjectData.labels, datasets:[{label:'Present %', data:subjectData.data1, backgroundColor:'green'},{label:'Absent %', data:subjectData.data2, backgroundColor:'red'}] },
+    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
+});
+</script>
 {% endblock %}

@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from userauths.models import User
 from .models import Grade, School, Parent,StaffProfile,Student, ScanLog, SmartID,Scholarship
 import logging
+from django.db.models import Q, Count, Avg, Case, When, Value, FloatField, ExpressionWrapper, F, DurationField
 from django.db import IntegrityError
 import os
 from django.db.models import Q
@@ -64,7 +65,7 @@ from .models import (
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear,
-    SubjectEnrollment,AcademicYear
+    SubjectEnrollment,AcademicYear,SubCounty
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -117,7 +118,28 @@ SEVERITY_CHOICES = [
 
 import time
 import requests
+from datetime import datetime
+from django.utils.dateparse import parse_time
 
+def safe_parse_time(value):
+    if not value:
+        return None
+
+    value = str(value).strip()
+
+    # Try Django parser first (24h format)
+    t = parse_time(value)
+    if t:
+        return t
+
+    # Fallback: AM/PM formats
+    for fmt in ("%I:%M %p", "%I %p"):
+        try:
+            return datetime.strptime(value.upper(), fmt).time()
+        except ValueError:
+            pass
+
+    return None
 def _send_sms_via_eujim(to_phone_number: str, message: str, retries=3, delay=5) -> bool:
     if not to_phone_number:
         return False
@@ -283,110 +305,118 @@ def export_attendance_pdf(request):
 
 @login_required
 def dashboard(request):
-    school = request.user.school_admin_profile
-    today = timezone.now().date()
-    today_weekday = today.strftime('%A').lower()
+    # ------------------- User & School -------------------
+    user = request.user
+    school = getattr(user, "school_admin_profile", None)
+    if not school:
+        return render(request, "school/error.html", {"message": "No school profile found."})
 
-    # ---------------- Filters ----------------
-    grade_id   = request.GET.get('grade') or None
-    stream_id  = request.GET.get('stream') or None
-    teacher_id = request.GET.get('teacher') or None
-    weekday    = request.GET.get('weekday') or None
-    slot_id    = request.GET.get('slot') or None
+    # ------------------- Filters -------------------
+    grade_id   = request.GET.get("grade")
+    stream_id  = request.GET.get("stream")
+    teacher_id = request.GET.get("teacher")
+    subject_id = request.GET.get("subject")
+    date_str   = request.GET.get("date")
 
-    ALL_WEEKDAYS = [
-        'monday', 'tuesday', 'wednesday',
-        'thursday', 'friday', 'saturday', 'sunday'
-    ]
+    # ------------------- Focus Date -------------------
+    try:
+        focus_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else timezone.localdate()
+    except ValueError:
+        focus_date = timezone.localdate()
 
-    # ---------------- Lessons Query ----------------
+    # Week start (Monday) → end (Friday)
+    week_start = focus_date - timedelta(days=focus_date.weekday())
+    week_end = week_start + timedelta(days=4)
+    week_days = [week_start + timedelta(days=i) for i in range(5)]
+
+    # Week navigation
+    prev_week = week_start - timedelta(days=7)
+    next_week = week_start + timedelta(days=7)
+
+    # ------------------- Time Slots -------------------
+    time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
+
+    # ------------------- Lessons -------------------
     lessons_qs = Lesson.objects.filter(
-        Q(timetable__school=school) |
-        Q(stream__school=school) |
-        Q(teacher__school=school),
-        day_of_week__in=ALL_WEEKDAYS
+        timetable__school=school,
+        timetable__term__is_active=True,
+        lesson_date__range=(week_start, week_end)
     ).select_related(
-        'subject', 'subject__grade',
-        'stream', 'teacher__user',
-        'time_slot'
+        "subject", "teacher__user", "stream", "timetable"
     )
 
+    # Apply filters
     if grade_id:
-        lessons_qs = lessons_qs.filter(subject__grade_id=grade_id)
+        lessons_qs = lessons_qs.filter(subject__grade__id=grade_id)
     if stream_id:
-        lessons_qs = lessons_qs.filter(stream_id=stream_id)
+        lessons_qs = lessons_qs.filter(stream__id=stream_id)
     if teacher_id:
-        lessons_qs = lessons_qs.filter(teacher_id=teacher_id)
-    if weekday:
-        lessons_qs = lessons_qs.filter(day_of_week=weekday)
-    if slot_id:
-        lessons_qs = lessons_qs.filter(time_slot_id=slot_id)
+        lessons_qs = lessons_qs.filter(teacher__id=teacher_id)
+    if subject_id:
+        lessons_qs = lessons_qs.filter(subject__id=subject_id)
 
     lessons = list(lessons_qs)
 
-    # ---------------- Build Timetable ----------------
-    table_data = defaultdict(lambda: defaultdict(list))
+    # ------------------- Build Calendar -------------------
+    calendar = defaultdict(lambda: defaultdict(list))
     conflicts = set()
     seen = set()
 
     for lesson in lessons:
-        key = (lesson.teacher_id, lesson.day_of_week, lesson.time_slot_id)
+        if not lesson.time_slot:
+            continue
+        key = (lesson.teacher_id, lesson.lesson_date, lesson.time_slot_id)
         if key in seen:
             conflicts.add(lesson.id)
         seen.add(key)
+        calendar[lesson.time_slot.id][lesson.lesson_date].append(lesson)
 
-        table_data[lesson.day_of_week][lesson.time_slot].append(lesson)
+    # ------------------- Dictionaries for Filters -------------------
+    grades = Grade.objects.filter(school=school, is_active=True)
+    streams = Streams.objects.filter(school=school, is_active=True)
+    teachers = StaffProfile.objects.filter(school=school, position__in=["teacher", "hod"])
+    subjects = Subject.objects.filter(school=school, is_active=True)
 
-    # Sort lessons inside cells
-    for day in table_data:
-        for slot in table_data[day]:
-            table_data[day][slot].sort(
-                key=lambda l: l.subject.grade.name if l.subject and l.subject.grade else ""
-            )
+    # ------------------- Subject Colors -------------------
+    subject_colors = {s.id: getattr(s, "color", "#dee2e6") for s in subjects}  # fallback gray
 
+    # ------------------- KPIs -------------------
+    total_teachers = StaffProfile.objects.filter(school=school, position="teacher").count()
+    total_students = Student.objects.filter(school=school, is_active=True).count()
+    total_parents = Parent.objects.filter(school=school).count()
+    total_discipline_cases = DisciplineRecord.objects.filter(school=school).count()
+
+    # ------------------- Context -------------------
     context = {
+        # Filters
+        "grades": grades,
+        "streams": streams,
+        "teachers": teachers,
+        "subjects": subjects,
+        "subject_colors": subject_colors,
+        "selected_grade": grade_id,
+        "selected_stream": stream_id,
+        "selected_teacher": teacher_id,
+        "selected_subject": subject_id,
+        "selected_date": focus_date,
+
         # Timetable
-        'time_slots': TimeSlot.objects.filter(school=school).order_by('start_time'),
-        'weekdays': [
-            ('monday', 'Monday'),
-            ('tuesday', 'Tuesday'),
-            ('wednesday', 'Wednesday'),
-            ('thursday', 'Thursday'),
-            ('friday', 'Friday'),
-            ('saturday', 'Saturday'),
-            ('sunday', 'Sunday'),
-        ],
-        'table_data': dict(table_data),
-        'conflicts': conflicts,
-        'today_weekday': today_weekday,
-        'today': today,
+        "time_slots": time_slots,
+        "week_days": week_days,
+        "calendar": calendar,
+        "conflicts": conflicts,
+        "today": timezone.localdate(),
+        "prev_week": prev_week,
+        "next_week": next_week,
 
         # KPIs
-        'total_teachers': StaffProfile.objects.filter(school=school, position='teacher').count(),
-        'total_students': Student.objects.filter(school=school).count(),
-        'total_parents': Parent.objects.filter(school=school).count(),
-        'total_discipline_cases': DisciplineRecord.objects.filter(school=school).count(),
-
-        # Filters
-        'grades': Grade.objects.filter(school=school),
-        'streams': Streams.objects.filter(school=school),
-        'teachers': StaffProfile.objects.filter(
-            school=school,
-            position__in=['teacher', 'hod']
-        ),
-
-        # Selected
-        'selected_grade': grade_id,
-        'selected_stream': stream_id,
-        'selected_teacher': teacher_id,
-        'selected_weekday': weekday,
-        'selected_slot': slot_id,
+        "total_teachers": total_teachers,
+        "total_students": total_students,
+        "total_parents": total_parents,
+        "total_discipline_cases": total_discipline_cases,
     }
 
-    return render(request, 'school/dashboard.html', context)
-
-    
-
+    return render(request, "school/dashboard.html", context)
 @login_required
 def time_slot_list(request):
     school_profile = getattr(request.user, 'school_admin_profile', None)
@@ -2163,30 +2193,38 @@ def school_subjects(request):
         return redirect('school:dashboard')
 
     query = request.GET.get('q', '')
-    subject_qs = Subject.objects.filter(
-        school=school
-    ).select_related('grade').order_by('name')
+
+    subject_qs = (
+        Subject.objects
+        .filter(school=school)
+        .select_related('school', 'pathway')
+        .prefetch_related('grade')
+        .order_by('name')
+    )
 
     if query:
         subject_qs = subject_qs.filter(
             Q(name__icontains=query) |
             Q(code__icontains=query) |
             Q(grade__name__icontains=query)
-        )
+        ).distinct()  # 👈 important for M2M searches
 
-    paginator = Paginator(subject_qs, 10)  # 👈 10 per page
+    paginator = Paginator(subject_qs, 10)
     page_number = request.GET.get('page')
     subjects = paginator.get_page(page_number)
 
     form = SubjectForm(school=school)
 
-    context = {
-        'subjects': subjects,
-        'form': form,
-        'school': school,
-        'query': query,
-    }
-    return render(request, 'school/subject.html', context)
+    return render(
+        request,
+        'school/subject.html',
+        {
+            'subjects': subjects,
+            'form': form,
+            'school': school,
+            'query': query,
+        }
+    )
 
 
 @login_required
@@ -2842,7 +2880,6 @@ def teacher_class_attendance_report(request, stream_id):
 
 from django.db.models import Count, Q, F
 from django.core.paginator import Paginator
-
 @login_required
 def attendance_dashboard(request):
     try:
@@ -2850,17 +2887,18 @@ def attendance_dashboard(request):
     except AttributeError:
         return render(request, 'error/no_school_access.html', status=403)
 
+    # Base queryset
     qs = Attendance.objects.select_related(
-    'enrollment__student__user',
-    'enrollment__student__grade_level',
-    'enrollment__student__stream',
-    'enrollment__lesson__subject',  # ✅ correct path
-    'term',
-    'academic_year',
-    'marked_by__user'
-).filter(enrollment__school=user_school)
+        'enrollment__student__user',
+        'enrollment__student__grade_level',
+        'enrollment__student__stream',
+        'enrollment__lesson__subject',
+        'term',
+        'academic_year',
+        'marked_by__user'
+    ).filter(enrollment__school=user_school)
 
-
+    # Filters from GET
     filters = {
         'academic_year': request.GET.get('academic_year', ''),
         'term': request.GET.get('term', ''),
@@ -2881,7 +2919,6 @@ def attendance_dashboard(request):
         qs = qs.filter(enrollment__student__stream_id=filters['stream'])
     if filters['subject'].isdigit():
         qs = qs.filter(enrollment__lesson__subject_id=filters['subject'])
-
     if filters['student'].strip():
         s = filters['student'].strip()
         qs = qs.filter(
@@ -2890,10 +2927,12 @@ def attendance_dashboard(request):
             Q(enrollment__student__user__last_name__icontains=s)
         )
     if filters['date']:
+        from django.utils.dateparse import parse_date
         parsed = parse_date(filters['date'])
         if parsed:
             qs = qs.filter(date=parsed)
 
+    # Attendance stats per status
     stats = qs.aggregate(
         P=Count('id', filter=Q(status='P')),
         ET=Count('id', filter=Q(status='ET')),
@@ -2903,6 +2942,14 @@ def attendance_dashboard(request):
     )
     stats = {k: v or 0 for k, v in stats.items()}
 
+    # Prepare KPI cards
+    status_cards = [
+        {'status': 'P', 'label': 'Present', 'color': 'success', 'count': stats['P']},
+        {'status': 'ET', 'label': 'Tardy', 'color': 'warning', 'count': stats['ET'] + stats['UT']},
+        {'status': 'EA', 'label': 'Absent', 'color': 'danger', 'count': stats['EA'] + stats['UA']},
+    ]
+
+    # Discipline stats
     discipline_qs = DisciplineRecord.objects.filter(linked_attendance__in=qs)
     discipline_stats = discipline_qs.aggregate(
         total=Count('id'),
@@ -2911,21 +2958,31 @@ def attendance_dashboard(request):
     )
     discipline_stats = {k: v or 0 for k, v in discipline_stats.items()}
 
+    # Daily trend (last 30 days)
     today = localdate()
     daily_trend = qs.filter(date__gte=today - timedelta(days=30)).values('date').annotate(
         present=Count('id', filter=Q(status='P')),
         absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
     ).order_by('date')
 
+    # Grade-wise trend
+    grade_trends = qs.values('enrollment__student__grade_level__name').annotate(
+        P=Count('id', filter=Q(status='P')),
+        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
+        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
+    ).order_by('enrollment__student__grade_level__name')
+
+    # Pagination
     paginator = Paginator(qs.order_by('-date', '-id'), 25)
     page_obj = paginator.get_page(request.GET.get('page'))
 
     context = {
         'attendances': page_obj,
         'stats': stats,
+        'status_cards': status_cards,
         'daily_trend': list(daily_trend),
+        'grade_trends': list(grade_trends),
         'discipline_stats': discipline_stats,
-        'alerts': [],
         'filters': filters,
         'academic_years': AcademicYear.objects.filter(school=user_school),
         'terms': Term.objects.filter(school=user_school),
@@ -2933,8 +2990,11 @@ def attendance_dashboard(request):
         'streams': Streams.objects.filter(school=user_school),
         'subjects': Subject.objects.filter(school=user_school, is_active=True),
         'school': user_school,
+        'alerts': [],
     }
+
     return render(request, 'school/attendance_dashboard.html', context)
+
 
 
 @login_required
@@ -4369,172 +4429,194 @@ def assign_class_teacher_for_teacher(request, teacher_id):
 
 
 
+@login_required
+def ajax_subjects(request):
+    school_id = request.GET.get("school_id")
+    grade_id = request.GET.get("grade_id")
+    qs = Subject.objects.all()
+    if school_id:
+        qs = qs.filter(school_id=school_id)
+    if grade_id:
+        qs = qs.filter(grade__id=grade_id)
+    subjects = qs.values("id","name").order_by("name")
+    return JsonResponse(list(subjects), safe=False)
 
 def is_policymaker(user):
-    return user.groups.filter(name='policymakers').exists()
+    return getattr(user, "is_policy_maker", False)
 
+# ───────────── AJAX FILTERS ─────────────
+@login_required
+def ajax_subcounties(request):
+    county_id = request.GET.get("county_id")
+    if not county_id:
+        subcounties = SubCounty.objects.all().values("id","name").order_by("name")
+    else:
+        subcounties = SubCounty.objects.filter(county_id=county_id).values("id","name").order_by("name")
+    return JsonResponse(list(subcounties), safe=False)
+
+@login_required
+def ajax_schools(request):
+    subcounty_id = request.GET.get("subcounty_id")
+    if not subcounty_id:
+        schools = School.objects.filter(is_active=True).values("id","name").order_by("name")
+    else:
+        schools = School.objects.filter(sub_county_id=subcounty_id, is_active=True).values("id","name").order_by("name")
+    return JsonResponse(list(schools), safe=False)
+
+@login_required
+def ajax_grades(request):
+    school_id = request.GET.get("school_id")
+    if not school_id:
+        grades = Grade.objects.all().values("id","name").order_by("name")
+    else:
+        grades = Grade.objects.filter(school_id=school_id).values("id","name").order_by("name")
+    return JsonResponse(list(grades), safe=False)
+
+
+# ───────────── POLICY MAKER DASHBOARD ─────────────@login_required
 @login_required
 @user_passes_test(is_policymaker)
 def policymaker_dashboard(request):
-    today = date.today()
+    # ───── FILTERS ─────
+    county_id = request.GET.get('county')
+    subcounty_id = request.GET.get('subcounty')
+    school_id = request.GET.get('school')
+    grade_id = request.GET.get('grade')
+    subject_id = request.GET.get('subject')
 
-    # ───────────────────────────────
-    # Filters from GET
-    # ───────────────────────────────
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    selected_county = request.GET.get('county')
-    selected_school = request.GET.get('school')
-    selected_grade = request.GET.get('grade')
-    selected_stream = request.GET.get('stream')
-    selected_subject = request.GET.get('subject')
-    selected_teacher = request.GET.get('teacher')
+    # Base school queryset
+    schools_qs = School.objects.all()
+    if county_id:
+        schools_qs = schools_qs.filter(county_id=county_id)
+    if subcounty_id:
+        schools_qs = schools_qs.filter(sub_county_id=subcounty_id)
+    if school_id:
+        schools_qs = schools_qs.filter(id=school_id)
 
-    # Date filter
-    date_filter = Q(date__range=[start_date, end_date]) if start_date and end_date else Q(date__gte=today - timedelta(days=30))
-
-    # Filtered attendance queryset
-    attendance_qs = Attendance.objects.filter(date_filter).select_related(
-        'enrollment__student__stream__grade__school',
-        'enrollment__lesson__subject',
-        'enrollment__lesson__teacher',
-        'enrollment__lesson__time_slot'
-    )
-
-    if selected_county:
-        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade__school__county_id=selected_county)
-    if selected_school:
-        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade__school_id=selected_school)
-    if selected_grade:
-        attendance_qs = attendance_qs.filter(enrollment__student__stream__grade_id=selected_grade)
-    if selected_stream:
-        attendance_qs = attendance_qs.filter(enrollment__student__stream_id=selected_stream)
-    if selected_subject:
-        attendance_qs = attendance_qs.filter(enrollment__lesson__subject_id=selected_subject)
-    if selected_teacher:
-        attendance_qs = attendance_qs.filter(enrollment__lesson__teacher_id=selected_teacher)
-
-    attendance_count = attendance_qs.count()
-
-    # ───────────────────────────────
-    # Global totals (unfiltered)
-    # ───────────────────────────────
-    total_schools = School.objects.filter(is_active=True).count()
-    total_teachers = StaffProfile.objects.filter(position='teacher').count()
-    total_students = Student.objects.filter(is_active=True).count()
-
-    # Attendance rate
-    attendance_stats = attendance_qs.aggregate(
-        total_sessions=Count('id'),
-        present_count=Count('id', filter=Q(status__in=['P','ET','UT'])),
-        absent_count=Count('id', filter=Q(status__in=['EA','UA']))
-    )
-
-    total_sessions = attendance_stats['total_sessions'] or 1
-    attendance_rate = ((attendance_stats['present_count']) / total_sessions) * 100
-    absenteeism_rate = ((attendance_stats['absent_count']) / total_sessions) * 100
-
+    # ───── KPI CARDS ─────
     stats_cards = [
-        {'title': 'Schools', 'value': total_schools, 'icon': 'bi-building', 'color': 'success'},
-        {'title': 'Teachers', 'value': total_teachers, 'icon': 'bi-person-badge', 'color': 'success'},
-        {'title': 'Students', 'value': total_students, 'icon': 'bi-people', 'color': 'success'},
-        {'title': 'Avg Attendance', 'value': f"{attendance_rate:.1f}%", 'icon': 'bi-check-circle', 'color': 'success' if attendance_rate >= 80 else 'warning'},
-        # {'title': 'Avg Absenteeism', 'value': f"{absenteeism_rate:.1f}%", 'icon': 'bi-exclamation-triangle', 'color': 'danger' if absenteeism_rate > 20 else 'info'},
+        {
+            "title": "Total Schools",
+            "value": schools_qs.count(),
+            "icon": "bi-building"
+        },
+        {
+            "title": "Total Students",
+            "value": Student.objects.filter(school__in=schools_qs).count(),
+            "icon": "bi-people"
+        },
+        {
+            "title": "Total Lessons",
+            "value": Lesson.objects.filter(timetable__school__in=schools_qs).count(),
+            "icon": "bi-journal-text"
+        },
+        {
+            "title": "Total Discipline Cases",
+            "value": DisciplineRecord.objects.filter(school__in=schools_qs).count(),
+            "icon": "bi-exclamation-triangle text-danger"
+        }
     ]
 
-    # ───────────────────────────────
-    # School Rankings
-    # ───────────────────────────────
-    school_rankings = (
-        attendance_qs
-        .values('enrollment__student__stream__grade__school__id',
-                'enrollment__student__stream__grade__school__name')
-        .annotate(
-            avg_attendance=Avg(
-                Case(
-                    When(status__in=['P','ET','UT'], then=Value(1.0)),
-                    default=Value(0.0),
-                    output_field=FloatField()
-                )
-            ) * 100,
-            avg_absenteeism=Avg(
-                Case(
-                    When(status__in=['EA','UA'], then=Value(1.0)),
-                    default=Value(0.0),
-                    output_field=FloatField()
-                )
-            ) * 100,
-            total_sessions=Count('id')
-        )
-        .order_by('-avg_attendance')
-    )
+    # ───── ATTENDANCE STATS ─────
+    attendances_qs = Attendance.objects.filter(enrollment__school__in=schools_qs)
+    if grade_id:
+        attendances_qs = attendances_qs.filter(enrollment__lesson__stream__grade_id=grade_id)
+    if subject_id:
+        attendances_qs = attendances_qs.filter(enrollment__lesson__subject_id=subject_id)
 
-    low_attendance_schools = [s for s in school_rankings if s['avg_attendance'] < 75]
+    school_rankings = []
+    for school in schools_qs:
+        total = attendances_qs.filter(enrollment__school=school).count()
+        present = attendances_qs.filter(enrollment__school=school, status='P').count()
+        absent = total - present
+        school_rankings.append({
+            "school": school.name,
+            "present_rate": round((present / total * 100) if total else 0, 1),
+            "absent_rate": round((absent / total * 100) if total else 0, 1)
+        })
 
-    # Pagination
-    page_number = request.GET.get('page', 1)
-    paginator = Paginator(list(school_rankings), 10)
-    page_obj = paginator.get_page(page_number)
+    # ───── GRADE LEVEL COMPARISON ─────
+    grades_qs = Grade.objects.filter(school__in=schools_qs)
+    if grade_id:
+        grades_qs = grades_qs.filter(id=grade_id)
 
-    # ───────────────────────────────
-    # Subject stats
-    # ───────────────────────────────
-    subject_stats_qs = (
-        attendance_qs
-        .values('enrollment__lesson__subject__id', 'enrollment__lesson__subject__name')
-        .annotate(
-            sessions=Count('id'),
-            present_rate=Avg(
-                Case(
-                    When(status__in=['P','ET','UT'], then=Value(100.0)),
-                    default=Value(0.0),
-                    output_field=FloatField()
-                )
-            ),
-            absent_rate=Avg(
-                Case(
-                    When(status__in=['EA','UA'], then=Value(100.0)),
-                    default=Value(0.0),
-                    output_field=FloatField()
-                )
-            )
-        )
-        .order_by('-present_rate')
-    )
+    grade_chart_labels = []
+    grade_present = []
+    grade_absent = []
 
-    subject_stats = []
-    for subj in subject_stats_qs:
-        subj_copy = dict(subj)
-        # Calculate total hours
-        subj_att_qs = attendance_qs.filter(enrollment__lesson__subject__id=subj['enrollment__lesson__subject__id'])
-        total_minutes = 0
-        for att in subj_att_qs:
-            slot = att.enrollment.lesson.time_slot
-            if slot and slot.start_time and slot.end_time:
-                start_dt = datetime.datetime.combine(date.today(), slot.start_time)
-                end_dt = datetime.datetime.combine(date.today(), slot.end_time)
-                total_minutes += (end_dt - start_dt).total_seconds() / 60
-        subj_copy['total_hours'] = round(total_minutes / 60.0, 2)
-        subject_stats.append(subj_copy)
+    for grade in grades_qs:
+        total = attendances_qs.filter(enrollment__lesson__stream__grade=grade).count()
+        present = attendances_qs.filter(enrollment__lesson__stream__grade=grade, status='P').count()
+        absent = total - present
+        grade_chart_labels.append(grade.name)
+        grade_present.append(round((present / total * 100) if total else 0, 1))
+        grade_absent.append(round((absent / total * 100) if total else 0, 1))
 
-    # ───────────────────────────────
-    # Context
-    # ───────────────────────────────
+    # ───── SUBJECT LEVEL COMPARISON ─────
+    subjects_qs = Subject.objects.filter(school__in=schools_qs)
+    if subject_id:
+        subjects_qs = subjects_qs.filter(id=subject_id)
+
+    subject_chart_labels = []
+    subject_present = []
+    subject_absent = []
+
+    for subject in subjects_qs:
+        total = attendances_qs.filter(enrollment__lesson__subject=subject).count()
+        present = attendances_qs.filter(enrollment__lesson__subject=subject, status='P').count()
+        absent = total - present
+        subject_chart_labels.append(subject.name)
+        subject_present.append(round((present / total * 100) if total else 0, 1))
+        subject_absent.append(round((absent / total * 100) if total else 0, 1))
+
+    # ───── LESSON HOURS PER SUBJECT ─────
+    lessons_qs = Lesson.objects.filter(timetable__school__in=schools_qs)
+    if grade_id:
+        lessons_qs = lessons_qs.filter(stream__grade_id=grade_id)
+    if subject_id:
+        lessons_qs = lessons_qs.filter(subject_id=subject_id)
+
+    lesson_labels = []
+    lesson_hours = []
+
+    for lesson in lessons_qs:
+        if lesson.time_slot and lesson.subject:
+            start_dt = datetime.combine(datetime.today(), lesson.time_slot.start_time)
+            end_dt = datetime.combine(datetime.today(), lesson.time_slot.end_time)
+            duration_hours = (end_dt - start_dt).total_seconds() / 3600
+            lesson_hours.append(round(duration_hours, 2))
+            lesson_labels.append(lesson.subject.name)
+
+    # ───── DROPDOWNS ─────
+    counties = County.objects.all()
+    subjects = Subject.objects.filter(school__in=schools_qs)
+
     context = {
-        'stats_cards': stats_cards,
-        'page_obj': page_obj,
-        'low_attendance_schools': low_attendance_schools,
-        'subject_stats': subject_stats,
-        'counties': County.objects.all(),
-        'filters': request.GET,
-        'attendance_count': attendance_count,
-        'has_data': attendance_count > 0,
-        'all_time_attendance_count': Attendance.objects.count(),
+        "stats_cards": stats_cards,
+        "school_rankings": school_rankings,
+        "chart_labels": [s["school"] for s in school_rankings],
+        "chart_present": [s["present_rate"] for s in school_rankings],
+        "chart_absent": [s["absent_rate"] for s in school_rankings],
+        "grade_chart_labels": grade_chart_labels,
+        "grade_present": grade_present,
+        "grade_absent": grade_absent,
+        "subject_chart_labels": subject_chart_labels,
+        "subject_present": subject_present,
+        "subject_absent": subject_absent,
+        "lesson_labels": lesson_labels,
+        "lesson_hours": lesson_hours,
+        "counties": counties,
+        "subjects": subjects,
+        "filters": {
+            "county": county_id or "",
+            "subcounty": subcounty_id or "",
+            "school": school_id or "",
+            "grade": grade_id or "",
+            "subject": subject_id or ""
+        }
     }
 
-    return render(request, 'school/policy/dashboard.html', context)
-
-
+    return render(request, "school/policy/dashboard.html", context)
 
 
 #FIle Upload
@@ -4562,10 +4644,10 @@ def generate_time_slots(school, staff_user):
         duration = 45
         description = "Lesson"
 
-        if count == 3:
+        if count == 2 and count == 5:
             duration = 20
             description = "Break"
-        elif count == 6:
+        elif count == 8:
             duration = 45
             description = "Lunch"
 
@@ -4763,9 +4845,15 @@ def norm_time(t):
 
     return None
 
+
 @require_POST
 @login_required
 def universal_excel_upload(request):
+    """
+    Universal Excel Upload handler:
+    - categories: students, teachers, parents, subjects, timetable, grades, time_slots
+    - preview + download support handled in frontend
+    """
     excel_file = request.FILES.get("file")
     category = request.POST.get("category")
 
@@ -4773,8 +4861,7 @@ def universal_excel_upload(request):
         return JsonResponse({"error": "File and category required"}, status=400)
 
     try:
-        df = pd.read_excel(excel_file)
-        df = df.fillna("")
+        df = pd.read_excel(excel_file).fillna("")
         df.columns = df.columns.str.strip().str.lower().str.replace(r'[^a-z0-9_]', '_', regex=True)
     except Exception as e:
         return JsonResponse({"error": f"Invalid Excel file: {str(e)}"}, status=400)
@@ -4787,113 +4874,102 @@ def universal_excel_upload(request):
 
     with transaction.atomic():
         active_term = Term.objects.filter(school=school, is_active=True).first()
-        if category in ("students", "subjects", "timetable") and not active_term:
-            return JsonResponse({"error": "No active term found"}, status=400)
+        staff = StaffProfile.objects.filter(user=request.user, school=school).first()
 
-        # ─────────────────────────────
-        # STUDENTS
-        # ─────────────────────────────
+        # ────────── CATEGORY: STUDENTS ──────────
+
         if category == "students":
+            if not active_term:
+                return JsonResponse({"error": "No active term found"}, status=400)
+
             for idx, row in df.iterrows():
                 try:
-                    admin_no = str(row["admin_no"]).strip()
-                    student_email = f"{admin_no}@student.school.local"
-                    student_pass = generate_password()
+                    with transaction.atomic():  # commit each row independently
+                        admin_no = str(row["admin_no"]).strip()
+                        student_email = f"{admin_no}@student.school.local"
+                        student_pass = generate_password()
 
-                    user, created = User.objects.get_or_create(
-                        email=student_email,
-                        defaults={
-                            "phone_number": admin_no,
-                            "first_name": row["first_name"],
-                            "last_name": row["last_name"],
-                            "is_student": True,
-                        }
-                    )
-                    if created:
-                        user.set_password(student_pass)
-                        user.save()
-
-                    grade = Grade.objects.get(name=row["grade"], school=school)
-                    stream = Streams.objects.get(name=row["stream"], school=school)
-
-                    student, _ = Student.objects.get_or_create(
-                        user=user,
-                        student_id=admin_no,
-                        school=school,
-                        defaults={
-                            "date_of_birth": row["date_of_birth"],
-                            "enrollment_date": timezone.now().date(),
-                            "grade_level": grade,
-                            "stream": stream,
-                        }
-                    )
-
-                    subject_codes = [
-                        c.strip().upper() for c in str(row["subjects"]).split(",") if c.strip()
-                    ]
-                    for code in subject_codes:
-                        subject, _ = Subject.objects.get_or_create(
-                            school=school,
-                            code=code,
+                        # Create or get User
+                        user, created = User.objects.get_or_create(
+                            email=student_email,
                             defaults={
-                                "name": code,
-                                "grade": grade,
-                                "start_date": active_term.start_date,
-                                "end_date": active_term.end_date,
+                                "phone_number": admin_no,
+                                "first_name": str(row["first_name"]).strip(),
+                                "last_name": str(row["last_name"]).strip(),
+                                "is_student": True,
                             }
                         )
-                        SubjectEnrollment.objects.get_or_create(
-                            student=student,
-                            subject=subject
+                        if created:
+                            user.set_password(student_pass)
+                            user.save()
+
+                        # Normalize grade and stream names
+                        grade_name = str(row["grade"]).strip().upper()
+                        stream_name = str(row["stream"]).strip().upper()
+
+                        grade = Grade.objects.filter(name__iexact=grade_name, school=school).first()
+                        if not grade:
+                            raise ValueError(f"Grade '{grade_name}' not found for school {school}")
+
+                        stream = Streams.objects.filter(name__iexact=stream_name, school=school).first()
+                        if not stream:
+                            raise ValueError(f"Stream '{stream_name}' not found for school {school}")
+
+                        # Create or get Student
+                        student, created = Student.objects.get_or_create(
+                            user=user,
+                            student_id=admin_no,
+                            school=school,
+                            defaults={
+                                "date_of_birth": row["date_of_birth"],
+                                "enrollment_date": timezone.now().date(),
+                                "grade_level": grade,
+                                "stream": stream,
+                            }
                         )
 
-                    results["created"] += 1
+                        # Enroll in subjects
+                        subject_codes = [
+                            c.strip().upper()
+                            for c in str(row.get("subjects", "")).split(",")
+                            if c.strip()
+                        ]
+
+                        for code in subject_codes:
+                            subject = Subject.objects.filter(school=school, code__iexact=code).first()
+                            if not subject:
+                                # create placeholder subject if it doesn't exist
+                                subject = Subject.objects.create(
+                                    school=school,
+                                    code=code,
+                                    name=code,
+                                    start_date=active_term.start_date,
+                                    end_date=active_term.end_date,
+                                )
+                            subject.grade.add(grade)
+
+                            # Create enrollment
+                            SubjectEnrollment.objects.get_or_create(student=student, subject=subject)
+
+                        results["created"] += 1
 
                 except Exception as e:
+                    logger.exception(f"Row {idx + 2} failed")
                     results["errors"].append({"row": idx + 2, "error": str(e)})
 
-        # ─────────────────────────────
-        # SUBJECTS
-        # ─────────────────────────────
-        elif category == "subjects":
-            for idx, row in df.iterrows():
-                try:
-                    Subject.objects.update_or_create(
-                        school=school,
-                        code=row["code"].upper(),
-                        defaults={
-                            "name": row["name"],
-                            "sessions_per_week": int(row["lessons_per_week"]),
-                            "start_date": active_term.start_date,
-                            "end_date": active_term.end_date,
-                        }
-                    )
-                    results["created"] += 1
-                except Exception as e:
-                    results["errors"].append({"row": idx + 2, "error": str(e)})
-
-
-        # ================= TEACHERS =================
+        # ────────── CATEGORY: TEACHERS ──────────
         elif category == "teachers":
-            required = [
-                "phone", "email", "first_name", "last_name",
-                "subjects", "streams", "class_teacher"
-            ]
+            required = ["phone", "email", "first_name", "last_name", "subjects", "streams", "class_teacher"]
             missing = [c for c in required if c not in df.columns]
             if missing:
                 return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
 
-            for i, row in df.iterrows():
+            for idx, row in df.iterrows():
                 try:
-                    # Normalize phone and email
                     phone = normalize_phone(row["phone"])
                     email = safe_email(row["email"], f"{phone}@gmail.com")
-                    
-                    # Generate random password
                     password = generate_password()
-                    print(f"Generated password for {email} {phone}: {password}")  # Log the password)
 
-                    # Create or get User
                     user, created = User.objects.get_or_create(
                         email=email,
                         defaults={
@@ -4903,47 +4979,187 @@ def universal_excel_upload(request):
                             "is_teacher": True,
                         }
                     )
-
-                    # Set password if user was created
                     if created:
                         user.set_password(password)
                         user.save()
-                    staff_id = f"TCHR{str(user.id).zfill(5)}"
-                    # Create or get StaffProfile
-                    staff, _ = StaffProfile.objects.get_or_create(user=user,position="Teacher", school=school, defaults={"staff_id": staff_id})
 
-                    # Assign subjects to teacher
-                    subject_codes = str(row["subjects"]).replace(" ", "").split(",")
-                    for code in subject_codes:
-                        subject = Subject.objects.filter(code=code, school=school).first()
-                        if subject:
-                            staff.subjects.add(subject)
+                    staff_id = f"TCHR{str(user.id).zfill(5)}"
+                    staff_profile, _ = StaffProfile.objects.get_or_create(
+                        user=user,
+                        school=school,
+                        defaults={
+                            "staff_id": staff_id,
+                            "position": "teacher",  # must match POSITION_CHOICES key
+                        }
+                    )
+
+                    # Assign subjects
+                    for code in str(row["subjects"]).replace(" ", "").split(","):
+                        subj = Subject.objects.filter(code=code, school=school).first()
+                        if subj:
+                            staff_profile.subjects.add(subj)
 
                     # Assign streams
                     streams = Streams.objects.filter(
-                        name__in=str(row["streams"]).replace(" ", "").split(","),
-                        school=school
+                        name__in=str(row["streams"]).replace(" ", "").split(","), school=school
                     )
 
-                    # Assign class teacher if applicable
                     if str(row["class_teacher"]).upper() == "YES":
                         for stream in streams:
                             TeacherStreamAssignment.objects.get_or_create(
-                                teacher=staff,
-                                stream=stream,
-                                school=school
+                                teacher=staff_profile, stream=stream, school=school
                             )
 
-                    # Send credentials via email and SMS
+                    # Send credentials
                     msg = f"Teacher Login\nEmail: {email}\nPassword: {password}"
-                    send_email(email, "Teacher Credentials", msg)
-                    _send_sms_via_eujim(phone, msg)
+                    print(msg)
+                    logger.info(f"Teacher created: {email}{msg}")
+                    # send_email(email, "Teacher Credentials", msg)
+                    # _send_sms_via_eujim(phone, msg)
 
                     results["created"] += 1
 
                 except Exception as e:
-                    logger.exception(f"Teacher row {i + 2} error")
-                    results["errors"].append({"row": i + 2, "error": str(e)})
+                    logger.exception(f"Teacher row {idx + 2} error")
+                    results["errors"].append({"row": idx + 2, "error": str(e)})
+
+
+        # ────────── CATEGORY: GRADES + STREAMS ──────────
+        elif category == "grades":
+            required = ["grade_name", "code", "lessons_per_term", "capacity", "stream_name"]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
+
+            for idx, row in df.iterrows():
+                try:
+                    grade_code = str(row["code"]).strip().upper()
+                    grade_name = str(row["grade_name"]).strip()
+
+                    raw_streams = str(row["stream_name"]).strip()
+                    if not raw_streams:
+                        raise ValueError("Stream is mandatory for a grade")
+
+                    # ✅ Split comma-separated streams
+                    stream_names = [
+                        s.strip().upper()
+                        for s in raw_streams.split(",")
+                        if s.strip()
+                    ]
+
+                    if not stream_names:
+                        raise ValueError("No valid stream names found")
+
+                    grade, _ = Grade.objects.update_or_create(
+                        school=school,
+                        code=grade_code,
+                        defaults={
+                            "name": grade_name,
+                            "lessons_per_term": int(row["lessons_per_term"]),
+                            "capacity": int(row["capacity"]),
+                            "description": row.get("description", ""),
+                            "is_active": True,
+                        }
+                    )
+
+                    stream_capacity = int(row.get("stream_capacity") or grade.capacity)
+
+                    for stream_name in stream_names:
+                        Streams.objects.update_or_create(
+                            school=school,
+                            grade=grade,
+                            name=stream_name,
+                            defaults={
+                                "capacity": stream_capacity,
+                                "is_active": True,
+                            }
+                        )
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    results["errors"].append({
+                        "row": idx + 2,  # Excel row number
+                        "error": str(e)
+                    })
+
+
+        # ────────── CATEGORY: TIME SLOTS ──────────
+        elif category == "time_slots":
+            for idx, row in df.iterrows():
+                try:
+                    start_time = safe_parse_time(row["start_time"])
+                    end_time = safe_parse_time(row["end_time"])
+                    if not start_time or not end_time:
+                        raise ValueError("Invalid time format")
+
+                    TimeSlot.objects.update_or_create(
+                        school=school,
+                        start_time=start_time,
+                        end_time=end_time,
+                        defaults={"description": row.get("description", ""), "updated_by": staff}
+                    )
+                    results["created"] += 1
+                except Exception as e:
+                    results["errors"].append({"row": idx + 2, "error": str(e)})
+
+        # ────────── CATEGORY: SUBJECTS ──────────
+        elif category == "subjects":
+            if not active_term:
+                return JsonResponse({"error": "No active term found"}, status=400)
+
+            for idx, row in df.iterrows():
+                try:
+                    subject, _ = Subject.objects.update_or_create(
+                        school=school,
+                        code=str(row["code"]).strip().upper(),
+                        defaults={
+                            "name": str(row["name"]).strip(),
+                            "sessions_per_week": int(row["lessons_per_week"]),
+                            "start_date": active_term.start_date,
+                            "end_date": active_term.end_date,
+                        }
+                    )
+
+                    # ─── Handle grades (comma separated) ───
+                    if "grade" in df.columns and row.get("grade"):
+                        raw_grades = str(row["grade"])
+
+                        grade_names = [
+                            g.strip()
+                            for g in raw_grades.split(",")
+                            if g.strip()
+                        ]
+
+                        for grade_name in grade_names:
+                            grade = Grade.objects.filter(
+                                school=school,
+                                name__iexact=grade_name
+                            ).first()
+
+                            if grade:
+                                subject.grade.add(grade)
+                            else:
+                                # OPTIONAL: auto-create missing grades
+                                grade = Grade.objects.create(
+                                    school=school,
+                                    name=grade_name,
+                                    code=grade_name.replace(" ", "").upper(),
+                                    lessons_per_term=0,
+                                    capacity=0,
+                                    is_active=True,
+                                )
+                                subject.grade.add(grade)
+
+                    results["created"] += 1
+
+                except Exception as e:
+                    results["errors"].append({
+                        "row": idx + 2,
+                        "error": str(e)
+                    })
+
+
 
         elif category == "parents":
             required = ["first_name", "last_name", "mobile", "admin_no"]
@@ -4952,53 +5168,56 @@ def universal_excel_upload(request):
                 return JsonResponse({"error": f"Missing columns: {missing}"}, status=400)
 
             for idx, row in df.iterrows():
+                row_num = idx + 2
                 try:
-                    phone = normalize_phone(row["mobile"])
-                    admin_no = str(row["admin_no"]).strip()
+                    with transaction.atomic():  # commit each row independently
+                        phone = normalize_phone(row["mobile"])
+                        admin_no = str(row["admin_no"]).strip()
 
-                    email = f"{phone}@{phone}.com"
-                    password = generate_password()
+                        email = f"{phone}@{phone}.com"
+                        password = generate_password()
 
-                    user, created = User.objects.get_or_create(
-                        email=email,
-                        defaults={
-                            "phone_number": phone,
-                            "first_name": row["first_name"],
-                            "last_name": row["last_name"],
-                            "is_parent": True,
-                        }
-                    )
+                        # Create or get User
+                        user, created = User.objects.get_or_create(
+                            email=email,
+                            defaults={
+                                "phone_number": phone,
+                                "first_name": str(row["first_name"]).strip(),
+                                "last_name": str(row["last_name"]).strip(),
+                                "is_parent": True,
+                            }
+                        )
+                        if created:
+                            user.set_password(password)
+                            user.save()
 
-                    if created:
-                        user.set_password(password)
-                        user.save()
+                        logger.info(f"Parent user {'created' if created else 'exists'}: {email} (password: {password})")
 
-                    parent, _ = Parent.objects.get_or_create(
-                        user=user,
-                        defaults={
-                            "parent_id": f"PARENT{user.id}",
-                            "phone": phone,
-                            "school": school,
-                        }
-                    )
+                        # Create or get Parent profile
+                        parent, _ = Parent.objects.get_or_create(
+                            user=user,
+                            defaults={
+                                "parent_id": f"PARENT{user.id}",
+                                "phone": phone,
+                                "school": school,
+                            }
+                        )
 
-                    student = Student.objects.filter(
-                        student_id=admin_no,
-                        school=school
-                    ).first()
+                        # Link to student if exists
+                        student = Student.objects.filter(student_id=admin_no, school=school).first()
+                        if student:
+                            student.parents.add(parent)
+                        else:
+                            results["warnings"].append({
+                                "row": row_num,
+                                "message": f"Student '{admin_no}' not found – parent not linked"
+                            })
 
-                    if student:
-                        student.parents.add(parent)
-                    else:
-                        results["warnings"].append({
-                            "row": idx + 2,
-                            "message": f"Student '{admin_no}' not found – parent not linked"
-                        })
-
-                    results["created"] += 1
+                        results["created"] += 1
 
                 except Exception as e:
-                    results["errors"].append({"row": idx + 2, "error": str(e)})
+                    logger.exception(f"Row {row_num} failed")
+                    results["errors"].append({"row": row_num, "error": str(e)})
 
 
         # ─────────────────────────────
@@ -5032,7 +5251,7 @@ def universal_excel_upload(request):
                 grade=grade,
                 stream=stream,
                 term=term,
-                year=year_obj.id,
+                year=excel_year_value,
                 defaults={"start_date": term.start_date, "end_date": term.end_date}
             )
 
@@ -5138,6 +5357,7 @@ def universal_excel_upload(request):
         "category": category,
         "results": results
     })
+
 @login_required
 def upload_excel_page(request):
     """Renders the Excel upload page."""

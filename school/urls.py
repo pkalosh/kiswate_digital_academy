@@ -44,6 +44,10 @@ urlpatterns = [
     path("parent/<int:pk>/edit/", views.update_parent, name="update_parent"),
     path("parent/<int:pk>/delete/", views.delete_parent, name="delete_parent"),
 
+    path("ajax/subcounties/", views.ajax_subcounties, name="ajax-subcounties"),
+    path("ajax/schools/", views.ajax_schools, name="ajax-schools"),
+    path("ajax/grades/", views.ajax_grades, name="ajax-grades"),
+    path("ajax/subjects/", views.ajax_subjects, name="ajax-subjects"),
 
     # # Parents Management
     # path('parents/', views.parent_list_create, name='parent_list_create'),

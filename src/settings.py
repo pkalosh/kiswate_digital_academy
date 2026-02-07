@@ -238,3 +238,7 @@ SMS_API_KEY = ''
 SMS_PARTNERID =''
 SMS_SHORTCODE = ''
 SMS_API_URL = ''
+
+
+LOGIN_URL = "userauths:sign-in"
+LOGOUT_REDIRECT_URL = "userauths:sign-in"

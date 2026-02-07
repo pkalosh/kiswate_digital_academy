@@ -2,94 +2,162 @@
 {% load dict_extras %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <a href="{% url 'school:generate_timetable' %}" class="btn btn-success">Generate Timetable</a>
-        <h4>Weekly Timetable <small class="text-muted">(week of {{ week_days.0|date:"D, M j" }})</small></h4>
-        <form method="get" class="d-flex gap-2 flex-wrap">
-            <input type="date" name="date" value="{{ focus_date }}" class="form-control" style="width: 160px;">
-            <button type="submit" class="btn btn-outline-primary">Go</button>
-        </form>
-    </div>
+<div class="container-fluid py-4">
 
-    <!-- Horizontal scroll wrapper -->
-    <div class="table-responsive" style="overflow-x:auto;">
-        <table class="table table-bordered mb-0">
-            <thead class="table-light text-center">
-                <tr>
-                    <th style="width:140px;">Time</th>
-                    {% for day in week_days %}
-                        <th>{{ day|date:"D, M j" }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for slot in time_slots %}
-                <tr>
-                    <td class="fw-bold text-center align-middle" style="white-space: nowrap;">
-                        {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
-                    </td>
-                    {% for day in week_days %}
-                    <td style="min-width:240px; vertical-align:top; padding:8px;">
-                        {% with day_str=day|date:"Y-m-d" %}
-                            {% with slot_day=calendar|get_item:slot.id|get_item:day_str %}
-                                {% if slot_day %}
-                                    {% for stream_id, lessons in slot_day.items %}
-                                    <div class="mb-3 border rounded p-2">
-                                        {% for lesson in lessons %}
-                                        <div class="p-2 mb-2 rounded" 
-                                             style="background-color: {{ subject_colors|get_item:lesson.subject.id|default:'#f8f9fa' }};">
-                                            <div class="fw-bold mb-1">{{ lesson.subject.name|default:"—" }}</div>
-                                            <div class="small mb-1">
-                                                {% if lesson.stream.grade %}
-                                                    {{ lesson.stream.grade.name|default:"(no grade)" }}
-                                                {% elif lesson.timetable and lesson.timetable.grade %}
-                                                    {{ lesson.timetable.grade.name|default:"(no grade)" }}
-                                                {% else %}
-                                                    Grade not available
-                                                {% endif %}
-                                                • {{ lesson.stream_name }}
-                                            </div>
-                                            <div class="mb-1">{{ lesson.teacher.user.get_full_name|default:"—" }}</div>
-                                            <div class="small text-muted">
-                                                Room: <strong>{{ lesson.room|default:"—" }}</strong>
-                                            </div>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="text-muted small">No lesson</span>
-                                {% endif %}
-                            {% endwith %}
-                        {% endwith %}
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+  <!-- ================= Header + Filters ================= -->
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <a href="{% url 'school:generate_timetable' %}" class="btn btn-success">Generate Timetable</a>
+    <h4 class="mb-0">
+      Weekly Timetable <small class="text-muted">(week of {{ week_days.0|date:"D, M j" }})</small>
+    </h4>
+    <form method="get" class="d-flex gap-2 flex-wrap">
+      <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" class="form-control" style="width: 160px;">
+      <select name="grade" class="form-select" style="width: 140px;">
+        <option value="">All Grades</option>
+        {% for g in grades %}
+          <option value="{{ g.id }}" {% if selected_grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="stream" class="form-select" style="width: 140px;">
+        <option value="">All Streams</option>
+        {% for s in streams %}
+          <option value="{{ s.id }}" {% if selected_stream == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="teacher" class="form-select" style="width: 160px;">
+        <option value="">All Teachers</option>
+        {% for t in teachers %}
+          <option value="{{ t.id }}" {% if selected_teacher == t.id|stringformat:"s" %}selected{% endif %}>{{ t.user.get_full_name }}</option>
+        {% endfor %}
+      </select>
+      <select name="subject" class="form-select" style="width: 140px;">
+        <option value="">All Subjects</option>
+        {% for subj in subjects %}
+          <option value="{{ subj.id }}" {% if selected_subject == subj.id|stringformat:"s" %}selected{% endif %}>{{ subj.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline-primary">Go</button>
+    </form>
+  </div>
 
-    <div class="mt-3">
-        <h6>Legend</h6>
-        <div class="d-flex flex-wrap gap-2">
-            {% for subj_id, color in subject_colors.items %}
-                {% with subject=subjects|get_item:subj_id %}
-                    <span class="badge" style="background-color: {{ color }}; color: {% if color == '#eee' %}#333{% else %}white{% endif %}">
-                        {{ subject.name }}
-                    </span>
-                {% endwith %}
-            {% endfor %}
-            <span class="badge bg-danger">Conflict</span>
+  <!-- ================= Timetable Table (desktop + tablet) ================= -->
+  <div class="table-responsive d-none d-md-block" style="overflow-x:auto;">
+    <table class="table table-bordered align-middle mb-0">
+      <thead class="table-light text-center">
+        <tr>
+          <th style="width:140px;">Time</th>
+          {% for day in week_days %}
+            <th>{{ day|date:"D, M j" }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for slot in time_slots %}
+        <tr>
+          <td class="fw-bold text-center align-middle" style="white-space: nowrap;">
+            {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
+          </td>
+          {% for day in week_days %}
+          <td style="min-width:240px; vertical-align:top; padding:8px;">
+            {% with day_str=day|date:"Y-m-d" %}
+              {% with slot_day=calendar|get_item:slot.id|get_item:day_str %}
+                {% if slot_day %}
+                  {% for stream_id, lessons in slot_day.items %}
+                    <div class="mb-3">
+                      {% for lesson in lessons %}
+                      <div class="p-2 mb-2 rounded"
+                           style="background-color: {{ subject_colors|get_item:lesson.subject.id|default:'#f8f9fa' }}; {% if lesson.id in conflicts %}border:2px solid red;{% endif %}">
+                        <div class="fw-bold mb-1">{{ lesson.subject.name|default:"—" }}</div>
+                        <div class="small mb-1">
+                          {% if lesson.stream.grade %}
+                            {{ lesson.stream.grade.name }}
+                          {% else %}
+                            Grade not available
+                          {% endif %} • {{ lesson.stream_name }}
+                        </div>
+                        <div class="mb-1">{{ lesson.teacher.user.get_full_name|default:"—" }}</div>
+                        <div class="small text-muted">Room: <strong>{{ lesson.room|default:"—" }}</strong></div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-muted small">No lesson</span>
+                {% endif %}
+              {% endwith %}
+            {% endwith %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= Mobile Card View ================= -->
+  <div class="d-md-none">
+    {% for slot in time_slots %}
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light fw-bold text-center">
+          {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
         </div>
+        <div class="card-body">
+          {% for day in week_days %}
+            <div class="mb-3">
+              <div class="fw-semibold">{{ day|date:"D, M j" }}</div>
+              {% with day_str=day|date:"Y-m-d" %}
+                {% with slot_day=calendar|get_item:slot.id|get_item:day_str %}
+                  {% if slot_day %}
+                    {% for stream_id, lessons in slot_day.items %}
+                      {% for lesson in lessons %}
+                      <div class="p-2 mb-2 rounded"
+                           style="background-color: {{ subject_colors|get_item:lesson.subject.id|default:'#f8f9fa' }}; {% if lesson.id in conflicts %}border:2px solid red;{% endif %}">
+                        <div class="fw-bold">{{ lesson.subject.name|default:"—" }}</div>
+                        <div class="small">
+                          {% if lesson.stream.grade %}
+                            {{ lesson.stream.grade.name }}
+                          {% else %}
+                            Grade not available
+                          {% endif %} • {{ lesson.stream_name }}
+                        </div>
+                        <div class="mb-1">{{ lesson.teacher.user.get_full_name|default:"—" }}</div>
+                        <div class="small text-muted">Room: <strong>{{ lesson.room|default:"—" }}</strong></div>
+                      </div>
+                      {% endfor %}
+                    {% endfor %}
+                  {% else %}
+                    <span class="text-muted small">No lesson</span>
+                  {% endif %}
+                {% endwith %}
+              {% endwith %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- ================= Legend ================= -->
+  <div class="mt-3">
+    <h6>Legend</h6>
+    <div class="d-flex flex-wrap gap-2">
+      {% for subj_id, color in subject_colors.items %}
+        {% with subject=subjects|get_item:subj_id %}
+          <span class="badge" style="background-color: {{ color }}; color: {% if color == '#eee' %}#333{% else %}white{% endif %}">
+            {{ subject.name }}
+          </span>
+        {% endwith %}
+      {% endfor %}
+      <span class="badge bg-danger">Conflict</span>
     </div>
+  </div>
 </div>
 
-<!-- Optional: Make table scroll nicely on mobile with shadow -->
 <style>
+/* Scroll hint for mobile */
 .table-responsive {
-    position: relative;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 .table-responsive::-webkit-scrollbar {
     height: 8px;
@@ -102,5 +170,4 @@
     background: rgba(0,0,0,0.05);
 }
 </style>
-
 {% endblock %}

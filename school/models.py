@@ -19,9 +19,10 @@ GENDER_CHOICES = [
 POSITION_CHOICES = [
     ('teacher', 'Teacher'),
     ('hod', 'Head of Department'),  # New: For HODs
-    ('deputy_principal', 'Deputy Principal'),  # New: Can mark suspensions
-    ('principal', 'Principal'),  # New: Can mark expulsions
     ('administrator', 'Administrator'),
+    ('class_teacher', 'Class Teacher'),
+    ('clerks', 'Clerks'),
+    ('finance', 'Finance'),
     ('security', 'Security Staff'),
     ('cook', 'Cook'),  # Kitchen
     ('dorm_supervisor', 'Dormitory Supervisor'),  # New: For dorms
@@ -29,8 +30,7 @@ POSITION_CHOICES = [
     ('trip_coordinator', 'Trip Coordinator'),  # New: For school trips/games
     ('moe_policy_maker', 'MoE Policy Maker'),  # New: External stakeholders
     ('cleaner', 'Cleaner'),
-    ('driver', 'Driver'),
-    ('other', 'Other'),
+    ('driver', 'Driver')
 ]
 
 # New: ATTENDANCE_STATUS_CHOICES matching concept exactly
@@ -251,7 +251,7 @@ class Subject(models.Model):
     code = models.CharField(max_length=100, blank=True)
 
     school = models.ForeignKey(School, on_delete=models.CASCADE)
-    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='subjects')
+    grade = models.ManyToManyField(Grade, related_name='subjects')
     pathway = models.ForeignKey(
         Pathway,
         on_delete=models.CASCADE,
@@ -303,7 +303,7 @@ class Parent(models.Model):
     address = models.TextField(blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='parents/', blank=True, null=True)
-    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, null=True, blank=True)
     roles = models.ManyToManyField(Role, blank=True, related_name='parents')  # New: Optional for parental roles
 
     def __str__(self):

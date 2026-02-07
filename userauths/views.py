@@ -59,7 +59,7 @@ def LoginView(request):
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
 
         # Check groups (recommended for policymakers and future roles)
-        if user.groups.filter(name="policymakers").exists():
+        if getattr(request.user, "is_policy_maker", False):
             return redirect("school:policy-dashboard")  # ← your policymaker dashboard
 
         # Boolean fields on User (your current style)
@@ -86,7 +86,7 @@ def LoginView(request):
         if request.user.is_superuser:
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
 
-        if request.user.groups.filter(name="policymakers").exists():
+        if  getattr(request.user, "is_policy_maker", False):
             return redirect("school:policy-dashboard")
 
         elif getattr(request.user, "is_parent", False):
@@ -243,6 +243,8 @@ WEEKDAYS = [
     ("sunday", "Sunday"),
 ]
 
+
+
 @login_required
 def student_dashboard(request):
     user = request.user
@@ -254,8 +256,9 @@ def student_dashboard(request):
         return redirect("userauths:sign-in")
 
     today = timezone.now().date()
-    today_weekday = today.strftime("%A").lower()  # "monday", "tuesday", ...
+    today_weekday = today.strftime("%A").lower()
 
+    # ── ENROLLMENTS
     enrollments = (
         student.enrollments
         .filter(status="active")
@@ -269,6 +272,7 @@ def student_dashboard(request):
 
     lesson_ids = enrollments.values_list("lesson_id", flat=True)
 
+    # ── WEEK RANGE
     start_week = today - timedelta(days=today.weekday())
     end_week = start_week + timedelta(days=6)
 
@@ -288,19 +292,28 @@ def student_dashboard(request):
         .order_by("day_of_week", "time_slot__start_time")
     )
 
-    time_slots = TimeSlot.objects.filter(
-        school=student.school
-    ).order_by("start_time")
+    # ── TIME SLOTS
+    time_slots = TimeSlot.objects.filter(school=student.school).order_by("start_time")
+    for slot in time_slots:
+        desc = (slot.description or "").lower()
+        if "break" in desc:
+            slot.slot_type = "break"
+        elif "lunch" in desc:
+            slot.slot_type = "lunch"
+        elif "prep" in desc:
+            slot.slot_type = "prep"
+        else:
+            slot.slot_type = "lesson"
 
+    # ── TIMETABLE GRID
     timetable_grid = {key: {} for key, _ in WEEKDAYS}
-
     for lesson in lessons_qs:
         if not lesson.day_of_week or not lesson.time_slot:
             continue
         day = lesson.day_of_week.lower()
         timetable_grid[day].setdefault(lesson.time_slot.id, []).append(lesson)
 
-    # ATTENDANCE HEATMAP (week)
+    # ── ATTENDANCE HEATMAP
     attendance_records = (
         Attendance.objects
         .filter(
@@ -309,9 +322,7 @@ def student_dashboard(request):
         )
         .values("date", "status")
     )
-
     attendance_map = {record["date"]: record["status"] for record in attendance_records}
-
     heatmap = []
     for i in range(7):
         date = start_week + timedelta(days=i)
@@ -322,12 +333,12 @@ def student_dashboard(request):
             "status": status
         })
 
+    # ── ASSIGNMENTS DUE
     student_subject_ids = (
         enrollments
         .values_list("lesson__subject_id", flat=True)
         .distinct()
     )
-
     assignments_due = (
         Assignment.objects
         .filter(
@@ -340,7 +351,7 @@ def student_dashboard(request):
         .count()
     )
 
-    # Stats
+    # ── STATS
     stats = [
         {
             "title": "This Week",
@@ -358,7 +369,7 @@ def student_dashboard(request):
         },
         {
             "title": "Attendance",
-            "value": "95%",  # ← replace with real calculation if available
+            "value": f"{sum(1 for h in heatmap if h['status']=='present')}/{len(heatmap)}",
             "icon": "bi-bar-chart-line",
             "color": "info",
             "url": ""

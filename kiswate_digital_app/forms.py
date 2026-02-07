@@ -154,6 +154,8 @@ class SchoolCreationForm(forms.ModelForm):
             is_admin=True,  # School admin flag
             is_active=True,
             is_verified=False,
+            is_principal=True,
+            is_deputy_principal=False,
         )
 
         # Create School
@@ -173,7 +175,7 @@ class SchoolCreationForm(forms.ModelForm):
             Temporary Password: {password}
             
             Please log in and change your password.
-            Login URL: {getattr(settings, 'FRONTEND_URL', 'https://yourapp.com/login')}
+            Login URL: {getattr(settings, 'FRONTEND_URL', 'https://app.kiswate.org/sing-in/')}
             
             Best regards,
             System Admin
@@ -355,7 +357,7 @@ class AdminEditForm(forms.ModelForm):
             Temporary Password: {password or '(unchanged)'}
 
             If you did not request this, contact support.
-            Login URL: {getattr(settings, 'FRONTEND_URL', 'https://yourapp.com/login')}
+            Login URL: {getattr(settings, 'FRONTEND_URL', 'https://app.kiswate.org/sing-in/')}
 
             Best regards,
             System Admin

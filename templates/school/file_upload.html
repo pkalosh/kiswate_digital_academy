@@ -1,37 +1,29 @@
 {% extends 'school/base.html' %}
 {% block title %}Upload Excel | {{ school.name }}{% endblock %}
 {% load static %}
-{% block content %}
 
+{% block content %}
 <section class="content container-fluid py-4">
   <div class="card shadow-sm border-0 rounded-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">
-        <i class="bi bi-upload me-2"></i> Upload Excel Files
-      </h5>
+      <h5 class="mb-0"><i class="bi bi-upload me-2"></i> Upload Excel Files</h5>
     </div>
-
     <div class="card-body">
-      {% if messages %}
-        {% for message in messages %}
-          <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-            {{ message }}
-            <button class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
 
       <form id="excelUploadForm" enctype="multipart/form-data" class="row g-3">
         {% csrf_token %}
         <div class="col-md-6">
           <label for="category" class="form-label">Select Category</label>
           <select class="form-select" name="category" id="category" required>
-            <option value="" selected disabled>Select category</option>
+            <option value="" disabled selected>Select category</option>
+            <option value="grades">Grades & Streams</option>
+            <option value="time_slots">Time Slots</option>
+            <option value="subjects">Subjects</option>
             <option value="students">Students</option>
             <option value="teachers">Teachers</option>
             <option value="parents">Parents</option>
-            <option value="subjects">Subjects</option>
             <option value="timetable">Timetable</option>
+
           </select>
         </div>
 
@@ -55,6 +47,8 @@
         <a href="{% static 'samples/teachers_upload_sample.xlsx' %}" class="btn btn-outline-success btn-sm">Teachers Sample</a>
         <a href="{% static 'samples/subjects_upload_sample.xlsx' %}" class="btn btn-outline-warning btn-sm">Subjects Sample</a>
         <a href="{% static 'samples/timetable_upload_sample.xlsx' %}" class="btn btn-outline-info btn-sm">Timetable Sample</a>
+        <a href="{% static 'samples/grades_upload_sample.xlsx' %}" class="btn btn-outline-dark btn-sm">Grades Sample</a>
+        <a href="{% static 'samples/time_slots_upload_sample.xlsx' %}" class="btn btn-outline-secondary btn-sm">TimeSlots Sample</a>
       </div>
 
       <div id="previewContainer" class="mb-3"></div>
@@ -63,6 +57,7 @@
   </div>
 </section>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("excelUploadForm");
@@ -70,37 +65,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const previewDiv = document.getElementById("previewContainer");
   const fileInput = document.getElementById("file");
 
-  // Preview Excel before upload
+  // Preview Excel
   fileInput.addEventListener("change", async (e) => {
-    const file = e.target.files[0];
     previewDiv.innerHTML = "";
+    const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
         const data = new Uint8Array(event.target.result);
         const workbook = XLSX.read(data, {type: "array"});
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header:1});
-        
-        if (jsonData.length > 0) {
-          let table = '<h6>Excel Preview</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr>';
-          jsonData[0].forEach(col => { table += `<th>${col}</th>`; });
-          table += '</tr></thead><tbody>';
-          jsonData.slice(1, 10).forEach(row => {
-            table += '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>';
-          });
-          table += '</tbody></table></div>';
-          previewDiv.innerHTML = table;
-        }
-      } catch (err) {
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, {header:1});
+        if (!jsonData.length) return;
+
+        let table = '<h6>Excel Preview</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr>';
+        jsonData[0].forEach(col => table += `<th>${col}</th>`);
+        table += '</tr></thead><tbody>';
+        jsonData.slice(1, 10).forEach(row => table += '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>');
+        table += '</tbody></table></div>';
+        previewDiv.innerHTML = table;
+      } catch(err) {
         previewDiv.innerHTML = `<div class="alert alert-warning">Preview failed: ${err}</div>`;
       }
     };
     reader.readAsArrayBuffer(file);
   });
 
+  // Upload via fetch
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const formData = new FormData(form);
@@ -110,34 +103,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("{% url 'school:universal_excel_upload' %}", {
         method: "POST",
         body: formData,
-        headers: {
-          "X-CSRFToken": formData.get("csrfmiddlewaretoken")
-        }
+        headers: {"X-CSRFToken": formData.get("csrfmiddlewaretoken")}
       });
-
       const data = await response.json();
-
       if (data.status === "success") {
         resultsDiv.innerHTML = `
           <div class="alert alert-success">
             <strong>Category:</strong> ${data.category} <br>
             <strong>Records Created:</strong> ${data.results.created} <br>
-            ${data.results.errors.length > 0 ? 
-              "<strong>Errors:</strong><ul>" + data.results.errors.map(e => "<li>Row " + e.row + ": " + e.error + "</li>").join('') + "</ul>" 
-              : ""}
-          </div>
-        `;
+            ${data.results.errors.length ? "<strong>Errors:</strong><ul>" + data.results.errors.map(e => "<li>Row " + e.row + ": " + e.error + "</li>").join('') + "</ul>" : ""}
+            ${data.results.warnings.length ? "<strong>Warnings:</strong><ul>" + data.results.warnings.map(w => "<li>Row " + w.row + ": " + w.message + "</li>").join('') + "</ul>" : ""}
+          </div>`;
       } else {
         resultsDiv.innerHTML = `<div class="alert alert-danger">Error: ${JSON.stringify(data.error || data.results.errors)}</div>`;
       }
-    } catch (err) {
+    } catch(err) {
       resultsDiv.innerHTML = `<div class="alert alert-danger">Upload failed: ${err}</div>`;
     }
   });
 });
 </script>
-
-<!-- Include SheetJS for preview -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
 {% endblock %}
