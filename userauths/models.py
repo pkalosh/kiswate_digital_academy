@@ -47,6 +47,7 @@ class User(AbstractUser):
     is_deputy_principal = models.BooleanField(default=False)
     is_policy_maker = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
+    is_kiswate_user = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -137,6 +137,13 @@ WEEKDAY_CHOICES = [
         ("sunday", "Sunday"),
     ]
 
+SCHOOL_CLASSIFICATION_CHOICES = [
+    ('C1', 'National'),
+    ('C2', 'Extra-County'),
+    ('C3', 'County'),
+    ('C4', 'Sub-County/Day'),
+]
+
 class County(models.Model):
     name = models.CharField(max_length=100, unique=True, blank=True, null=True)
 
@@ -177,6 +184,7 @@ class Ward(models.Model):
 
 class School(models.Model):
     name = models.CharField(max_length=255)
+    school_classification = models.CharField(max_length=250, choices=SCHOOL_CLASSIFICATION_CHOICES, blank=True, null=True)  # e.g., public/private, boarding/day
     school_admin = models.OneToOneField(User, on_delete=models.CASCADE, related_name='school_admin_profile')
     code = models.CharField(max_length=50, unique=True)
     address = models.TextField(blank=True)

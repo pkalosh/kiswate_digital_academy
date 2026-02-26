@@ -21,6 +21,7 @@ from django.utils.safestring import mark_safe
 from django.core.mail import send_mail
 from itertools import cycle
 import random
+from django.db.models.functions import Lower
 import string
 from django.utils.dateparse import parse_date
 import datetime
@@ -65,7 +66,7 @@ from .models import (
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear,
-    SubjectEnrollment,AcademicYear,SubCounty
+    SubjectEnrollment,AcademicYear,SubCounty,Pathway
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -96,12 +97,9 @@ from school.models import Attendance, Lesson
 
 INCIDENT_TYPE_CHOICES = [
     ('late', 'Late Arrival'),
-    ('expulsion', 'Expulsion'),
     ('tardy', 'Tardy'),
     ('absence', 'Absence'),
     ('misconduct', 'Misconduct'),
-    ('suspension', 'Suspension'),
-    ('expulsion', 'Expulsion'),
     ('other', 'Other'),
 ]
 
@@ -3466,7 +3464,7 @@ def teacher_attendance_mark(request, lesson_id):
         'can_override': can_override,
         'ATTENDANCE_CODES': ['P','ET','UT','EA','UA'],
         'DISCIPLINE_CODES': ['IB','18','20'],
-        'INCIDENT_TYPE_CHOICES': DisciplineRecord._meta.get_field('incident_type').choices,
+        'INCIDENT_TYPE_CHOICES': INCIDENT_TYPE_CHOICES,
         'SEVERITY_CHOICES': DisciplineRecord._meta.get_field('severity').choices,
         'trend_map': trend_map,
     })
@@ -4762,13 +4760,20 @@ SUBJECT_CODE_MAP = {
     "KISW": "Kiswahili",
     "CHEM": "Chemistry",
     "BIO": "Biology",
-    "PHYC": "Physics",
+    "PHY": "Physics",
     "CRE": "Christian Religious Education",
     "GEO": "Geography",
     "HIST": "History",
     "BST": "Business Studies",
     "AGRI": "Agriculture",
-    "MUSIC": "Music",
+    "MUDA": "Music & Dance",
+    "LIT": "Literature",
+    "FAS": "Fasihi",
+    "TF": "Theatre and Film",
+    "GENSCI": "General Science",
+    "CSL": "Community Service Learning",
+    "HSCI" : "Home Science",
+    "ICT": "Information & Communication Technology",
 }
 
 
@@ -4896,51 +4901,99 @@ def universal_excel_upload(request):
 
             for idx, row in df.iterrows():
                 try:
-                    with transaction.atomic():  # commit each row independently
+                    with transaction.atomic():
+
+                        # ───────── BASIC STUDENT INFO ─────────
                         admin_no = str(row["admin_no"]).strip()
                         student_email = f"{admin_no}@student.school.local"
-                        student_pass = generate_password()
+                        student_password = generate_password()
 
-                        # Create or get User
-                        user, created = User.objects.get_or_create(
+                        first_name = str(row["first_name"]).strip()
+                        last_name = str(row["last_name"]).strip()
+                        gender = str(row.get("gender", "")).strip().upper()
+
+                        # ───────── CREATE OR GET USER ─────────
+                        user, user_created = User.objects.get_or_create(
                             email=student_email,
                             defaults={
                                 "phone_number": admin_no,
-                                "first_name": str(row["first_name"]).strip(),
-                                "last_name": str(row["last_name"]).strip(),
+                                "first_name": first_name,
+                                "last_name": last_name,
                                 "is_student": True,
                             }
                         )
-                        if created:
-                            user.set_password(student_pass)
+
+                        if user_created:
+                            user.set_password(student_password)
                             user.save()
 
-                        # Normalize grade and stream names
-                        grade_name = str(row["grade"]).strip().upper()
-                        stream_name = str(row["stream"]).strip().upper()
+                        # ───────── GRADE & STREAM ─────────
+                        grade_name = str(row["grade"]).strip()
+                        stream_name = str(row["stream"]).strip()
 
-                        grade = Grade.objects.filter(name__iexact=grade_name, school=school).first()
+                        grade = Grade.objects.filter(
+                            name__iexact=grade_name,
+                            school=school
+                        ).first()
+
                         if not grade:
-                            raise ValueError(f"Grade '{grade_name}' not found for school {school}")
+                            raise ValueError(f"Grade '{grade_name}' not found")
 
-                        stream = Streams.objects.filter(name__iexact=stream_name, school=school).first()
+                        stream = Streams.objects.filter(
+                            name__iexact=stream_name,
+                            school=school
+                        ).first()
+
                         if not stream:
-                            raise ValueError(f"Stream '{stream_name}' not found for school {school}")
+                            raise ValueError(f"Stream '{stream_name}' not found")
 
-                        # Create or get Student
+                        # ───────── PATHWAY LOOKUP ─────────
+                        pathway_raw = str(row.get("pathway", "")).strip()
+                        pathway_obj = None
+
+                        if pathway_raw:
+                            normalized_csv = (
+                                pathway_raw.lower()
+                                .replace(".", "")
+                                .replace("&", "and")
+                                .replace(" ", "")
+                            )
+
+                            for p in Pathway.objects.filter(school=school, grade=grade):
+                                normalized_db = (
+                                    p.name.strip()
+                                    .lower()
+                                    .replace(".", "")
+                                    .replace("&", "and")
+                                    .replace(" ", "")
+                                )
+                                if normalized_db == normalized_csv:
+                                    pathway_obj = p
+                                    break
+
+                        # ───────── CREATE OR UPDATE STUDENT ─────────
                         student, created = Student.objects.get_or_create(
                             user=user,
                             student_id=admin_no,
                             school=school,
                             defaults={
-                                "date_of_birth": row["date_of_birth"],
+                                "date_of_birth": row.get("date_of_birth"),
+                                "gender": gender,
                                 "enrollment_date": timezone.now().date(),
                                 "grade_level": grade,
                                 "stream": stream,
+                                "pathway": pathway_obj,
                             }
                         )
 
-                        # Enroll in subjects
+                        if not created:
+                            student.grade_level = grade
+                            student.stream = stream
+                            student.pathway = pathway_obj
+                            student.gender = gender
+                            student.save()
+
+                        # ───────── SUBJECT ENROLLMENT ─────────
                         subject_codes = [
                             c.strip().upper()
                             for c in str(row.get("subjects", "")).split(",")
@@ -4948,9 +5001,12 @@ def universal_excel_upload(request):
                         ]
 
                         for code in subject_codes:
-                            subject = Subject.objects.filter(school=school, code__iexact=code).first()
+                            subject = Subject.objects.filter(
+                                school=school,
+                                code__iexact=code
+                            ).first()
+
                             if not subject:
-                                # create placeholder subject if it doesn't exist
                                 subject = Subject.objects.create(
                                     school=school,
                                     code=code,
@@ -4958,16 +5014,68 @@ def universal_excel_upload(request):
                                     start_date=active_term.start_date,
                                     end_date=active_term.end_date,
                                 )
+
                             subject.grade.add(grade)
 
-                            # Create enrollment
-                            SubjectEnrollment.objects.get_or_create(student=student, subject=subject)
+                            SubjectEnrollment.objects.get_or_create(
+                                student=student,
+                                subject=subject
+                            )
+
+                        # ───────── PARENT AUTO-CREATION + LINKING ─────────
+                        parent_phone = str(row.get("parent_phone", "")).strip()
+                        parent_email = str(row.get("parent_email", "")).strip()
+                        parent_first_name = str(row.get("parent_first_name", "")).strip()
+                        parent_last_name = str(row.get("parent_last_name", "")).strip()
+
+                        if parent_phone:
+
+                            if not parent_email:
+                                parent_email = f"{parent_phone}@parent.school.local"
+
+                            parent_password = generate_password()
+
+                            # Create or get parent user
+                            parent_user, parent_user_created = User.objects.get_or_create(
+                                email=parent_email,
+                                defaults={
+                                    "phone_number": parent_phone,
+                                    "first_name": parent_first_name,
+                                    "last_name": parent_last_name,
+                                    "is_parent": True,
+                                }
+                            )
+
+                            if parent_user_created:
+                                parent_user.set_password(parent_password)
+                                parent_user.save()
+
+                            # Create or get Parent profile
+                            parent_obj, parent_created = Parent.objects.get_or_create(
+                                phone=parent_phone,
+                                defaults={
+                                    "user": parent_user,
+                                    "parent_id": parent_phone,
+                                    "school": school,
+                                }
+                            )
+
+                            # Ensure correct user linkage
+                            if not parent_created and parent_obj.user != parent_user:
+                                parent_obj.user = parent_user
+                                parent_obj.save()
+
+                            # Link parent to student
+                            student.parents.add(parent_obj)
 
                         results["created"] += 1
 
                 except Exception as e:
                     logger.exception(f"Row {idx + 2} failed")
-                    results["errors"].append({"row": idx + 2, "error": str(e)})
+                    results["errors"].append({
+                        "row": idx + 2,
+                        "error": str(e)
+                    })
 
         # ────────── CATEGORY: TEACHERS ──────────
         elif category == "teachers":
@@ -5115,6 +5223,7 @@ def universal_excel_upload(request):
                 except Exception as e:
                     results["errors"].append({"row": idx + 2, "error": str(e)})
 
+
         # ────────── CATEGORY: SUBJECTS ──────────
         elif category == "subjects":
             if not active_term:
@@ -5122,6 +5231,46 @@ def universal_excel_upload(request):
 
             for idx, row in df.iterrows():
                 try:
+                    # ─── Handle grades (comma separated) ───
+                    grade_names = []
+                    if "grade" in df.columns and row.get("grade"):
+                        raw_grades = str(row["grade"])
+                        grade_names = [g.strip() for g in raw_grades.split(",") if g.strip()]
+
+                    # ─── Handle pathway string ───
+                    pathway_name_raw = str(row.get("pathway", "")).strip()
+                    normalized_csv_pathway = (
+                        pathway_name_raw.lower().replace(".", "").replace("&", "and").replace(" ", "")
+                    ) if pathway_name_raw else None
+
+                    pathway_obj = None  # default None
+
+                    # Use first grade for pathway relation
+                    if normalized_csv_pathway and grade_names:
+                        grade_name_for_pathway = grade_names[0]
+                        grade_obj = Grade.objects.filter(
+                            school=school,
+                            name__iexact=grade_name_for_pathway
+                        ).first()
+
+                        if grade_obj:
+                            # Normalize existing pathways in DB for lookup
+                            for p in Pathway.objects.filter(school=school, grade=grade_obj):
+                                normalized_db = p.name.strip().lower().replace(".", "").replace("&", "and").replace(" ", "")
+                                if normalized_db == normalized_csv_pathway:
+                                    pathway_obj = p
+                                    break
+
+                            # Create pathway if not found
+                            if not pathway_obj:
+                                pathway_obj = Pathway.objects.create(
+                                    name=pathway_name_raw,
+                                    grade=grade_obj,
+                                    school=school,
+                                    is_active=True
+                                )
+
+                    # ─── Create/update Subject ───
                     subject, _ = Subject.objects.update_or_create(
                         school=school,
                         code=str(row["code"]).strip().upper(),
@@ -5130,38 +5279,30 @@ def universal_excel_upload(request):
                             "sessions_per_week": int(row["lessons_per_week"]),
                             "start_date": active_term.start_date,
                             "end_date": active_term.end_date,
+                            "pathway": pathway_obj,  # foreign key
                         }
                     )
 
-                    # ─── Handle grades (comma separated) ───
-                    if "grade" in df.columns and row.get("grade"):
-                        raw_grades = str(row["grade"])
+                    # ─── Assign grades to subject ───
+                    for grade_name in grade_names:
+                        grade = Grade.objects.filter(
+                            school=school,
+                            name__iexact=grade_name
+                        ).first()
 
-                        grade_names = [
-                            g.strip()
-                            for g in raw_grades.split(",")
-                            if g.strip()
-                        ]
-
-                        for grade_name in grade_names:
-                            grade = Grade.objects.filter(
+                        if grade:
+                            subject.grade.add(grade)
+                        else:
+                            # Optional: auto-create missing grades
+                            grade = Grade.objects.create(
                                 school=school,
-                                name__iexact=grade_name
-                            ).first()
-
-                            if grade:
-                                subject.grade.add(grade)
-                            else:
-                                # OPTIONAL: auto-create missing grades
-                                grade = Grade.objects.create(
-                                    school=school,
-                                    name=grade_name,
-                                    code=grade_name.replace(" ", "").upper(),
-                                    lessons_per_term=0,
-                                    capacity=0,
-                                    is_active=True,
-                                )
-                                subject.grade.add(grade)
+                                name=grade_name,
+                                code=grade_name.replace(" ", "").upper(),
+                                lessons_per_term=0,
+                                capacity=0,
+                                is_active=True,
+                            )
+                            subject.grade.add(grade)
 
                     results["created"] += 1
 
@@ -5170,8 +5311,6 @@ def universal_excel_upload(request):
                         "row": idx + 2,
                         "error": str(e)
                     })
-
-
 
         elif category == "parents":
             required = ["first_name", "last_name", "mobile", "admin_no"]

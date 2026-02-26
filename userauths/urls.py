@@ -19,4 +19,6 @@ urlpatterns = [
     path('parent-dashboard/', views.parent_dashboard, name='parent-dashboard'),
     path('student-dashboard/', views.student_dashboard, name='student-dashboard'),
     path('teacher-dashboard/', views.teacher_dashboard, name='teacher-dashboard'),
+    path("forgot-password/", views.ForgotPasswordView, name="forgot-password"),
+    path("verify-otp/", views.VerifyOTPView, name="verify-otp"),
 ]

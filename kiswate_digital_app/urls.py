@@ -6,6 +6,7 @@ app_name = "kiswate_digital_app"
 urlpatterns = [
     #dashboard
     path("Kiswate-admin-dashboard/", views.kiswate_dashboard, name="kiswate_admin_dashboard"),
+    
     #schools
     path("new-school/", views.new_school, name="new_school"),
     path("school-list/", views.school_list, name="school_list"),

@@ -1,0 +1,37 @@
+{% extends 'landing/base.html' %}
+{% block title %}Verify OTP | Kiswate{% endblock %}
+
+{% block content %}
+<section style="padding:80px 0; background-color:#0d1117;">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-md-6 col-lg-5">
+        <div class="text-center mb-4">
+          <h2 class="text-light">Verify OTP</h2>
+          <p class="text-secondary">Enter the OTP sent to your email or phone and reset your password</p>
+        </div>
+
+        <form method="post" class="p-4 rounded-4 shadow" style="background-color:#1a1f2b;">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label text-light">OTP</label>
+            <input type="text" name="otp" class="form-control" placeholder="Enter OTP" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label text-light">New Password</label>
+            <input type="password" name="password" class="form-control" placeholder="New Password" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label text-light">Confirm Password</label>
+            <input type="password" name="confirm_password" class="form-control" placeholder="Confirm Password" required>
+          </div>
+
+          <button type="submit" class="btn btn-success w-100">Reset Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -12,7 +12,11 @@ from django.utils import timezone
 from collections import defaultdict
 from userauths.models import User
 from django.db.models import Sum
-
+from userauths.models import OTP,User
+from userauths.backends import EmailBackend
+from school.views import send_email, _send_sms_via_eujim
+from django.db.models import Q
+import random
 
 def index(request):
     return render(request, "landing/index.html",{})
@@ -39,7 +43,7 @@ def demo(request):
 from django.contrib.auth import authenticate, login
 from django.contrib import messages
 from django.shortcuts import redirect, render
-from django.contrib.auth.models import User
+# from django.contrib.auth.models import User
 
 def LoginView(request):
     if request.method == "POST":
@@ -55,7 +59,7 @@ def LoginView(request):
         messages.success(request, f"Welcome back, {user.get_full_name()}!")
 
         # Role-based redirects — check in priority order
-        if user.is_superuser:
+        if user.is_superuser or getattr(user, "is_kiswate_user", False):
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
 
         # Check groups (recommended for policymakers and future roles)
@@ -83,7 +87,7 @@ def LoginView(request):
 
     # GET request: if already logged in, redirect based on role
     if request.user.is_authenticated:
-        if request.user.is_superuser:
+        if request.user.is_superuser or getattr(request.user, "is_kiswate_user", False):
             return redirect("kiswate_digital_app:kiswate_admin_dashboard")
 
         if  getattr(request.user, "is_policy_maker", False):
@@ -418,6 +422,7 @@ def teacher_dashboard(request):
     try:
         teacher_profile = user.staffprofile
     except StaffProfile.DoesNotExist:
+        #redirect to login
         return render(
             request,
             'school/teacher/not_authorized.html',
@@ -601,3 +606,138 @@ def change_passwordView(request):
         form = PasswordChangeForm(user=request.user)
     
     return render(request, "users/changepassword.html", {'form': form})
+
+
+
+def generate_otp_code(length=6):
+    return ''.join([str(random.randint(0, 9)) for _ in range(length)])
+
+
+def get_client_ip(request):
+    """Get the client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+def ForgotPasswordView(request):
+    """
+    Step 1: User enters email or phone to receive OTP
+    """
+    if request.method == "POST":
+        identifier = request.POST.get("email")  # email or phone
+        client_ip = get_client_ip(request)
+        now = timezone.now()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        try:
+            user = User.objects.filter(
+                Q(email__iexact=identifier) | Q(phone_number__iexact=identifier)
+            ).first()
+
+            if not user:
+                messages.warning(request, "No user found with that email or phone number.")
+                return redirect("userauths:forgot-password")
+
+            # Count OTPs requested today by this user or IP
+            otp_count = OTP.objects.filter(
+                Q(user=user) | Q(user__isnull=True),  # optionally track by IP if needed
+                created_at__gte=start_of_day,
+                purpose="password_reset"
+            ).count()
+
+            if otp_count >= 4:
+                messages.error(request, "You have reached the maximum of 2 OTP requests today. Try again tomorrow.")
+                return redirect("userauths:forgot-password")
+
+            # Generate OTP
+            otp_code = generate_otp_code()
+            expires_at = timezone.now() + timedelta(minutes=10)
+
+            otp = OTP.objects.create(
+                user=user,
+                otp_code=otp_code,
+                purpose="password_reset",
+                expires_at=expires_at
+            )
+
+            # Send OTP via email or phone
+            sent = False
+            if user.email and '@' in identifier:
+                subject = "Your Password Reset OTP"
+                message = f"Your OTP code is {otp_code}. It will expire in 10 minutes."
+                sent = send_email(user.email, subject, message)
+
+            if not sent and user.phone_number:
+                message = f"Your OTP code is {otp_code}. It will expire in 10 minutes."
+                sent = _send_sms_via_eujim(user.phone_number, message)
+
+            if sent:
+                request.session['password_reset_user'] = user.id
+                messages.success(request, "OTP sent successfully. Please check your email or SMS.")
+                return redirect("userauths:verify-otp")
+            else:
+                messages.error(request, "Failed to send OTP. Please try again later.")
+                return redirect("userauths:forgot-password")
+
+        except Exception as e:
+            messages.error(request, "An error occurred. Please try again.")
+            return redirect("userauths:forgot-password")
+
+    return render(request, "landing/forgot_password.html")
+
+
+def VerifyOTPView(request):
+    """
+    Step 2: User enters OTP to verify and reset password
+    """
+    user_id = request.session.get("password_reset_user")
+    if not user_id:
+        messages.warning(request, "Session expired. Please try again.")
+        return redirect("userauths:forgot-password")
+
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        messages.warning(request, "User not found. Please try again.")
+        return redirect("userauths:forgot-password")
+
+    if request.method == "POST":
+        otp_input = request.POST.get("otp")
+        new_password = request.POST.get("password")
+        confirm_password = request.POST.get("confirm_password")
+
+        if new_password != confirm_password:
+            messages.warning(request, "Passwords do not match.")
+            return redirect("userauths:verify-otp")
+
+        otp = OTP.objects.filter(
+            user=user,
+            otp_code=otp_input,
+            purpose="password_reset",
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).first()
+
+        if not otp:
+            messages.error(request, "Invalid or expired OTP.")
+            return redirect("userauths:verify-otp")
+
+        # Mark OTP as used
+        otp.is_used = True
+        otp.verified_at = timezone.now()
+        otp.save()
+
+        # Reset password
+        user.set_password(new_password)
+        user.save()
+
+        # Clear session
+        request.session.pop("password_reset_user", None)
+
+        messages.success(request, "Password reset successful. Please login.")
+        return redirect("userauths:sign-in")
+
+    return render(request, "landing/verify_otp.html", {"user": user})
