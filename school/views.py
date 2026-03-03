@@ -5049,6 +5049,8 @@ def universal_excel_upload(request):
                             if parent_user_created:
                                 parent_user.set_password(parent_password)
                                 parent_user.save()
+                                _send_sms_via_eujim(parent_phone, msg)
+
 
                             # Create or get Parent profile
                             parent_obj, parent_created = Parent.objects.get_or_create(
@@ -5135,7 +5137,7 @@ def universal_excel_upload(request):
                     print(msg)
                     logger.info(f"Teacher created: {email}{msg}")
                     # send_email(email, "Teacher Credentials", msg)
-                    # _send_sms_via_eujim(phone, msg)
+                    _send_sms_via_eujim(phone, msg)
 
                     results["created"] += 1
 
@@ -5343,6 +5345,7 @@ def universal_excel_upload(request):
                             user.save()
 
                         logger.info(f"Parent user {'created' if created else 'exists'}: {email} (password: {password})")
+                        _send_sms_via_eujim(phone, f"Your password is: {password}")
 
                         # Create or get Parent profile
                         parent, _ = Parent.objects.get_or_create(
