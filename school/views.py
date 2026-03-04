@@ -5049,6 +5049,8 @@ def universal_excel_upload(request):
                             if parent_user_created:
                                 parent_user.set_password(parent_password)
                                 parent_user.save()
+                                msg = f"Parent Login\nEmail: {parent_phone}\nPassword: {parent_password}"
+
                                 _send_sms_via_eujim(parent_phone, msg)
 
 
