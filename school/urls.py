@@ -14,16 +14,17 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('policy-dashboard/', views.policymaker_dashboard, name='policy-dashboard'),
     
-    # Grades Management
+    # grades
     path('grades/', views.school_grades, name='school-grades'),
     path('grades/create/', views.grade_create, name='grade-create'),
     path('grades/uploads/', views.upload_grade_file, name='upload-grade-file'),
     path('grades/<int:pk>/edit/', views.grade_edit, name='edit-grade'),
     path('grades/<int:pk>/delete/', views.grade_delete, name='delete-grade'),
 
-    # streams Management
+    # streams
     path("grade/<int:grade_id>/streams/", views.grade_streams_view, name="grade-streams"),
     path("grade/<int:grade_id>/streams/create/", views.create_stream, name="stream-create"),
+    path("stream/<int:stream_id>/edit/", views.edit_stream, name="stream-edit"),
     path("stream/<int:stream_id>/delete/", views.delete_stream, name="stream-delete"),
 
     # Term

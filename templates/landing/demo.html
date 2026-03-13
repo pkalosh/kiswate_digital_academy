@@ -2,99 +2,220 @@
 {% block title %}Demo | Kiswate Digital Learning{% endblock %}
 
 {% block content %}
-<section id="demo" style="padding:100px 0; background:linear-gradient(145deg, #0b0b0b, #141414);">
-  <div class="container">
-    <div class="row g-5 align-items-center">
-      
-      <!-- Left: Demo Form -->
-      <div class="col-lg-7" data-aos="fade-right">
-        <h2 class="section-title text-white fw-bold mb-3">Ready to Modernize Your Campus?</h2>
-        <p class="section-sub text-secondary fs-5 mb-4">Book a 30-minute walkthrough. We’ll connect a demo device and show live events flowing into the cloud.</p>
-        <div class="divider mb-5"></div>
-        
-        <form class="row g-4 shadow-lg p-4 rounded-4 bg-dark bg-opacity-25 backdrop-blur">
-          <div class="col-md-6">
-            <label class="form-label text-light fw-semibold">School Name</label>
-            <input class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3" placeholder="e.g., Sunrise Academy" />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label text-light fw-semibold">Contact Email</label>
-            <input type="email" class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3" placeholder="admin@school.ac.ke" />
-          </div>
-          <div class="col-12">
-            <label class="form-label text-light fw-semibold">Message</label>
-            <textarea class="form-control bg-white text-dark border-0 shadow-sm rounded-3" rows="4" placeholder="Tell us about your campuses and devices…"></textarea>
-          </div>
-          <div class="col-12 text-end mt-3">
-            <button class="btn btn-green py-3 px-5 fw-semibold rounded-3 shadow">Request Demo</button>
-          </div>
-        </form>
-      </div>
+<section id="demo" style="padding:100px 0; background:linear-gradient(145deg,#0b0b0b,#141414);">
 
-      <!-- Right: Info Card -->
-      <div class="col-lg-5" data-aos="fade-left">
-        <div class="hero-card bg-gradient-dark p-5 rounded-4 shadow-lg text-white h-100">
-          <h5 class="fw-bold mb-4 text-green">Why SchoolCloud?</h5>
-          <ul class="small text-secondary mb-0 ps-3">
-            <li class="mb-3">🇰🇪 Built for local realities (M-Pesa, offline-ready)</li>
-            <li class="mb-3">⚡ Fast rollout – no local servers needed</li>
-            <li>🌍 Scales from one gate to nationwide networks</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="container">
+
+<div class="row g-5 align-items-center">
+
+<!-- LEFT: FORM -->
+<div class="col-lg-7" data-aos="fade-right">
+
+<h2 class="section-title text-white fw-bold mb-3">
+Ready to Modernize Your Learning Institution?
+</h2>
+
+<p class="section-sub text-secondary fs-5 mb-4">
+Book a 30-minute walkthrough. We'll connect a demo device and show live events flowing into the cloud.
+</p>
+
+<div class="divider mb-5"></div>
+
+
+<!-- Django Messages -->
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+{{ message }}
+<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+
+<form method="POST" class="row g-4 shadow-lg p-4 rounded-4 bg-dark bg-opacity-25 backdrop-blur">
+
+{% csrf_token %}
+
+<!-- Contact Info -->
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">First Name</label>
+<input name="first_name" required
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3"
+placeholder="John">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Last Name</label>
+<input name="last_name" required
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3"
+placeholder="Doe">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Email</label>
+<input type="email" name="email_address" required
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3"
+placeholder="admin@school.ac.ke">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Phone</label>
+<input name="contact_phone" required
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3"
+placeholder="+254712345678">
+</div>
+
+<!-- School Info -->
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">School Name</label>
+<input name="school_name"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3"
+placeholder="Sunrise Academy">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">School Category</label>
+<select name="school_category"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+
+<option value="">Select Category</option>
+<option value="C1">National</option>
+<option value="C2">Extra County</option>
+<option value="C3">County</option>
+<option value="C4">Sub County / Day</option>
+
+</select>
+</div>
+
+<!-- Location -->
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">County</label>
+<input name="county"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Sub County</label>
+<input name="sub_county"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Constituency</label>
+<input name="constituency"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+</div>
+
+<div class="col-md-6">
+<label class="form-label text-light fw-semibold">Ward</label>
+<input name="ward"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+</div>
+
+<div class="col-md-12">
+<label class="form-label text-light fw-semibold">City / Town</label>
+<input name="city"
+class="form-control form-control-lg bg-white text-dark border-0 shadow-sm rounded-3">
+</div>
+
+<div class="col-12">
+<label class="form-label text-light fw-semibold">Address</label>
+<textarea name="address"
+class="form-control bg-white text-dark border-0 shadow-sm rounded-3"
+rows="2"></textarea>
+</div>
+
+<div class="col-12">
+<label class="form-label text-light fw-semibold">Message</label>
+<textarea name="message"
+class="form-control bg-white text-dark border-0 shadow-sm rounded-3"
+rows="4"
+placeholder="Tell us about your campuses and devices…"></textarea>
+</div>
+
+<div class="col-12 text-end mt-3">
+
+<button class="btn btn-green py-3 px-5 fw-semibold rounded-3 shadow">
+Request Demo
+</button>
+
+</div>
+
+</form>
+</div>
+
+
+<!-- RIGHT INFO -->
+<div class="col-lg-5" data-aos="fade-left">
+
+<div class="hero-card bg-gradient-dark p-5 rounded-4 shadow-lg text-white h-100">
+
+<h5 class="fw-bold mb-4 text-green">Why Kiswate?</h5>
+
+<ul class="small text-secondary mb-0 ps-3">
+
+<li class="mb-3">🇰🇪 Built for Kenyan schools</li>
+<li class="mb-3">⚡ No local servers required</li>
+<li class="mb-3">📊 Real-time attendance analytics</li>
+<li>🌍 Scales from one school to nationwide networks</li>
+
+</ul>
+
+</div>
+
+</div>
+
+</div>
+</div>
 </section>
 {% endblock %}
 
 <style>
-  /* Divider reuse from pricing */
-  .divider {
-    width: 100px;
-    height: 3px;
-    background: #00b871;
-    border-radius: 3px;
-  }
+  .divider{
+width:100px;
+height:3px;
+background:#00b871;
+border-radius:3px;
+}
 
-  /* Green accent */
-  .text-green {
-    color: #00b871 !important;
-  }
+.text-green{
+color:#00b871!important;
+}
 
-  /* Button style */
-  .btn-green {
-    background: #00b871;
-    color: #fff;
-    border: none;
-    transition: all 0.3s ease;
-  }
+.btn-green{
+background:#00b871;
+color:#fff;
+border:none;
+transition:all .3s ease;
+}
 
-  .btn-green:hover {
-    background: #00d680;
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 0 20px rgba(0, 184, 113, 0.4);
-  }
+.btn-green:hover{
+background:#00d680;
+transform:translateY(-2px);
+box-shadow:0 0 20px rgba(0,184,113,.4);
+}
 
-  /* Card background */
-  .hero-card {
-    background: linear-gradient(160deg, #121212, #1c1c1c);
-    border: 1px solid rgba(255,255,255,0.08);
-  }
+.hero-card{
+background:linear-gradient(160deg,#121212,#1c1c1c);
+border:1px solid rgba(255,255,255,.08);
+}
 
-  /* Form field focus effects */
-  .form-control:focus {
-    box-shadow: 0 0 0 0.25rem rgba(0, 184, 113, 0.25);
-    border-color: #00b871;
-  }
+.form-control:focus{
+box-shadow:0 0 0 .25rem rgba(0,184,113,.25);
+border-color:#00b871;
+}
 
-  /* Responsiveness */
-  @media (max-width: 768px) {
-    #demo {
-      padding: 60px 0;
-    }
-    .hero-card {
-      margin-top: 40px;
-    }
-  }
+@media(max-width:768px){
+
+#demo{
+padding:60px 0;
+}
+
+.hero-card{
+margin-top:40px;
+}
+
+}
 </style>
   

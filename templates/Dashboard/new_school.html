@@ -1,10 +1,23 @@
 <!-- templates/Dashboard/new_school.html -->
-{% extends 'Dashboard/base.html' %}
+{% extends 'Dashboard/admindash-base.html' %}
 {% load static %}
 {% block title %}New School | Dashboard{% endblock %}
 
 {% block content %}
   <header class="header d-flex align-items-center justify-content-between">
+        {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
       <div>

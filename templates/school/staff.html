@@ -1,322 +1,108 @@
 {% extends 'school/base.html' %}
 {% load static %}
-{% load widget_tweaks form_extras %}
+{% load widget_tweaks custom_filters %}
 {% block title %}School Users | {{ school.name }}{% endblock %}
+
 {% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3">School Users - {{ school.name }}</h2>
+
+    <!-- ---------------- SEARCH ---------------- -->
+    <form method="get" class="mb-3">
+        <div class="input-group">
+            <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search users...">
+            <button type="submit" class="btn btn-green">
+                <i class="fa fa-search"></i> Search
+            </button>
+        </div>
+    </form>
+
+    <!-- ---------------- TABS ---------------- -->
+    <ul class="nav nav-tabs mb-3" id="userTabs">
+        <li class="nav-item">
+            <a class="nav-link {% if request.GET.tab == 'teachers' or not request.GET.tab %}active{% endif %}" data-bs-toggle="tab" href="#teachers-tab">Teachers</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.GET.tab == 'staff' %}active{% endif %}" data-bs-toggle="tab" href="#staff-tab">Other Staff</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.GET.tab == 'students' %}active{% endif %}" data-bs-toggle="tab" href="#students-tab">Students</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if request.GET.tab == 'parents' %}active{% endif %}" data-bs-toggle="tab" href="#parents-tab">Parents</a>
+        </li>
+    </ul>
+
+    <!-- ---------------- TAB CONTENT ---------------- -->
+    <div class="tab-content">
+
+        <!-- TEACHERS -->
+        <div class="tab-pane fade {% if request.GET.tab == 'teachers' or not request.GET.tab %}show active{% endif %}" id="teachers-tab">
+            <div class="mb-2">
+                <button class="btn btn-green" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+                    <i class="fa fa-plus"></i> New Teacher
+                </button>
+            </div>
+            {% include 'school/partials/_teachers.html' %}
+        </div>
+
+        <!-- OTHER STAFF -->
+        <div class="tab-pane fade {% if request.GET.tab == 'staff' %}show active{% endif %}" id="staff-tab">
+            <div class="mb-2">
+                <button class="btn btn-green" data-bs-toggle="modal" data-bs-target="#createStaffModal">
+                    <i class="fa fa-plus"></i> New Staff
+                </button>
+            </div>
+            {% include 'school/partials/_staff_other.html' %}
+        </div>
+
+        <!-- STUDENTS -->
+        <div class="tab-pane fade {% if request.GET.tab == 'students' %}show active{% endif %}" id="students-tab">
+            <div class="mb-2">
+                <button class="btn btn-green" data-bs-toggle="modal" data-bs-target="#createStudentModal">
+                    <i class="fa fa-plus"></i> New Student
+                </button>
+            </div>
+            {% include 'school/partials/_students.html' %}
+        </div>
+
+        <!-- PARENTS -->
+        <div class="tab-pane fade {% if request.GET.tab == 'parents' %}show active{% endif %}" id="parents-tab">
+            <div class="mb-2">
+                <button class="btn btn-green" data-bs-toggle="modal" data-bs-target="#createParentModal">
+                    <i class="fa fa-plus"></i> New Parent
+                </button>
+                <button class="btn btn-green" data-bs-toggle="modal" data-bs-target="#createParentStudentModal">
+                    <i class="fa fa-link"></i> New Parent + Student
+                </button>
+            </div>
+            {% include 'school/partials/_parents.html' %}
+        </div>
+
+    </div>
+</div>
+
+<!-- ---------------- GLOBAL CREATE MODALS ---------------- -->
+{% include 'school/partials/modals.html' %}
+
+<!-- ---------------- CUSTOM CSS ---------------- -->
 <style>
-.nav-tabs .nav-link:hover {
-    color: black !important;
-}
 .nav-tabs .nav-link.active {
-    background-color: green !important;
-    color: black !important;
-    border-color: green !important;
+    background-color: #28a745 !important;
+    color: white !important;
+    border-color: #28a745 #28a745 #fff !important;
+}
+.nav-tabs .nav-link:hover {
+    color: #28a745 !important;
+}
+.btn-green {
+    background-color: #28a745;
+    color: white;
+    border: none;
+}
+.btn-green:hover {
+    background-color: #218838;
+    color: white;
 }
 </style>
-
-<section class="content container-fluid py-4">
-    <!-- System Messages -->
-    {% if messages %}
-    <div class="row">
-        {% for message in messages %}
-        <div class="col-12">
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message|safe }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <div class="container">
-        <h2 class="mb-4">School Users Management</h2>
-
-        <!-- Global Search -->
-        <form method="GET" class="mb-4">
-            <div class="input-group">
-                <input type="text" name="q" class="form-control" placeholder="Search all users..." value="{{ query }}">
-                <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
-            </div>
-        </form>
-
-        <!-- NAV TABS -->
-        <ul class="nav nav-tabs mb-4" id="userTabs">
-            <li class="nav-item">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#teachers">Teachers</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#staff">Other Staff</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#students">Students</button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#parents">Parents</button>
-            </li>
-        </ul>
-
-        <div class="tab-content">
-            <!-- ======================= TEACHERS TAB ======================= -->
-            <div class="tab-pane fade show active" id="teachers">
-                <div class="d-flex justify-content-end mb-3">
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createStaffModal">
-                        <i class="bi bi-plus-circle"></i> Create Staff
-                    </button>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th><th>Subject</th><th>Class</th><th>Stream</th><th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for t in teachers_page %}
-                            <tr>
-                                <td>{{ t.user.first_name }} {{ t.user.last_name }}</td>
-                                <td>{% for s in t.subjects.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-                                <td>{% for s in t.subjects.all %}{{ s.grade }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-                                <td>{{ t.stream }}</td>
-                                <td class="d-flex gap-1">
-                                    <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewStaffModal{{ t.id }}">
-                                        <i class="bi bi-eye"></i> View
-                                    </button>
-                                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStaffModal{{ t.id }}">
-                                        <i class="bi bi-pencil-square"></i> Edit
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteStaffModal{{ t.id }}">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="5" class="text-center">No teachers found.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% include 'school/partials/pagination.html' with page_obj=teachers_page %}
-            </div>
-
-            <!-- ======================= OTHER STAFF TAB ======================= -->
-            <div class="tab-pane fade" id="staff">
-                <div class="d-flex justify-content-end mb-3">
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createStaffModal">
-                        <i class="bi bi-plus-circle"></i> Create Staff
-                    </button>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr><th>Name</th><th>Role</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody>
-                            {% for s in staff_page_other %}
-                            <tr>
-                                <td>{{ s.user.first_name }} {{ s.user.last_name }}</td>
-                                <td>{{ s.position }}</td>
-                                <td class="d-flex gap-1">
-                                    <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewStaffModal{{ s.id }}">
-                                        <i class="bi bi-eye"></i> View
-                                    </button>
-                                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStaffModal{{ s.id }}">
-                                        <i class="bi bi-pencil-square"></i> Edit
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteStaffModal{{ s.id }}">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center">No other staff found.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% include 'school/partials/pagination.html' with page_obj=staff_page_other %}
-            </div>
-
-            <!-- ======================= STUDENTS TAB ======================= -->
-            <div class="tab-pane fade" id="students">
-                <div class="d-flex justify-content-end mb-3">
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createStudentModal">
-                        <i class="bi bi-plus-circle"></i> Create Student
-                    </button>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead><tr><th>Name</th><th>Class</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            {% for st in students_page %}
-                            <tr>
-                                <td>{{ st.user.first_name }} {{ st.user.last_name }}</td>
-                                <td>{{ st.grade_level|default:"N/A" }}</td>
-                                <td class="d-flex gap-1">
-                                    <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewStudentModal{{ st.id }}">
-                                        <i class="bi bi-eye"></i> View
-                                    </button>
-                                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editStudentModal{{ st.id }}">
-                                        <i class="bi bi-pencil-square"></i> Edit
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteStudentModal{{ st.id }}">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-center">No students found.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% include 'school/partials/pagination.html' with page_obj=students_page %}
-            </div>
-
-            <!-- ======================= PARENTS TAB ======================= -->
-            <div class="tab-pane fade" id="parents">
-                <div class="d-flex justify-content-end mb-3 gap-2 flex-wrap">
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createParentModal">
-                        <i class="bi bi-plus-circle"></i> Create Parent
-                    </button>
-                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createParentStudentModal">
-                        <i class="bi bi-people"></i> Create Parent + Student
-                    </button>
-                    <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#assignStudentModal">
-                        <i class="bi bi-person-plus"></i> Assign Student
-                    </button>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead><tr><th>Parent Name</th><th>Phone</th><th>Students</th><th>Actions</th></tr></thead>
-                        <tbody>
-                            {% for p in parents_page %}
-                            <tr>
-                                <td>{{ p.user.first_name }} {{ p.user.last_name }}</td>
-                                <td>{{ p.phone|default:"N/A" }}</td>
-                                <td>
-                                    {% for child in p.student_set.all %}
-                                    <span class="badge bg-primary me-1 mb-1">{{ child.user.get_full_name }}</span>
-                                    {% empty %}
-                                    <span class="text-muted">No students</span>
-                                    {% endfor %}
-                                </td>
-                                <td class="d-flex gap-1">
-                                    <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#viewParentModal{{ p.id }}">
-                                        <i class="bi bi-eye"></i> View
-                                    </button>
-                                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editParentModal{{ p.id }}">
-                                        <i class="bi bi-pencil-square"></i> Edit
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteParentModal{{ p.id }}">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="4" class="text-center">No parents found.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% include 'school/partials/pagination.html' with page_obj=parents_page %}
-            </div>
-        </div>
-
-        <!-- ======================= DELETE MODALS ======================= -->
-        {% for t in teachers_page %}
-        <div class="modal fade" id="deleteStaffModal{{ t.id }}">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">Delete teacher <strong>{{ t.user.get_full_name }}</strong>?</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <a href="{% url 'school:delete_staff' t.id %}" class="btn btn-danger">Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-
-        {% for s in staff_page_other %}
-        <div class="modal fade" id="deleteStaffModal{{ s.id }}">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">Delete staff <strong>{{ s.user.get_full_name }}</strong>?</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <a href="{% url 'school:delete_staff' s.id %}" class="btn btn-danger">Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-
-        {% for st in students_page %}
-        <div class="modal fade" id="deleteStudentModal{{ st.id }}">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">Delete student <strong>{{ st.user.get_full_name }}</strong>?</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <a href="{% url 'school:delete_student' st.id %}" class="btn btn-danger">Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-
-        {% for p in parents_page %}
-        <div class="modal fade" id="deleteParentModal{{ p.id }}">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">Delete parent <strong>{{ p.user.get_full_name }}</strong>?</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <a href="{% url 'school:delete_parent' p.id %}" class="btn btn-danger">Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-
-    </div>
-</section>
-
-<!-- Select2 CSS/JS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    $('.select2').select2({
-        theme: 'bootstrap-5',
-        width: '100%',
-        placeholder: "Select options..."
-    });
-});
-</script>
 {% endblock %}

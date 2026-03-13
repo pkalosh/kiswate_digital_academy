@@ -7,6 +7,19 @@
   <div class="d-flex align-items-center gap-2">
     <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
     <div>
+          {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
       <h6 class="m-0 fw-bold">Subscription Plans</h6>
       <nav aria-label="breadcrumb" class="small">
         <ol class="breadcrumb mb-0">

@@ -1,0 +1,142 @@
+{% load widget_tweaks custom_filters %}
+<h5 class="mt-4">Other Staff Members</h5>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for staff in staff_page_other %}
+        <tr>
+            <td>{{ staff.user.get_full_name }}</td>
+            <td>{{ staff.position|title }}</td>
+            <td>{{ staff.user.email }}</td>
+            <td>{{ staff.user.phone_number }}</td>
+            <td>
+                <button type="button" class="btn btn-sm btn-green" data-bs-toggle="modal" data-bs-target="#editStaffOtherModal{{ staff.id }}">Edit</button>
+                <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#viewStaffOtherModal{{ staff.id }}">View</button>
+                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteStaffOtherModal{{ staff.id }}">Delete</button>
+            </td>
+        </tr>
+
+        {# ---------------- EDIT MODAL ---------------- #}
+        <div class="modal fade" id="editStaffOtherModal{{ staff.id }}" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="edit_staff_other">
+                        <input type="hidden" name="staff_id" value="{{ staff.id }}">
+
+                        <div class="modal-header">
+                            <h5 class="modal-title">Edit {{ staff.user.get_full_name }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        <div class="modal-body">
+                            {% with other_staff_forms|dict_get:staff.id as form %}
+                                {% if form %}
+                                    {% for field in form %}
+                                        <div class="mb-3">
+                                            <label class="form-label">{{ field.label }}</label>
+                                            {% if field.field.widget.input_type != 'checkbox' %}
+                                                {{ field|add_class:"form-control" }}
+                                            {% else %}
+                                                {{ field }}
+                                            {% endif %}
+                                            {% if field.errors %}
+                                                <div class="text-danger">{{ field.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted">No fields available for editing.</p>
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-green">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# ---------------- VIEW MODAL ---------------- #}
+        <div class="modal fade" id="viewStaffOtherModal{{ staff.id }}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Staff Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>Name:</strong> {{ staff.user.get_full_name }}</p>
+                        <p><strong>Email:</strong> {{ staff.user.email }}</p>
+                        <p><strong>Phone:</strong> {{ staff.user.phone_number }}</p>
+                        <p><strong>Role:</strong> {{ staff.position|title }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-green" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ---------------- DELETE MODAL ---------------- #}
+        <div class="modal fade" id="deleteStaffOtherModal{{ staff.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_staff_other">
+                        <input type="hidden" name="staff_id" value="{{ staff.id }}">
+                        <div class="modal-header">
+                            <h5 class="modal-title text-danger">Confirm Delete</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            Are you sure you want to delete <strong>{{ staff.user.get_full_name }}</strong>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {% endfor %}
+    </tbody>
+</table>
+
+{# ---------------- PAGINATION ---------------- #}
+<nav aria-label="Page navigation">
+    <ul class="pagination">
+        {% if staff_page_other.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?staff_page_other={{ staff_page_other.previous_page_number }}&tab=staff">&laquo; Prev</a>
+        </li>
+        {% endif %}
+
+        {% for page_num in staff_page_other.paginator.page_range %}
+        <li class="page-item {% if staff_page_other.number == page_num %}active{% endif %}">
+            <a class="page-link" href="?staff_page_other={{ page_num }}&tab=staff">{{ page_num }}</a>
+        </li>
+        {% endfor %}
+
+        {% if staff_page_other.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?staff_page_other={{ staff_page_other.next_page_number }}&tab=staff">Next &raquo;</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>

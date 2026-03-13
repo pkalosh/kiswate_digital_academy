@@ -30,6 +30,8 @@
     <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createSchoolModal">
         <i class="bi bi-plus-circle me-2"></i>Add New School
     </button>
+
+
 </header>
 
 <section class="content container-fluid py-4">
@@ -38,7 +40,18 @@
     <div class="card shadow-sm border-0 rounded-4">
     <div class="card-body">
     <div class="table-responsive">
-
+        {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
     <table class="table table-hover align-middle">
         <thead class="table-light">
         <tr>

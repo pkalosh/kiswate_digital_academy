@@ -305,6 +305,17 @@ def export_attendance_pdf(request):
 def dashboard(request):
     # ------------------- User & School -------------------
     user = request.user
+    # ------------------- Role Authorization -------------------
+    if not (
+        user.is_admin
+        # or user.school_staff
+        or user.is_principal
+        or user.is_deputy_principal
+    ):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+    print(f"User {user.email} accessed the dashboard.")
+
     school = getattr(user, "school_admin_profile", None)
     if not school:
         return render(request, "school/error.html", {"message": "No school profile found."})
@@ -702,67 +713,51 @@ def delete_term(request, term_id):
 #     return render(request, "school/staff.html", context)
 
 
-def paginate(request, queryset, per_page=10):
-    """Helper for pagination (implement as needed)."""
-    from django.core.paginator import Paginator
+from django.core.paginator import Paginator
+
+
+def paginate(request, queryset, per_page=10, page_param='page'):
+    """Paginate a queryset with a custom GET parameter."""
     paginator = Paginator(queryset, per_page)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get(page_param)
     return paginator.get_page(page_number)
+
 
 @login_required
 def school_users(request):
-    """
-    Unified view for managing school members (teachers, staff, students, parents).
-    Handles listing with search/filter across tabs.
-    Handles creation via POST from modals (separate forms for flexibility).
-    Optimized for large schools: paginated forms, limited query fields.
-    """
+    """Unified view for teachers, staff, students, parents with search, forms, and pagination."""
+
     # ── Get school instance
-    school = None
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        try:
-            school = request.user.staffprofile.school
-        except AttributeError as e:
-            logger.warning(f"Permission denied for user {request.user.email}: {e}")
-            messages.error(request, f"You do not have permission to access this page.")
-            return redirect('userauths:sign-in')
+    school = getattr(request.user, 'school_admin_profile', None) or getattr(getattr(request.user, 'staffprofile', None), 'school', None)
+    if not school:
+        messages.error(request, "You do not have permission to access this page.")
+        return redirect('userauths:sign-in')
 
     query = request.GET.get('q', '').strip()
 
     # ─────────────────────────────
     # TEACHERS
     # ─────────────────────────────
-    teachers = StaffProfile.objects.filter(
-        school=school, position='teacher'
-    ).select_related('user').only(
+    teachers = StaffProfile.objects.filter(school=school, position='teacher').select_related('user').only(
         'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number'
     ).order_by('-id')
     if query:
-        teachers = teachers.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query)
-        )
-    teachers_page = paginate(request, teachers)
-    # Forms for current page only
-    staff_update_forms = {s.id: StaffUpdateForm(instance=s) for s in teachers_page}
+        teachers = teachers.filter(Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
+    teachers_page = paginate(request, teachers, page_param='teachers_page')
+
+    # Create a dict keyed by teacher ID for template
+    teachers_forms = {t.id: StaffUpdateForm(instance=t, prefix=f'teacher_{t.id}') for t in teachers_page}
 
     # ─────────────────────────────
     # OTHER STAFF
     # ─────────────────────────────
-    other_staff = StaffProfile.objects.filter(
-        school=school
-    ).exclude(position='teacher').select_related('user').only(
+    other_staff = StaffProfile.objects.filter(school=school).exclude(position='teacher').select_related('user').only(
         'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'position'
     ).order_by('-id')
     if query:
-        other_staff = other_staff.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query)
-        )
-    staff_page_other = paginate(request, other_staff)
-    staff_update_forms.update({s.id: StaffUpdateForm(instance=s) for s in staff_page_other})
+        other_staff = other_staff.filter(Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
+    staff_page_other = paginate(request, other_staff, page_param='staff_page_other')
+    other_staff_forms = {s.id: StaffUpdateForm(instance=s, prefix=f'staff_{s.id}') for s in staff_page_other}
 
     # ─────────────────────────────
     # STUDENTS
@@ -779,8 +774,8 @@ def school_users(request):
             Q(user__email__icontains=query) |
             Q(grade_level__name__icontains=query)
         )
-    students_page = paginate(request, students)
-    student_update_forms = {st.id: StudentUpdateForm(instance=st) for st in students_page}
+    students_page = paginate(request, students, page_param='students_page')
+    students_forms = {st.id: StudentUpdateForm(instance=st, prefix=f'student_{st.id}') for st in students_page}
 
     # ─────────────────────────────
     # PARENTS
@@ -796,9 +791,10 @@ def school_users(request):
             Q(phone__icontains=query) |
             Q(user__email__icontains=query)
         )
-    parents_page = paginate(request, parents)
-    parent_update_forms = {p.id: ParentUpdateForm(instance=p) for p in parents_page}
+    parents_page = paginate(request, parents, page_param='parents_page')
+    parents_forms = {p.id: ParentUpdateForm(instance=p, prefix=f'parent_{p.id}') for p in parents_page}
 
+    # ── Context
     context = {
         'school': school,
         'query': query,
@@ -806,9 +802,11 @@ def school_users(request):
         'staff_page_other': staff_page_other,
         'students_page': students_page,
         'parents_page': parents_page,
-        'student_update_forms': student_update_forms,
-        'parent_update_forms': parent_update_forms,
-        'staff_update_forms': staff_update_forms,
+        'teachers_forms': teachers_forms,
+        'other_staff_forms': other_staff_forms,
+        'students_forms': students_forms,
+        'parents_forms': parents_forms,
+        # Creation forms
         'student_form': StudentCreationForm(school=school),
         'parent_form': ParentCreationForm(school=school),
         'parent_student_form': ParentStudentCreationForm(school=school),
@@ -816,129 +814,11 @@ def school_users(request):
         'staff_form': StaffCreationForm(school=school),
     }
 
-    # Handle POST for creations
+    # ── Handle POST (create/update actions)
     if request.method == 'POST':
-        action = request.POST.get('action', '')
-
-        if action == 'create_student':
-            form = StudentCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Unpack tuple from form.save() (student, password)
-                        student, password = form.save()
-                        # Ensure school_id is set (form should already set via self.school)
-                        if not student.school_id:
-                            student.school_id = school.id
-                            student.save(update_fields=['school_id'])
-                        messages.success(
-                            request,
-                            f'Successfully created Student "{student.user.get_full_name()}" ({student.student_id}). '
-                            f'Grade: {student.grade_level}. '
-                            f'Temporary password: <strong>{password}</strong>. '
-                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
-                        )
-                        # Map parents if selected
-                        for parent in form.cleaned_data.get('parents', []):
-                            student.parents.add(parent)
-                        return redirect('school:school-users')
-                except Exception as e:
-                    messages.error(request, f"Failed to create Student: {str(e)}")
-            else:
-                messages.error(request, "Please correct the form errors below.")
-                context['student_form'] = form
-
-        elif action == 'create_parent':
-            form = ParentCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Unpack tuple
-                        parent, password = form.save()
-                        # Ensure school_id is set
-                        if not parent.school_id:
-                            parent.school_id = school.id
-                            parent.save(update_fields=['school_id'])
-                        messages.success(
-                            request,
-                            f'Successfully created Parent "{parent.user.get_full_name()}" ({parent.parent_id}). '
-                            f'Temporary password: <strong>{password}</strong>. '
-                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
-                        )
-                        return redirect('school:school-users')
-                except Exception as e:
-                    messages.error(request, f"Failed to create Parent: {str(e)}")
-            else:
-                messages.error(request, "Please correct the form errors below.")
-                context['parent_form'] = form
-
-        elif action == 'create_parent_student':
-            form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Unpack 4-tuple
-                        parent, student, parent_password, student_password = form.save()
-                        # Ensure school_id on both (form should set via self.school)
-                        if not parent.school_id:
-                            parent.school_id = school.id
-                            parent.save(update_fields=['school_id'])
-                        if not student.school_id:
-                            student.school_id = school.id
-                            student.save(update_fields=['school_id'])
-                        # Link
-                        student.parents.add(parent)
-                        messages.success(
-                            request,
-                            f'Successfully created Parent "{parent.user.get_full_name()}" and Student "{student.user.get_full_name()}". '
-                            f'They have been linked. Emails sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
-                        )
-                        return redirect('school:school-users')
-                except Exception as e:
-                    messages.error(request, f"Failed to create Parent and Student: {str(e)}")
-            else:
-                messages.error(request, "Please correct the form errors below.")
-                context['parent_student_form'] = form
-
-        elif action == 'create_staff':
-            form = StaffCreationForm(request.POST, request.FILES, school=school)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Unpack tuple
-                        staff, password = form.save()
-                        # Ensure school_id is set
-                        if not staff.school_id:
-                            staff.school_id = school.id
-                            staff.save(update_fields=['school_id'])
-                        messages.success(
-                            request,
-                            f'Successfully created Staff "{staff.user.get_full_name()}". '
-                            f'Temporary password: <strong>{password}</strong>. '
-                            f'Email sent: {"Yes" if form.cleaned_data.get("send_email") else "No"}.'
-                        )
-                        return redirect('school:school-users')
-                except Exception as e:
-                    messages.error(request, f"Failed to create Staff: {str(e)}")
-            else:
-                messages.error(request, "Please correct the form errors below.")
-                context['staff_form'] = form
-
-        elif action == 'assign_parent_student':
-            form = AssignParentStudentForm(request.POST, school=school)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        parent = form.cleaned_data['parent']
-                        student = form.cleaned_data['student']
-                        student.parents.add(parent)
-                        messages.success(request, f'Successfully assigned student "{student.user.get_full_name()}" to parent "{parent.user.get_full_name()}".')
-                        return redirect('school:school-users')
-                except Exception as e:
-                    messages.error(request, f"Failed to assign: {str(e)}")
-            else:
-                messages.error(request, "Please correct the form errors below.")
-                context['assign_form'] = form
+        action = request.POST.get('action')
+        # handle create/update forms here
+        # make sure to rebind invalid forms to context if form.is_valid() is False
 
     return render(request, 'school/staff.html', context)
 
@@ -1547,6 +1427,7 @@ def grade_create(request):
     if form.is_valid():
         grade = form.save(commit=False)
         grade.school = school
+        grade.is_active = True
         grade.save()
         messages.success(request, f'Grade "{grade.name}" created successfully.')
         logger.info(f"Created grade {grade.name} for school {school.name} by {request.user.email}.")
@@ -2376,6 +2257,7 @@ def enrollment_delete(request, pk):
         return redirect('school:school-enrollment')
     return redirect('school:school-enrollment')
 
+
 @login_required
 def school_timetable(request):
     """
@@ -2383,28 +2265,33 @@ def school_timetable(request):
     Displays lessons/sessions under each timetable.
     """
     try:
-        school = request.user.school_admin_profile  # Adjust based on your User extension
+        school = request.user.school_admin_profile
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('school:dashboard')
-    
+
     query = request.GET.get('q', '')
-    timetables = Timetable.objects.filter(school=school).select_related('grade').order_by('-year', 'term')
+    timetables = Timetable.objects.filter(
+        school=school, is_active=True
+    ).select_related('grade').order_by('-year', 'term')
+
     if query:
         timetables = timetables.filter(
-            Q(grade__name__icontains=query) | Q(term__icontains=query) | Q(year__icontains=query)
+            Q(grade__name__icontains=query) |
+            Q(term__icontains=query) |
+            Q(year__icontains=query)
         )
-    
+
     # Pagination
     paginator = Paginator(timetables, 10)
     page_number = request.GET.get('page')
     timetables_page = paginator.get_page(page_number)
-    
+
     # For each timetable, fetch sample lessons (limit to avoid overload)
     timetables_with_lessons = []
     for tt in timetables_page:
-        lessons_qs = Lesson.objects.filter(timetable=tt).select_related('subject', 'teacher').order_by('date', 'start_time')[:20]
-        lessons_count = Lesson.objects.filter(timetable=tt).count()
+        lessons_qs = Lesson.objects.filter(timetable=tt).select_related('subject', 'teacher', 'stream', 'time_slot').order_by('lesson_date')
+        lessons_count = lessons_qs.count()
         timetables_with_lessons.append({
             'timetable': tt,
             'lessons': lessons_qs,
@@ -2412,14 +2299,18 @@ def school_timetable(request):
             'active': timezone.now().date() >= tt.start_date and timezone.now().date() <= tt.end_date,
         })
 
-    
-    form = TimetableForm(school=school)
+    # Instantiate forms
+    timetable_form = TimetableForm(school=school)
+    lesson_form = LessonForm(school=school)  # Pass school if your form requires it
+
     context = {
         'timetables': timetables_with_lessons,
-        'form': form,
+        'form': timetable_form,
+        'lesson_form': lesson_form,  # <-- pass to template
         'school': school,
         'query': query,
     }
+
     return render(request, 'school/timetable.html', context)
 
 @login_required
@@ -2693,12 +2584,15 @@ def lesson_edit(request, lesson_id):
         form = LessonForm(request.POST, instance=lesson, school=school)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Lesson for {lesson.subject} on {lesson.date} updated.')
+            messages.success(request, f'Lesson for {lesson.subject} on {lesson.lesson_date} updated.')
         else:
             for field, errors in form.errors.items():
                 for error in errors:
-                    messages.error(request, f"{form.fields[field].label}: {error}")
-    return redirect('school:lesson-list', timetable_id=lesson.timetable.id)
+                    if field == '__all__':
+                        messages.error(request, error)
+                    else:
+                        messages.error(request, f"{form.fields[field].label}: {error}")
+    return redirect('school:school-timetable')
 
 
 @login_required
@@ -4332,33 +4226,76 @@ def mpesa_payment_callback(request):
 
 @login_required
 def grade_streams_view(request, grade_id):
-    grade = get_object_or_404(Grade, id=grade_id)
-    streams = grade.streams.all().values("id", "name")
 
-    return JsonResponse(list(streams), safe=False)
+    school = request.user.school_admin_profile
+    grade = get_object_or_404(Grade, id=grade_id, school=school)
+
+    streams = grade.streams.filter(is_active=True).order_by("name")
+
+    data = [
+        {
+            "id": s.id,
+            "name": s.name
+        }
+        for s in streams
+    ]
+
+    return JsonResponse(data, safe=False)
 
 @login_required
 def create_stream(request, grade_id):
-    grade = get_object_or_404(Grade, id=grade_id)
+
+    school = request.user.school_admin_profile
+    grade = get_object_or_404(Grade, id=grade_id, school=school)
 
     if request.method == "POST":
+
         form = StreamForm(request.POST)
+
         if form.is_valid():
             stream = form.save(commit=False)
             stream.grade = grade
-            stream.school = grade.school
+            stream.school = school
             stream.save()
+
             messages.success(request, "Stream added successfully.")
+
         else:
-            messages.error(request, "Failed to create stream. Check form inputs.")
+            messages.error(request, "Failed to create stream.")
 
     return redirect("school:school-grades")
 
 @login_required
+def edit_stream(request, stream_id):
+
+    school = request.user.school_admin_profile
+    stream = get_object_or_404(Streams, id=stream_id, school=school)
+
+    if request.method == "POST":
+
+        form = StreamForm(request.POST, instance=stream)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Stream updated successfully.")
+
+        else:
+            messages.error(request, "Failed to update stream.")
+
+    return redirect("school:school-grades")
+@login_required
 def delete_stream(request, stream_id):
-    stream = get_object_or_404(Streams, id=stream_id)
-    stream.delete()
-    messages.success(request, "Stream deleted successfully.")
+
+    school = request.user.school_admin_profile
+    stream = get_object_or_404(Streams, id=stream_id, school=school)
+
+    if request.method == "POST":
+
+        stream.is_active = False
+        stream.save()
+
+        messages.success(request, "Stream deleted successfully.")
+
     return redirect("school:school-grades")
 
 
@@ -4756,6 +4693,8 @@ def populate_student_lesson_enrollments(school, grade=None, stream=None, term=No
 
 SUBJECT_CODE_MAP = {
     "MAT": "Mathematics",
+    "CMAT": "Core Maths",
+    "EMAT": "Essential Maths",
     "ENG": "English",
     "KISW": "Kiswahili",
     "CHEM": "Chemistry",
@@ -5051,7 +4990,7 @@ def universal_excel_upload(request):
                                 parent_user.save()
                                 msg = f"Parent Login\nEmail: {parent_phone}\nPassword: {parent_password}"
 
-                                _send_sms_via_eujim(parent_phone, msg)
+                                # _send_sms_via_eujim(parent_phone, msg)
 
 
                             # Create or get Parent profile
@@ -5347,7 +5286,7 @@ def universal_excel_upload(request):
                             user.save()
 
                         logger.info(f"Parent user {'created' if created else 'exists'}: {email} (password: {password})")
-                        _send_sms_via_eujim(phone, f"Your password is: {password}")
+                        # _send_sms_via_eujim(phone, f"Your password is: {password}")
 
                         # Create or get Parent profile
                         parent, _ = Parent.objects.get_or_create(

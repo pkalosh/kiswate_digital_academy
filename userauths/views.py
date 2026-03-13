@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from school.models import (
     Timetable,TeacherStreamAssignment,Streams, Term, Lesson, Session, Enrollment, Subject,
-    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment, Notification
+    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment, Notification,ContactMessage
 )
 from django.utils import timezone
 from collections import defaultdict
@@ -17,6 +17,12 @@ from userauths.backends import EmailBackend
 from school.views import send_email, _send_sms_via_eujim
 from django.db.models import Q
 import random
+from django_ratelimit.decorators import ratelimit
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def index(request):
     return render(request, "landing/index.html",{})
@@ -36,8 +42,109 @@ def pricing(request):
 def faqs(request):
     return render(request, "landing/faqs.html",{})
 
+
+def get_client_ip(request):
+
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(",")[0]
+    else:
+        ip = request.META.get("REMOTE_ADDR")
+
+    return ip
+
+
+@ratelimit(key='ip', rate='5/h', block=True)
 def demo(request):
-    return render(request, "landing/demo.html",{})
+
+    if request.method == "POST":
+
+        ip = get_client_ip(request)
+
+        first_name = request.POST.get("first_name")
+        last_name = request.POST.get("last_name")
+        email = request.POST.get("email_address")
+        phone = request.POST.get("contact_phone")
+        school_name = request.POST.get("school_name")
+
+        school_category = request.POST.get("school_category")
+
+        county = request.POST.get("county")
+        sub_county = request.POST.get("sub_county")
+        constituency = request.POST.get("constituency")
+        ward = request.POST.get("ward")
+        city = request.POST.get("city")
+        address = request.POST.get("address")
+
+        message = request.POST.get("message")
+
+        # prevent duplicate leads within 24 hrs
+        last_24hrs = timezone.now() - timedelta(hours=24)
+
+        duplicate = ContactMessage.objects.filter(
+            created_at__gte=last_24hrs
+        ).filter(
+            email_address=email
+        ).exists()
+
+        if duplicate:
+            messages.warning(
+                request,
+                "A demo request with this email was already submitted within the last 24 hours. Our team will contact you shortly."
+            )
+            return redirect("userauths:demo")
+
+        phone_exists = ContactMessage.objects.filter(
+            created_at__gte=last_24hrs,
+            contact_phone=phone
+        ).exists()
+
+        if phone_exists:
+            messages.warning(
+                request,
+                "A demo request with this phone number already exists. Our team will contact you shortly."
+            )
+            return redirect("userauths:demo")
+
+        school_exists = ContactMessage.objects.filter(
+            created_at__gte=last_24hrs,
+            school_name=school_name
+        ).exists()
+
+        if school_exists:
+            messages.warning(
+                request,
+                "A demo request for this school was already submitted recently."
+            )
+            return redirect("userauths:demo")
+
+        # save lead
+        ContactMessage.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            email_address=email,
+            contact_phone=phone,
+            school_name=school_name,
+            school_category=school_category,
+            county=county,
+            sub_county=sub_county,
+            constituency=constituency,
+            ward=ward,
+            city=city,
+            address=address,
+            message=message,
+            ip_address=ip,
+        )
+
+        messages.success(
+            request,
+            "Your demo request has been submitted successfully. Our team will contact you shortly."
+        )
+
+        return redirect("userauths:demo")
+
+    return render(request, "landing/demo.html")
 
 # Integrated LoginView with Role-Based Redirects
 from django.contrib.auth import authenticate, login
@@ -45,73 +152,55 @@ from django.contrib import messages
 from django.shortcuts import redirect, render
 # from django.contrib.auth.models import User
 
+
+def get_user_redirect(user):
+
+    if user.is_superuser or user.is_kiswate_user:
+        return "kiswate_digital_app:kiswate_admin_dashboard"
+
+    if user.is_policy_maker:
+        return "school:policy-dashboard"
+
+    if user.is_parent:
+        return "userauths:parent-dashboard"
+
+    if user.is_student:
+        return "userauths:student-dashboard"
+
+    if user.is_teacher:
+        return "userauths:teacher-dashboard"
+
+    if user.school_staff or user.is_admin or user.is_principal or user.is_deputy_principal:
+        return "school:dashboard"
+
+    logger.warning(f"User {user.id} has no role assigned.")
+    return "userauths:sign-in"
+
+
 def LoginView(request):
+
+    # If already logged in
+    if request.user.is_authenticated:
+        return redirect(get_user_redirect(request.user))
+
     if request.method == "POST":
+
         email = request.POST.get("email")
         password = request.POST.get("password")
 
         user = authenticate(request, email=email, password=password)
+
         if user is None:
             messages.warning(request, "Invalid email or password")
             return redirect("userauths:sign-in")
 
         login(request, user)
+
         messages.success(request, f"Welcome back, {user.get_full_name()}!")
 
-        # Role-based redirects — check in priority order
-        if user.is_superuser or getattr(user, "is_kiswate_user", False):
-            return redirect("kiswate_digital_app:kiswate_admin_dashboard")
-
-        # Check groups (recommended for policymakers and future roles)
-        if getattr(request.user, "is_policy_maker", False):
-            return redirect("school:policy-dashboard")  # ← your policymaker dashboard
-
-        # Boolean fields on User (your current style)
-        elif getattr(user, "is_parent", False):
-            return redirect("userauths:parent-dashboard")
-
-        elif getattr(user, "is_student", False):
-            return redirect("userauths:student-dashboard")
-
-        elif getattr(user, "is_teacher", False) or getattr(user, "school_staff", False):
-            if getattr(user, "is_teacher", False):
-                return redirect("userauths:teacher-dashboard")
-            return redirect("school:dashboard")
-
-        elif getattr(user, "is_admin", False):
-            return redirect("school:dashboard")
-
-        # Default/fallback
-        else:
-            return redirect("school:dashboard")
-
-    # GET request: if already logged in, redirect based on role
-    if request.user.is_authenticated:
-        if request.user.is_superuser or getattr(request.user, "is_kiswate_user", False):
-            return redirect("kiswate_digital_app:kiswate_admin_dashboard")
-
-        if  getattr(request.user, "is_policy_maker", False):
-            return redirect("school:policy-dashboard")
-
-        elif getattr(request.user, "is_parent", False):
-            return redirect("userauths:parent-dashboard")
-
-        elif getattr(request.user, "is_student", False):
-            return redirect("userauths:student-dashboard")
-
-        elif getattr(request.user, "is_teacher", False) or getattr(request.user, "school_staff", False):
-            if getattr(request.user, "is_teacher", False):
-                return redirect("userauths:teacher-dashboard")
-            return redirect("school:dashboard")
-
-        elif getattr(request.user, "is_admin", False):
-            return redirect("school:dashboard")
-
-        else:
-            return redirect("school:dashboard")
+        return redirect(get_user_redirect(user))
 
     return render(request, "landing/login.html")
-
 
 # Updated Dashboard Views (Adjusted for User Model Booleans and Profile Access)
 # Note: Assumes OneToOneFields (e.g., user.parent for is_parent=True users).

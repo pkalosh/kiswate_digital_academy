@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'django.contrib.humanize',
+    # 'ratelimit',
+    'crispy_forms',
+    'crispy_bootstrap5',
     'userauths',
     'school',
     'kiswate_digital_app',
@@ -47,7 +50,7 @@ INSTALLED_APPS = [
     'widget_tweaks',
     'rest_framework',  # Add this
     'rest_framework_simplejwt', 
-     'corsheaders', # Optional: for JWT
+    'corsheaders', # Optional: for JWT
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -90,7 +93,12 @@ DATABASES = {
     }
 }
 
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
 
+RATELIMIT_USE_CACHE = 'default'
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

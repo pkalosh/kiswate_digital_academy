@@ -39,4 +39,13 @@ urlpatterns = [
     path('scholarship/<int:pk>/edit/', views.scholarship_edit, name='scholarship_edit'),
     path('scholarship/<int:pk>/delete/', views.scholarship_delete, name='scholarship_delete'),
     
+    #demo requests
+    path('demo-requests/', views.demo_request_list, name='demo_request_list'),
+    path('demo-requests/verify/<uuid:lead_id>/', views.mark_verified, name='mark_verified'),
+    path('demo-requests/convert/<uuid:lead_id>/', views.convert_to_school, name='convert_to_school'),
+    path('staff-members/', views.staff_members, name='staff-members'),
+    path('new-staff-members/', views.new_staff_members, name='new-staff-members'),
+    path('staff-members/<int:pk>/edit/', views.edit_staff_member, name='edit_staff_member'),
+    path('staff-members/<int:pk>/delete/', views.delete_staff_member, name='delete_staff_member'),
+
 ]

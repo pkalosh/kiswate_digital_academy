@@ -1,0 +1,83 @@
+{% extends 'Dashboard/admindash-base.html' %}
+{% block title %}Demo Requests | {{ school.name }}{% endblock %}
+
+{% block content %}
+<section class="py-5">
+  <div class="container">
+    <h2 class="fw-bold mb-4 text-center">Demo Requests</h2>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" style="background-color: #e4fcdb; border-color: transparent;" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>School Name</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Submitted At</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lead in demo_requests %}
+              <tr class="{% if not lead.is_verified %}table-warning{% endif %}">
+                <td>{{ forloop.counter }}</td>
+                <td>{{ lead.first_name }} {{ lead.last_name }}</td>
+                <td>{{ lead.email_address }}</td>
+                <td>{{ lead.contact_phone }}</td>
+                <td>{{ lead.school_name|default:"-" }}</td>
+                <td>{{ lead.school_category|default:"-" }}</td>
+                <td>
+                  {% if lead.is_verified %}
+                    <span class="badge bg-success">Verified</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">New</span>
+                  {% endif %}
+                </td>
+                <td>{{ lead.created_at|date:"M d, Y H:i" }}</td>
+                <td class="text-center">
+                  {% if not lead.is_verified %}
+                  <form method="POST" action="{% url 'kiswate_digital_app:mark_verified' lead.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-success mb-1">
+                      <i class="bi bi-check-circle"></i> Verify
+                    </button>
+                  </form>
+                  {% endif %}
+                  {% if lead.is_verified %}
+                  <form method="POST" action="{% url 'kiswate_digital_app:convert_to_school' lead.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-primary mb-1">
+                      <i class="bi bi-building"></i> Convert
+                    </button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="9" class="text-center text-muted">No demo requests found.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

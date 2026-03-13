@@ -267,7 +267,7 @@ class TimeSlotForm(BaseForm):
 class GradeForm(BaseForm):
     class Meta:
         model = Grade
-        fields = ['name', 'description', 'code', 'capacity']
+        fields = ['name', 'description', 'code', 'capacity','is_active']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'code': forms.TextInput(attrs={'placeholder': 'e.g., GRD-001'}),
@@ -745,7 +745,7 @@ class TimetableForm(BaseForm):
 class LessonForm(BaseForm):
     class Meta:
         model = Lesson
-        fields = ['timetable', 'subject', 'teacher', 'day_of_week', 'time_slot', 'room', 'is_canceled', 'notes']
+        fields = ['timetable', 'stream','subject', 'teacher', 'day_of_week', 'time_slot', 'room', 'is_canceled', 'notes']
         widgets = {
             'time_slot': forms.Select(),
             'day_of_week': forms.Select(),
@@ -756,23 +756,31 @@ class LessonForm(BaseForm):
         day_of_week = cleaned_data.get('day_of_week')
         time_slot = cleaned_data.get('time_slot')
         teacher = cleaned_data.get('teacher')
+        stream = cleaned_data.get('stream')
         timetable = cleaned_data.get('timetable')
-        instance = self.instance  # For edits
+        lesson_date = cleaned_data.get('lesson_date')
+        instance = self.instance
 
-        if day_of_week and time_slot and teacher:
-            exclude_id = instance.id if instance else None
+        if day_of_week and time_slot and teacher and timetable:
+            exclude_id = instance.id if instance and instance.id else None
 
-            # Check if teacher already has a lesson in that time slot on that day
+            # Conflict check
             conflicts = Lesson.objects.filter(
                 teacher=teacher,
                 day_of_week=day_of_week,
                 time_slot=time_slot,
+                timetable=timetable,  # restrict to same timetable
             ).exclude(id=exclude_id)
 
+            # If lesson_date is set, only conflict with same date or null
+            if lesson_date:
+                conflicts = conflicts.filter(Q(lesson_date=lesson_date) | Q(lesson_date__isnull=True))
+            else:
+                # For lessons without specific date, conflict only with other lessons with no date
+                conflicts = conflicts.filter(lesson_date__isnull=True)
+
             if conflicts.exists():
-                conflict_details = conflicts.values_list(
-                    'id', 'timetable__grade__name', 'subject__name'
-                )
+                conflict_details = conflicts.values_list('id', 'stream__name', 'subject__name')
                 raise ValidationError(
                     f"Teacher conflict on {day_of_week}: Already scheduled for {list(conflict_details)}."
                 )

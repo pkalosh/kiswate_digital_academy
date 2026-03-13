@@ -142,7 +142,7 @@
       </div>
       <nav class="d-flex flex-column gap-1">
 
-      <a class="side-link active" href="#">
+      <a class="side-link active" href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
@@ -158,17 +158,8 @@
         <!-- <a class="side-link" href="{% url 'kiswate_digital_app:new_school' %}">Add New School</a> -->
         <a class="side-link" href="{% url 'kiswate_digital_app:school_admin_list' %}">School Admins</a>
       </div>
-      <a class="side-link d-flex justify-content-between align-items-center" 
-        data-bs-toggle="collapse" href="#agencyMenu2" role="button" aria-expanded="false" aria-controls="agencyMenu">
-        <span><i class="bi bi-diagram-3"></i> Scholarships</span>
-        <i class="bi bi-chevron-down small"></i>
-      </a>
-      <div class="collapse ps-4" id="agencyMenu2">
-        <a class="side-link" href="">Applications</a>
-        <a class="side-link" href="">Disbursments</a>
-      </div>
-      <a class="side-link" href="#"><i class="bi bi-people"></i> Users</a>
-      <a class="side-link" href="#"><i class="bi bi-gear"></i> Settings</a>
+      <a class="side-link" href="{% url 'kiswate_digital_app:staff-members' %}"><i class="bi bi-people"></i> Kiswate Staff</a>
+      <a class="side-link" href="#"><i class="bi bi-gear"></i> My Account</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out
       </a>
@@ -195,18 +186,6 @@
           
         </div>
             <!-- Alerts -->
-    {% if messages %}
-    <div class="row mb-3">
-        {% for message in messages %}
-        <div class="col-12">
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-                {{ message }}
-                <button class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
       </header>
 

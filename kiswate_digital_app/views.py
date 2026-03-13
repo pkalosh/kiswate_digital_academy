@@ -1,5 +1,6 @@
 # views.py (CRUD for School)
 import logging
+import secrets
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required,permission_required
 from django.contrib import messages
@@ -12,10 +13,11 @@ from django.db.models import Q
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
-from school.models import School,Scholarship,SubscriptionPlan, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward
+from school.models import School,Scholarship,SubscriptionPlan,ContactMessage, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward
 from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
-
+from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
 logger = logging.getLogger(__name__)
 
 @login_required
@@ -24,10 +26,9 @@ def school_list(request):
     List schools with search/filter.
     Handles creation via POST (from add modal).
     """
-    if not request.user.is_superuser:
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
         messages.error(request, "Access denied: Superuser privileges required.")
-        return redirect('dashboard')
-
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
     if request.method == 'POST':
         form = SchoolCreationForm(request.POST)
         if form.is_valid():
@@ -82,7 +83,7 @@ def edit_school(request, pk):
     Edit via modal form POST.
     Redirects back to list on success/error.
     """
-    if not request.user.is_superuser:
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:school_list')
 
@@ -137,7 +138,7 @@ def new_school(request):
     """
     Direct create page (optional; modal preferred).
     """
-    if not request.user.is_superuser:
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:school_list')
 
@@ -156,28 +157,33 @@ def new_school(request):
 
     context = {'form': form}
     return render(request, "Dashboard/new_school.html", context)
+@login_required
 def kiswate_dashboard(request):
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('userauths:sign-in')
+
     schools = School.objects.count()
     teachers = StaffProfile.objects.filter(position='teacher').count()
     students = Student.objects.count()
     parents = Parent.objects.count()
-    scholarships = Scholarship.objects.all().count()
-    
-    return render(request, "Dashboard/index.html", 
-                  {
-                      "schools":schools,
-                      "teachers":teachers,
-                      "students":students,
-                      "parents":parents,
-                      "scholarships":scholarships
-                   }
-                  )
+    scholarships = Scholarship.objects.count()
+    demo_requests = ContactMessage.objects.count()
+
+    return render(request, "Dashboard/index.html", {
+        "schools": schools,
+        "teachers": teachers,
+        "students": students,
+        "parents": parents,
+        "scholarships": scholarships,
+        "demo_requests": demo_requests
+    })
 
 
 @login_required
 def school_admin_list(request):
     # Superuser check
-    if not request.user.is_superuser:
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:kiswate_admin_dashboard')
 
@@ -219,7 +225,7 @@ def school_admin_list(request):
 
 @login_required
 def edit_school_admin(request, school_pk):
-    if not request.user.is_superuser:
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:school_admin_list')
 
@@ -250,10 +256,13 @@ def edit_school_admin(request, school_pk):
 
 @login_required
 def delete_school_admin(request, school_pk):
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
     """
     Deactivate school admin via modal POST.
     """
-    if not request.user.is_superuser:
+    if not request.user.is_superuser or  not request.user.is_kiswate_user:
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('kiswate_digital_app:school_admin_list')
 
@@ -290,6 +299,10 @@ def support(request):
 
 @login_required
 def scholarship_list_create(request):
+    if not (request.user.is_superuser or  request.user.is_kiswate_user):
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+
     """
     List scholarships with search/filter.
     Handles creation via POST from modal.
@@ -324,6 +337,9 @@ def scholarship_list_create(request):
 
 @login_required
 def scholarship_edit(request, pk):
+    if not request.user.is_superuser or  not request.user.is_kiswate_user:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
     """
     Edit scholarship via modal POST.
     On error, re-render list with bound form to show errors.
@@ -353,6 +369,9 @@ def scholarship_edit(request, pk):
 
 @login_required
 def scholarship_delete(request, pk):
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
     """
     Soft-delete scholarship via modal POST.
     """
@@ -372,6 +391,10 @@ def scholarship_delete(request, pk):
 
 @login_required
 def subscription_plan_list(request):
+    if not request.user.is_superuser:
+        messages.error(request, "Access denied: Superuser privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+
     """
     List all subscription plans.
     """
@@ -486,3 +509,170 @@ def edit_announcement(request):
 def delete_announcement(request):
     return render(request, "Dashboard/delete_announcement.html", {})
 
+
+@login_required
+def demo_request_list(request):
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    
+    demo_requests = ContactMessage.objects.all().order_by('-created_at')
+
+    return render(request, "Dashboard/demo_request_list.html", {'demo_requests': demo_requests})
+
+
+
+# Mark Verified
+@login_required
+def mark_verified(request, lead_id):
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    lead = get_object_or_404(ContactMessage, id=lead_id)
+    lead.is_verified = True
+    lead.save()
+    messages.success(request, "Lead has been verified successfully.")
+    return redirect('kiswate_digital_app:demo_request_list')
+
+# Convert to School
+
+@login_required
+def convert_to_school(request, lead_id):
+    if not (request.user.is_superuser or getattr(request.user, "is_kiswate_user", False)):
+        messages.error(request, "Access denied: Admin privileges required.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+
+    try:
+        lead = get_object_or_404(ContactMessage, id=lead_id)
+
+        if not lead.is_verified:
+            messages.warning(request, "Verify the lead first.")
+            return redirect('kiswate_digital_app:demo_request_list')
+
+        # Lookup related location instances safely
+        county = County.objects.filter(name__iexact=lead.county).first() if lead.county else None
+        sub_county = SubCounty.objects.filter(name__iexact=lead.sub_county).first() if lead.sub_county else None
+        constituency = Constituency.objects.filter(name__iexact=lead.constituency).first() if lead.constituency else None
+        ward = Ward.objects.filter(name__iexact=lead.ward).first() if lead.ward else None
+        city = City.objects.filter(name__iexact=lead.city).first() if lead.city else None
+
+        # Generate a secure random password for the school admin
+        random_password = secrets.token_urlsafe(12)
+
+        # Create the school admin user
+        school_admin = User.objects.create(
+            first_name=lead.first_name,
+            last_name=lead.last_name,
+            email=lead.email_address,
+            phone_number=lead.contact_phone,
+            is_active=True,
+            is_admin=True,      # mark as school admin
+            is_kiswate_user=True,  # optional: if you want them to have Kiswate privileges
+            password=make_password(random_password)
+        )
+
+        # Create the School object
+        school = School.objects.create(
+            name=lead.school_name,
+            school_classification=lead.school_category,
+            school_admin=school_admin,
+            contact_email=lead.email_address,
+            contact_phone=lead.contact_phone,
+            address=lead.address,
+            county=county,
+            sub_county=sub_county,
+            constituency=constituency,
+            ward=ward,
+            city=city,
+        )
+
+        # Mark the lead as converted
+        lead.status = "converted"
+        lead.save()
+
+        messages.success(
+            request,
+            f"{school.name} has been converted to a School object. Admin password: {random_password}"
+        )
+
+    except IntegrityError as e:
+        messages.error(request, f"Integrity error occurred during conversion. This may be due to duplicate email or phone number.")
+    except Exception as e:
+        messages.error(request, f"An unexpected error occurred: {str(e)}")
+
+    return redirect('kiswate_digital_app:demo_request_list')
+
+@login_required
+def staff_members(request):
+    staff = User.objects.filter(is_kiswate_user=True).order_by('-created_at')
+    return render(request, "Dashboard/staff_members.html", {"staff": staff})
+
+
+# Create new staff (from modal)
+@login_required
+def new_staff_members(request):
+    if request.method == "POST":
+        first_name = request.POST.get("first_name")
+        last_name = request.POST.get("last_name")
+        email = request.POST.get("email")
+        phone_number = request.POST.get("phone_number")
+        country = request.POST.get("country")
+        password = request.POST.get("password")
+
+        # Validation
+        if not phone_number:
+            messages.error(request, "Phone number is required.")
+            return redirect("kiswate_digital_app:staff-members")
+        if User.objects.filter(email=email).exists():
+            messages.error(request, "Email already exists.")
+            return redirect("kiswate_digital_app:staff-members")
+        if User.objects.filter(phone_number=phone_number).exists():
+            messages.error(request, "Phone number already exists.")
+            return redirect("kiswate_digital_app:staff-members")
+
+        user = User.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone_number=phone_number,
+            country=country,
+            is_staff=True,
+            # is_superuser=True,
+            is_kiswate_user=True,
+            is_active=True,
+            password=make_password(password),
+        )
+
+        messages.success(request, f"{user.get_full_name()} has been created successfully.")
+        return redirect("kiswate_digital_app:staff-members")
+
+    return redirect("kiswate_digital_app:staff-members")
+
+
+# Edit staff (modal)
+@login_required
+def edit_staff_member(request, pk):
+    staff = get_object_or_404(User, pk=pk, is_kiswate_user=True)
+    if request.method == "POST":
+        staff.first_name = request.POST.get("first_name")
+        staff.last_name = request.POST.get("last_name")
+        staff.email = request.POST.get("email")
+        staff.phone_number = request.POST.get("phone_number")
+        staff.country = request.POST.get("country")
+        password = request.POST.get("password")
+        if password:
+            staff.password = make_password(password)
+        staff.save()
+        messages.success(request, f"{staff.get_full_name()} updated successfully.")
+        return redirect("kiswate_digital_app:staff-members")
+    return redirect("kiswate_digital_app:staff-members")
+
+
+# Delete staff (modal)
+@login_required
+def delete_staff_member(request, pk):
+    staff = get_object_or_404(User, pk=pk, is_kiswate_user=True)
+    staff_name = staff.get_full_name()
+    staff.delete()
+    messages.success(request, f"{staff_name} deleted successfully.")
+    return redirect("kiswate_digital_app:staff-members")

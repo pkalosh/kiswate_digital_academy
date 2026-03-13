@@ -461,6 +461,7 @@ class Timetable(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ['school', 'grade', 'stream', 'term', 'year']
@@ -497,8 +498,8 @@ class Lesson(models.Model):
 
     def __str__(self):
         if self.time_slot:
-            return f"{self.subject.name} - {self.stream} - {self.day_of_week} {self.time_slot.start_time}-{self.time_slot.end_time}"
-        return f"{self.subject.name} - {self.stream} - {self.day_of_week}"
+            return f"{self.subject} - {self.stream} - {self.day_of_week} {self.time_slot.start_time}-{self.time_slot.end_time}"
+        return f"{self.subject} - {self.stream} - {self.day_of_week}"
 
 # VirtualClass 
 class Session(models.Model):  # Renamed from VirtualClass for in-person/hybrid
@@ -1088,38 +1089,94 @@ class Invoice(models.Model):
     # Add methods like mark_as_paid, mark_as_failed, is_overdue
 
 
+
+SCHOOL_CLASSIFICATION_CHOICES = [
+    ('C1', 'National'),
+    ('C2', 'Extra-County'),
+    ('C3', 'County'),
+    ('C4', 'Sub-County/Day'),
+]
+
+LEAD_STATUS = [
+    ("new", "New"),
+    ("contacted", "Contacted"),
+    ("demo_scheduled", "Demo Scheduled"),
+    ("converted", "Converted"),
+]
+
+
 class ContactMessage(models.Model):
-    """
-    Model to store contact messages from individuals interested in Smart Shule.
-    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    
-    first_name = models.CharField(max_length=100, help_text="First name of the person contacting.")
-    last_name = models.CharField(max_length=100, help_text="Last name of the person contacting.")
-    email_address = models.EmailField(help_text="Email address for communication.")
-    
-    school_name = models.CharField(max_length=255, blank=True, null=True, 
-                                   help_text="Name of the school the person represents or is inquiring about.")
-    
-    message = models.TextField(help_text="The content of the inquiry or message.")
-    
+
+    # Contact person
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    email_address = models.EmailField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+
+    # School
+    school_name = models.CharField(max_length=255, blank=True, null=True)
+    school_category = models.CharField(
+        max_length=5,
+        choices=SCHOOL_CLASSIFICATION_CHOICES,
+        blank=True,
+        null=True
+    )
+
+    # Location
+    county = models.CharField(max_length=100, blank=True, null=True)
+    sub_county = models.CharField(max_length=100, blank=True, null=True)
+    constituency = models.CharField(max_length=100, blank=True, null=True)
+    ward = models.CharField(max_length=100, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+
+    # Inquiry
+    message = models.TextField()
+
+    # Lead tracking
+    lead_status = models.CharField(
+        max_length=20,
+        choices=LEAD_STATUS,
+        default="new"
+    )
+
+    # Security / tracking
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+
+    # Verification
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+
     # Metadata
-    created_at = models.DateTimeField(default=timezone.now, help_text="Timestamp when the message was received.")
-    is_read = models.BooleanField(default=False, help_text="Indicates if the message has been reviewed by an admin.")
-    
+    created_at = models.DateTimeField(default=timezone.now)
+    is_read = models.BooleanField(default=False)
+
     class Meta:
-        verbose_name = "Contact Message"
-        verbose_name_plural = "Contact Messages"
-        ordering = ['-created_at'] # Order newest messages first
+        ordering = ['-created_at']
         indexes = [
             models.Index(fields=['email_address']),
             models.Index(fields=['school_name']),
+            models.Index(fields=['lead_status']),
             models.Index(fields=['created_at']),
         ]
 
-    def __str__(self):
-        return f"Message from {self.first_name} {self.last_name} ({self.school_name or 'N/A'}) - {self.created_at.strftime('%Y-%m-%d')}"
+    def save(self, *args, **kwargs):
 
+        if self.is_verified and not self.verified_at:
+            self.verified_at = timezone.now()
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} - {self.school_name or 'N/A'}"
 class MpesaStkPushRequestResponse(models.Model):
     merchant_request_id = models.CharField(max_length=100)
     checkout_request_id = models.CharField(max_length=100)

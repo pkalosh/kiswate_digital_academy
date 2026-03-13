@@ -4,6 +4,19 @@
 {% block content %}
 <section class="bg-light">
   <div class="container">
+        {% if messages %}
+    <div class="row mb-3">
+        {% for message in messages %}
+        <div class="col-12">
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="row g-4">
 
       <!-- Total Teachers -->
@@ -47,7 +60,19 @@
           </div>
         </div>
       </div>
-
+      <!-- Demo Requests -->
+            <div class="col-md-6 col-lg-3">
+        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
+          <div class="card-body">
+            <div class="text-warning mb-2">
+              <i class="bi bi-person-heart fs-1"></i>
+            </div>
+            <h5 class="fw-semibold">Demo Requests</h5>
+            <h3 class="fw-bold">{{ demo_requests|default:"0" }}</h3>
+            <p class="text-muted small mb-0">+3% this week</p>
+          </div>
+        </div>
+      </div>
       <!-- Scholarships -->
       <div class="col-md-6 col-lg-3">
         <div class="card shadow-sm border-0 rounded-4 text-center p-3">
