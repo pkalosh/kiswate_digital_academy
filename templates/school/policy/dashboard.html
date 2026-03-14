@@ -1,178 +1,169 @@
 {% extends "school/policy/base.html" %}
-{% load static %}
 {% load humanize %}
 
 {% block content %}
+
 <div class="container mt-4">
-    <h2>📊 Policy-Maker Dashboard</h2>
 
-    <!-- ───────── KPI CARDS ───────── -->
-    <div class="row mb-4">
-        {% for card in stats_cards %}
-        <div class="col-md-2">
-            <div class="card text-white {% if card.color == 'red' %}bg-danger{% else %}bg-success{% endif %} mb-3">
-                <div class="card-body text-center">
-                    <i class="bi {{ card.icon }} fs-2"></i>
-                    <h5 class="card-title mt-2">{{ card.value }}</h5>
-                    <p class="card-text">{{ card.title }}</p>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+<h2>📊 National School Intelligence Dashboard</h2>
 
-    <!-- ───────── FILTERS ───────── -->
-    <form id="filterForm" class="row g-3 mb-4" method="get">
-        <div class="col-md-2">
-            <label>County</label>
-            <select id="county" name="county" class="form-select">
-                <option value="">All Counties</option>
-                {% for c in counties %}
-                    <option value="{{ c.id }}" {% if filters.county == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label>Subcounty</label>
-            <select id="subcounty" name="subcounty" class="form-select">
-                <option value="">All Subcounties</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label>School</label>
-            <select id="school" name="school" class="form-select">
-                <option value="">All Schools</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label>Grade</label>
-            <select id="grade" name="grade" class="form-select">
-                <option value="">All Grades</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label>Subject</label>
-            <select id="subject" name="subject" class="form-select">
-                <option value="">All Subjects</option>
-                {% for s in subjects %}
-                    <option value="{{ s.id }}" {% if filters.subject == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
-        </div>
-    </form>
+<!-- KPI CARDS -->
 
-    <!-- ───────── CHARTS ───────── -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h5>📈 Top Schools Attendance</h5>
-            <canvas id="topSchoolsChart" height="120"></canvas>
-        </div>
-        <div class="col-md-6">
-            <h5>📊 Lesson Hours per Subject</h5>
-            <canvas id="lessonHoursChart" height="120"></canvas>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h5>📊 Grade-level Comparison</h5>
-            <canvas id="gradeChart" height="120"></canvas>
-        </div>
-        <div class="col-md-6">
-            <h5>📊 Subject-level Comparison</h5>
-            <canvas id="subjectChart" height="120"></canvas>
-        </div>
-    </div>
+<div class="row mb-4">
+{% for card in stats_cards %}
+<div class="col-md-3">
+<div class="card shadow-sm">
+<div class="card-body text-center">
+<i class="bi {{card.icon}} fs-2 text-success"></i>
+<h3>{{card.value|intcomma}}</h3>
+<p>{{card.title}}</p>
+</div>
+</div>
+</div>
+{% endfor %}
 </div>
 
-<!-- ───────── SCRIPTS ───────── -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-<script>
-function loadSubcounties(county_id, selected=null){
-    $.get("{% url 'school:ajax-subcounties' %}", {county_id}, function(data){
-        let html = '<option value="">All Subcounties</option>';
-        data.forEach(s => html += `<option value="${s.id}" ${selected == s.id ? 'selected' : ''}>${s.name}</option>`);
-        $('#subcounty').html(html);
-        $('#school').html('<option value="">All Schools</option>');
-        $('#grade').html('<option value="">All Grades</option>');
-    });
-}
+<!-- SCHOOL RANKING -->
 
-function loadSchools(subcounty_id, selected=null){
-    $.get("{% url 'school:ajax-schools' %}", {subcounty_id}, function(data){
-        let html = '<option value="">All Schools</option>';
-        data.forEach(s => html += `<option value="${s.id}" ${selected == s.id ? 'selected' : ''}>${s.name}</option>`);
-        $('#school').html(html);
-        $('#grade').html('<option value="">All Grades</option>');
-    });
-}
+<h4 class="mt-4">🏫 Top Performing Schools</h4>
 
-function loadGrades(school_id, selected=null){
-    $.get("{% url 'school:ajax-grades' %}", {school_id}, function(data){
-        let html = '<option value="">All Grades</option>';
-        data.forEach(g => html += `<option value="${g.id}" ${selected == g.id ? 'selected' : ''}>${g.name}</option>`);
-        $('#grade').html(html);
-    });
-}
+<table class="table table-striped table-bordered">
+<thead>
+<tr>
+<th>Rank</th>
+<th>School</th>
+<th>Attendance %</th>
+</tr>
+</thead>
+<tbody>
 
-// Initialize dropdowns with current filter values
-$(document).ready(function(){
-    const filters = {{ filters|safe }};
-    if(filters.county) loadSubcounties(filters.county, filters.subcounty);
-    if(filters.subcounty) loadSchools(filters.subcounty, filters.school);
-    if(filters.school) loadGrades(filters.school, filters.grade);
-});
+{% for s in school_rankings %}
+<tr>
+<td>{{forloop.counter}}</td>
+<td>{{s.enrollment__school__name}}</td>
+<td><b>{{s.present_rate|floatformat:1}}%</b></td>
+</tr>
+{% endfor %}
 
-// Update dependent dropdowns dynamically
-$('#county').change(function(){ loadSubcounties($(this).val()); });
-$('#subcounty').change(function(){ loadSchools($(this).val()); });
-$('#school').change(function(){ loadGrades($(this).val()); });
+</tbody>
+</table>
 
-// ───────── CHARTS ─────────
-function safeChartData(labels, data1=[], data2=[]){
-    if(!labels.length) labels=['No Data'];
-    if(!data1.length) data1=[0];
-    if(!data2.length) data2=[0];
-    return {labels, data1, data2};
-}
 
-let topSchoolsData = safeChartData({{ chart_labels|safe }}, {{ chart_present|safe }}, {{ chart_absent|safe }});
-new Chart(document.getElementById('topSchoolsChart'), {
-    type:'bar',
-    data:{
-        labels: topSchoolsData.labels,
-        datasets:[
-            { label: 'Present %', data: topSchoolsData.data1, backgroundColor:'green' },
-            { label: 'Absent %', data: topSchoolsData.data2, backgroundColor:'red' }
-        ]
-    },
-    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
-});
+<!-- COUNTY RANKING -->
 
-let lessonHoursData = safeChartData({{ lesson_labels|safe }}, {{ lesson_hours|safe }});
-new Chart(document.getElementById('lessonHoursChart'), {
-    type:'bar',
-    data:{ labels: lessonHoursData.labels, datasets:[{label:'Total Hours', data: lessonHoursData.data1, backgroundColor:'green'}] },
-    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}} }
-});
+<h4 class="mt-5">🗺 County Ranking</h4>
 
-let gradeData = safeChartData({{ grade_chart_labels|safe }}, {{ grade_present|safe }}, {{ grade_absent|safe }});
-new Chart(document.getElementById('gradeChart'), {
-    type:'bar',
-    data:{ labels: gradeData.labels, datasets:[{label:'Present %', data:gradeData.data1, backgroundColor:'green'},{label:'Absent %', data:gradeData.data2, backgroundColor:'red'}] },
-    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
-});
+<table class="table table-striped table-bordered">
 
-let subjectData = safeChartData({{ subject_chart_labels|safe }}, {{ subject_present|safe }}, {{ subject_absent|safe }});
-new Chart(document.getElementById('subjectChart'), {
-    type:'bar',
-    data:{ labels: subjectData.labels, datasets:[{label:'Present %', data:subjectData.data1, backgroundColor:'green'},{label:'Absent %', data:subjectData.data2, backgroundColor:'red'}] },
-    options:{ responsive:true, plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true,max:100}} }
-});
-</script>
+<thead>
+<tr>
+<th>Rank</th>
+<th>County</th>
+<th>Attendance %</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for c in county_rankings %}
+<tr>
+<td>{{forloop.counter}}</td>
+<td>{{c.enrollment__school__county__name}}</td>
+<td>{{c.present_rate|floatformat:1}}%</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
+
+
+<!-- TEACHER PERFORMANCE -->
+
+<h4 class="mt-5">👩‍🏫 Top Teachers</h4>
+
+<table class="table table-striped table-bordered">
+
+<thead>
+<tr>
+<th>Rank</th>
+<th>Teacher</th>
+<th>Performance %</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for t in teacher_rankings %}
+<tr>
+<td>{{forloop.counter}}</td>
+<td>{{t.enrollment__lesson__teacher__first_name}} {{t.enrollment__lesson__teacher__last_name}}</td>
+<td>{{t.performance|floatformat:1}}%</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
+
+
+<!-- GRADE PERFORMANCE -->
+
+<h4 class="mt-5">🎓 Grade Performance</h4>
+
+<table class="table table-striped table-bordered">
+
+<thead>
+<tr>
+<th>Rank</th>
+<th>Grade</th>
+<th>Attendance %</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for g in grade_rankings %}
+<tr>
+<td>{{forloop.counter}}</td>
+<td>{{g.enrollment__lesson__stream__grade__name}}</td>
+<td>{{g.performance|floatformat:1}}%</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
+
+
+<!-- SUBJECT PERFORMANCE -->
+
+<h4 class="mt-5">📚 Subject Performance</h4>
+
+<table class="table table-striped table-bordered">
+
+<thead>
+<tr>
+<th>Rank</th>
+<th>Subject</th>
+<th>Attendance %</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for s in subject_rankings %}
+<tr>
+<td>{{forloop.counter}}</td>
+<td>{{s.enrollment__lesson__subject__name}}</td>
+<td>{{s.performance|floatformat:1}}%</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
+</div>
+
 {% endblock %}

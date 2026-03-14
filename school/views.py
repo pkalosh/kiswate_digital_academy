@@ -301,138 +301,144 @@ def export_attendance_pdf(request):
     p.save()
     return response
 
+
+def get_user_school(user):
+    if user.is_admin or user.is_principal:
+        return getattr(user, "school_admin_profile", None)
+
+    if user.is_deputy_principal or user.school_staff:
+        try:
+            return user.staffprofile.school
+        except:
+            return None
+
+    return None
+
+
+
+
+
 @login_required
 def dashboard(request):
-    # ------------------- User & School -------------------
     user = request.user
-    # ------------------- Role Authorization -------------------
-    if not (
-        user.is_admin
-        # or user.school_staff
-        or user.is_principal
-        or user.is_deputy_principal
-    ):
+
+    # ------------------- Permissions -------------------
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
         messages.error(request, "You do not have permission to access this dashboard.")
         return redirect("userauths:sign-in")
-    print(f"User {user.email} accessed the dashboard.")
 
-    school = getattr(user, "school_admin_profile", None)
+    school = get_user_school(user)
     if not school:
         return render(request, "school/error.html", {"message": "No school profile found."})
-
-    # ------------------- Filters -------------------
-    grade_id   = request.GET.get("grade")
-    stream_id  = request.GET.get("stream")
-    teacher_id = request.GET.get("teacher")
-    subject_id = request.GET.get("subject")
-    date_str   = request.GET.get("date")
-
-    # ------------------- Focus Date -------------------
+    # Focus date
+    date_str = request.GET.get("date")
     try:
         focus_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else timezone.localdate()
     except ValueError:
         focus_date = timezone.localdate()
 
-    # Week start (Monday) → end (Friday)
+    # Week start-end
     week_start = focus_date - timedelta(days=focus_date.weekday())
     week_end = week_start + timedelta(days=4)
     week_days = [week_start + timedelta(days=i) for i in range(5)]
-
-    # Week navigation
     prev_week = week_start - timedelta(days=7)
     next_week = week_start + timedelta(days=7)
 
-    # ------------------- Time Slots -------------------
-    time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
+    # ------------------- KPIs -------------------
+    total_teachers = StaffProfile.objects.filter(position="teacher").count()
+    total_students = Student.objects.filter(is_active=True).count()
+    total_parents = Parent.objects.count()
 
-    # ------------------- Lessons -------------------
-    lessons_qs = Lesson.objects.filter(
-        timetable__school=school,
-        timetable__term__is_active=True,
-        lesson_date__range=(week_start, week_end)
-    ).select_related(
-        "subject", "teacher__user", "stream", "timetable"
+    # Missed lessons = UA + UT
+    total_missed = Attendance.objects.filter(
+        status__in=['UT','UA'],
+        date__range=(week_start, week_end)
+    ).count()
+
+    # Lateness = ET + UT
+    total_lateness = Attendance.objects.filter(
+        status__in=['ET','UT'],
+        date__range=(week_start, week_end)
+    ).count()
+
+    # ------------------- Top Teachers by Missed Lessons -------------------
+    top_teachers = (
+        StaffProfile.objects.filter(position="teacher")
+        .annotate(
+            missed_lessons=Count(
+                'lessons_taught__l_enrollments__attendances',
+                filter=Q(
+                    lessons_taught__l_enrollments__attendances__status__in=['UT','UA'],
+                    lessons_taught__l_enrollments__attendances__date__range=(week_start, week_end)
+                )
+            )
+        )
+        .order_by('-missed_lessons')[:10]
     )
 
-    # Apply filters
-    if grade_id:
-        lessons_qs = lessons_qs.filter(subject__grade__id=grade_id)
-    if stream_id:
-        lessons_qs = lessons_qs.filter(stream__id=stream_id)
-    if teacher_id:
-        lessons_qs = lessons_qs.filter(teacher__id=teacher_id)
-    if subject_id:
-        lessons_qs = lessons_qs.filter(subject__id=subject_id)
+    # ------------------- Classes with highest UA/UT -------------------
+    top_classes = (
+        Streams.objects.annotate(
+            missed=Count(
+                'lessons__l_enrollments__attendances',
+                filter=Q(
+                    lessons__l_enrollments__attendances__status__in=['UT','UA'],
+                    lessons__l_enrollments__attendances__date__range=(week_start, week_end)
+                )
+            )
+        ).order_by('-missed')[:10]
+    )
 
-    lessons = list(lessons_qs)
+    # ------------------- Student Lateness Heatmap -------------------
+    student_lateness = (
+        Student.objects.annotate(
+            lateness=Count(
+                'enrollments__attendances',
+                filter=Q(
+                    enrollments__attendances__status__in=['ET','UT'],
+                    enrollments__attendances__date__range=(week_start, week_end)
+                )
+            )
+        ).order_by('-lateness')[:20]
+    )
 
-    # ------------------- Build Calendar -------------------
-    calendar = defaultdict(lambda: defaultdict(list))
-    conflicts = set()
-    seen = set()
+    # ------------------- Weekly Attendance Trends -------------------
+    week_counts = defaultdict(lambda: {'P':0,'ET':0,'UT':0,'EA':0,'UA':0})
+    for day in week_days:
+        day_attendance = Attendance.objects.filter(date=day)
+        for status in ['P','ET','UT','EA','UA']:
+            week_counts[day][status] = day_attendance.filter(status=status).count()
 
-    for lesson in lessons:
-        if not lesson.time_slot:
-            continue
-        key = (lesson.teacher_id, lesson.lesson_date, lesson.time_slot_id)
-        if key in seen:
-            conflicts.add(lesson.id)
-        seen.add(key)
-        calendar[lesson.time_slot.id][lesson.lesson_date].append(lesson)
-
-    # ------------------- Dictionaries for Filters -------------------
-    grades = Grade.objects.filter(school=school, is_active=True)
-    streams = Streams.objects.filter(school=school, is_active=True)
-    teachers = StaffProfile.objects.filter(school=school, position__in=["teacher", "hod"])
-    subjects = Subject.objects.filter(school=school, is_active=True)
-
-    # ------------------- Subject Colors -------------------
-    subject_colors = {s.id: getattr(s, "color", "#dee2e6") for s in subjects}  # fallback gray
-
-    # ------------------- KPIs -------------------
-    total_teachers = StaffProfile.objects.filter(school=school, position="teacher").count()
-    total_students = Student.objects.filter(school=school, is_active=True).count()
-    total_parents = Parent.objects.filter(school=school).count()
-    total_discipline_cases = DisciplineRecord.objects.filter(school=school).count()
-
-    # ------------------- Context -------------------
     context = {
-        # Filters
-        "grades": grades,
-        "streams": streams,
-        "teachers": teachers,
-        "subjects": subjects,
-        "subject_colors": subject_colors,
-        "selected_grade": grade_id,
-        "selected_stream": stream_id,
-        "selected_teacher": teacher_id,
-        "selected_subject": subject_id,
-        "selected_date": focus_date,
-
-        # Timetable
-        "time_slots": time_slots,
-        "week_days": week_days,
-        "calendar": calendar,
-        "conflicts": conflicts,
-        "today": timezone.localdate(),
-        "prev_week": prev_week,
-        "next_week": next_week,
-
-        # KPIs
         "total_teachers": total_teachers,
         "total_students": total_students,
         "total_parents": total_parents,
-        "total_discipline_cases": total_discipline_cases,
+        "total_missed": total_missed,
+        "total_lateness": total_lateness,
+        "week_days": week_days,
+        "prev_week": prev_week,
+        "next_week": next_week,
+        "top_teachers": top_teachers,
+        "top_classes": top_classes,
+        "student_lateness": student_lateness,
+        "week_counts": week_counts,
+        "selected_date": focus_date,
     }
 
     return render(request, "school/dashboard.html", context)
 @login_required
 def time_slot_list(request):
-    school_profile = getattr(request.user, 'school_admin_profile', None)
-    if not school_profile:
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
         messages.error(request, "Access denied.")
         return redirect('school:dashboard')
-    school = school_profile
     slots = TimeSlot.objects.filter(school=school)
     form = TimeSlotForm(school=school)  # Empty form for modal
     return render(request, "school/time_slots.html", {
@@ -443,12 +449,17 @@ def time_slot_list(request):
 
 @login_required
 def time_slot_create(request):
-    try:
-        school_profile = request.user.school_admin_profile
-        school = school_profile  # Fix: Get actual School instance
-    except ObjectDoesNotExist:
-        messages.error(request, "You must have a school admin profile to create time slots.")
-        return redirect("school:time-slot-list")  # Or dashboard
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:time-slot-list')
 
     # Optional: Role check (from previous code)
     # user_role = get_user_role(request.user)
@@ -480,20 +491,24 @@ def time_slot_create(request):
 
 @login_required
 def time_slot_edit(request, pk):
-    try:
-        school_profile = request.user.school_admin_profile
-        user_school = school_profile  # For permission check
-    except ObjectDoesNotExist:
-        messages.error(request, "You must have a school admin profile to edit time slots.")
-        return redirect("school:time-slot-list")
+    user = request.user
 
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access to time slots.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:time-slot-list')
     # Optional role check
     # user_role = get_user_role(request.user)
     # if user_role not in ['admin']:
     #     messages.error(request, "Insufficient permissions.")
     #     return redirect("school:time-slot-list")
 
-    slot = get_object_or_404(TimeSlot, pk=pk, school=user_school)
+    slot = get_object_or_404(TimeSlot, pk=pk, school=school)
     form = TimeSlotForm(request.POST or None, instance=slot, school=slot.school)
     if request.method == "POST" and form.is_valid():
         try:
@@ -516,7 +531,20 @@ def time_slot_edit(request, pk):
 
 @login_required
 def time_slot_delete(request, pk):
-    slot = get_object_or_404(TimeSlot, pk=pk, school=request.user.school_admin_profile)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to create Time slots.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:time-slot-list')
+
+
+    slot = get_object_or_404(TimeSlot, pk=pk, school=school)
     if request.method == "POST":
         slot.delete()
         messages.success(request, "Time slot deleted successfully.")
@@ -527,12 +555,18 @@ def time_slot_delete(request, pk):
 
 
 def term_list(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access Term List.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
+    
     terms = Term.objects.filter(school=school)
     form = TermForm()
     return render(request, "school/terms.html", {"school": school, "terms": terms, "form": form})
@@ -540,12 +574,16 @@ def term_list(request):
 
 @login_required
 def create_term(request):
-    try:
-        school = request.user.school_admin_profile
-    
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to create Term.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     form = TermForm(request.POST or None)
@@ -553,6 +591,7 @@ def create_term(request):
     if request.method == "POST" and form.is_valid():
         term = form.save(commit=False)
         term.school = school
+        term.is_active = True
         term.save()
 
         # If new term is active → deactivate all other terms
@@ -608,111 +647,6 @@ def delete_term(request, term_id):
     })
 
 
-# @login_required
-# def school_users(request):
-#     school = None
-#     try:
-#         school = request.user.school_admin_profile
-#     except AttributeError:
-#         try:
-#             school = request.user.staffprofile.school
-#         except AttributeError as e:
-#             logger.warning(f"Permission denied for user {request.user.email}: {e}")
-#             messages.error(
-#                 request,
-#                 f"You do not have permission to access this page. (User: {request.user.email})"
-#             )
-#             return redirect('userauths:sign-in')
-
-#     # Querysets
-#     teachers = StaffProfile.objects.filter(school=school, position="teacher")
-#     other_staff = StaffProfile.objects.filter(school=school).exclude(position="teacher")
-#     students = Student.objects.filter(school=school)
-#     parents = Parent.objects.filter(school=school)
-
-#     # Forms
-#     staff_form = StaffCreationForm(school=school)
-#     student_form = StudentCreationForm(school=school)
-#     parent_form = ParentCreationForm(school=school)
-#     parent_student_form = ParentStudentCreationForm(school=school)
-
-#     combined_parent_student_form = {
-#         "parent_form": ParentCreationForm(school=school),
-#         "student_form": StudentCreationForm(school=school)
-#     }
-
-#     if request.method == "POST":
-
-#         # Create Staff
-#         if "create_staff" in request.POST:
-#             form = StaffCreationForm(request.POST, request.FILES, school=school)
-#             if form.is_valid():
-#                 staff, password = form.save()
-#                 messages.success(request, f"Staff created. Password: {password}")
-#                 return redirect("school:school-users")
-#             staff_form = form  
-
-#         # Create Student
-#         if "create_student" in request.POST:
-#             form = StudentCreationForm(request.POST, request.FILES, school=school)
-#             if form.is_valid():
-#                 student, password = form.save()
-#                 messages.success(request, "Student created successfully.")
-#                 return redirect("school:school-users")
-#             student_form = form
-
-#         # Create Parent
-#         if "create_parent" in request.POST:
-#             form = ParentCreationForm(request.POST, request.FILES, school=school)
-#             if form.is_valid():
-#                 parent, password = form.save()
-#                 messages.success(request, "Parent created successfully.")
-#                 return redirect("school:school-users")
-#             parent_form = form
-
-#         # Create Parent + Student
-#         if "create_parent_student" in request.POST:
-#             parent__student_form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
-
-#             if parent__student_form.is_valid():
-#                 parent, _ = parent_form.save()
-#                 student, _ = student_form.save()
-#                 student.parents.add(parent)
-
-#                 messages.success(request, "Parent + Student created successfully.")
-#                 return redirect("school:school-users")
-
-#             parent__student_form = parent__student_form
-
-#         # Assign Student
-#         if "assign_student" in request.POST:
-#             parent = Parent.objects.get(id=request.POST.get("parent_id"), school=school)
-#             student = Student.objects.get(id=request.POST.get("student_id"), school=school)
-#             student.parents.add(parent)
-
-#             messages.success(request, "Student assigned to parent.")
-#             return redirect("school:school-users")
-
-#     context = {
-#         "teachers": teachers,
-#         "other_staff": other_staff,
-#         "students": students,
-#         "parents": parents,
-
-#         "staff_form": staff_form,
-#         "student_form": student_form,
-#         "parent_form": parent_form,
-
-#         "combined_parent_student_form": combined_parent_student_form,
-#         "parent_student_form": parent_student_form,
-
-#         "assign_students": students,
-#         "assign_parents": parents,
-#     }
-
-#     return render(request, "school/staff.html", context)
-
-
 from django.core.paginator import Paginator
 
 
@@ -727,11 +661,18 @@ def paginate(request, queryset, per_page=10, page_param='page'):
 def school_users(request):
     """Unified view for teachers, staff, students, parents with search, forms, and pagination."""
 
-    # ── Get school instance
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(getattr(request.user, 'staffprofile', None), 'school', None)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+    print(school)
+
     if not school:
-        messages.error(request, "You do not have permission to access this page.")
-        return redirect('userauths:sign-in')
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     query = request.GET.get('q', '').strip()
 
@@ -825,10 +766,18 @@ def school_users(request):
 
 @login_required
 def update_student(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
+
     student = get_object_or_404(Student, pk=pk, school=school)
     if request.method == 'POST':
         form = StudentUpdateForm(request.POST, request.FILES, instance=student, school=school)  # Fixed: school=school
@@ -851,7 +800,14 @@ def update_student(request, pk):
 # Similar for Parent Update
 @login_required
 def update_parent(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
@@ -876,7 +832,14 @@ def update_parent(request, pk):
 # Similar for Staff Update
 @login_required
 def update_staff(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
@@ -901,10 +864,18 @@ def update_staff(request, pk):
 # Delete Views
 @login_required
 def delete_student(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
+    
     student = get_object_or_404(Student, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -916,10 +887,18 @@ def delete_student(request, pk):
 
 @login_required
 def delete_parent(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
+    
     parent = get_object_or_404(Parent, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -931,10 +910,18 @@ def delete_parent(request, pk):
 
 @login_required
 def delete_staff(request, pk):
-    school = getattr(request.user, 'school_admin_profile', None) or getattr(request.user, 'staffprofile', None).school
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:school-users')
+    
     staff = get_object_or_404(StaffProfile, pk=pk, school=school)
     try:
         with transaction.atomic():
@@ -952,8 +939,16 @@ def is_school_admin(user):
 @login_required
 @user_passes_test(is_school_admin)
 def get_streams_for_grade(request):
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)    
+
     grade_id = request.GET.get('grade_id')
-    school = getattr(request.user, 'school_admin_profile', None)
+
     if not school or not grade_id:
         return JsonResponse({'streams': []})
 
@@ -964,9 +959,16 @@ def get_streams_for_grade(request):
 @login_required
 @user_passes_test(is_school_admin)
 def generate_timetable_view(request):
-    school = getattr(request.user, 'school_admin_profile', None)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
-        messages.error(request, "You do not have permission to access this page.")
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -1034,10 +1036,16 @@ def generate_timetable_view(request):
 @login_required
 def view_timetable_week(request):
     user = request.user
-    school = getattr(user, "staffprofile", None)
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
-        return render(request, "school/error.html", {"message": "No staff profile found."})
-    school = school.school
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     # ── Focus date ───────────────────────────────────────────────────────────
     focus_date_str = request.GET.get("date")
@@ -1217,10 +1225,16 @@ def delete_parent(request, parent_id):
 @login_required
 def school_grades(request):
     # Ensure user is a school admin
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "You do not have permission to access this page.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     form = GradeForm(school=school)
@@ -1263,13 +1277,17 @@ def school_grades(request):
 
 @login_required
 def smartid_list(request):
+    user = request.user
 
-    school = getattr(request.user, "school_admin_profile", None)
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
 
-    if not isinstance(school, School):
-        logger.warning(f"Permission denied for user {request.user.email}")
-        messages.error(request, "You do not have permission to access Smart IDs.")
-        return redirect("school:dashboard")
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     query = request.GET.get('q', '')
 
@@ -1302,11 +1320,16 @@ def smartid_list(request):
 
 @login_required
 def smartid_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     if request.method != 'POST':
@@ -1334,11 +1357,16 @@ def smartid_create(request):
 
 @login_required
 def smartid_edit(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     if request.method != 'POST':
@@ -1365,11 +1393,16 @@ def smartid_edit(request, pk):
 
 @login_required
 def smartid_delete(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     if request.method != 'POST':
@@ -1413,11 +1446,16 @@ def scan_logs_view(request):
 
 @login_required
 def grade_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method != 'POST':
@@ -1448,11 +1486,16 @@ def grade_create(request):
 @login_required
 def upload_grade_file(request):
     # Ensure user has a school
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -1520,11 +1563,16 @@ def upload_grade_file(request):
 
 @login_required
 def grade_edit(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method != 'POST':
@@ -1552,11 +1600,16 @@ def grade_edit(request, pk):
 
 @login_required
 def grade_delete(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError as e:
-        logger.warning(f"Permission denied for user {request.user.email}: {e}")
-        messages.error(request, f"You do not have permission to access this page. (User: {request.user.email})")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method != 'POST':
@@ -1578,10 +1631,16 @@ def parent_list_create(request):
     List parents with search/filter.
     Handles creation via POST (from add modal).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -1624,11 +1683,18 @@ def parent_list_create(request):
 
 @login_required
 def parent_edit(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:parent_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+    
 
     parent = get_object_or_404(Parent, pk=pk, school=school)
 
@@ -1660,11 +1726,17 @@ def parent_delete(request, pk):
     Delete via modal form POST.
     Redirects back to list on success.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:parent_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     parent = get_object_or_404(Parent, pk=pk, school=school)
 
@@ -1687,10 +1759,16 @@ def staff_list_create(request):
     List staff with search/filter.
     Handles creation via POST (from add modal).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -1740,11 +1818,17 @@ def staff_edit(request, pk):
     Edit via modal form POST.
     Redirects back to list on success/error.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:staff_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     staff = get_object_or_404(StaffProfile, pk=pk, school=school)
 
@@ -1773,11 +1857,17 @@ def staff_delete(request, pk):
     Delete via modal form POST.
     Redirects back to list on success.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:staff_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     staff = get_object_or_404(StaffProfile, pk=pk, school=school)
 
@@ -1801,10 +1891,16 @@ def student_list_create(request):
     List students with search/filter.
     Handles creation via POST (from add modal).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -1855,11 +1951,17 @@ def student_edit(request, pk):
     Edit via modal form POST.
     Redirects back to list on success/error.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:student_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     student = get_object_or_404(Student, pk=pk, school=school)
 
@@ -1888,11 +1990,17 @@ def student_delete(request, pk):
     Delete via modal form POST.
     Redirects back to list on success.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:student_list_create')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     student = get_object_or_404(Student, pk=pk, school=school)
 
@@ -2065,10 +2173,16 @@ def subject_teacher_delete(request, staff_id, pk):
 
 @login_required
 def school_subjects(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     query = request.GET.get('q', '')
@@ -2108,11 +2222,17 @@ def school_subjects(request):
 
 @login_required
 def subject_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-subjects')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = SubjectForm(request.POST, school=school)
@@ -2131,11 +2251,17 @@ def subject_create(request):
 
 @login_required
 def subject_edit(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-subjects')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     subject = get_object_or_404(Subject, pk=pk, school=school)
     if request.method == 'POST':
@@ -2152,11 +2278,17 @@ def subject_edit(request, pk):
 
 @login_required
 def subject_delete(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-subjects')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     subject = get_object_or_404(Subject, pk=pk, school=school)
     if request.method == 'POST':
@@ -2168,10 +2300,16 @@ def subject_delete(request, pk):
 
 @login_required
 def school_enrollment(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     query = request.GET.get('q', '')
@@ -2192,11 +2330,17 @@ def school_enrollment(request):
 
 @login_required
 def enrollment_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-enrollment')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = EnrollmentForm(request.POST, school=school)
@@ -2218,11 +2362,17 @@ def enrollment_edit(request, pk):
     """
     Edit existing enrollment (e.g., change subject).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-enrollment')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     enrollment = get_object_or_404(Enrollment, pk=pk, school=school)
     if request.method == 'POST':
@@ -2242,11 +2392,17 @@ def enrollment_delete(request, pk):
     """
     Soft-delete enrollment (set inactive or remove).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-enrollment')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     enrollment = get_object_or_404(Enrollment, pk=pk, school=school)
     if request.method == 'POST':
@@ -2264,10 +2420,16 @@ def school_timetable(request):
     List all timetables with search/filter by grade, term, year.
     Displays lessons/sessions under each timetable.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     query = request.GET.get('q', '')
@@ -2319,11 +2481,17 @@ def timetable_create(request):
     Create a new timetable for a grade/term/year.
     Validates unique_together and date range.
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = TimetableForm(request.POST, school=school)
@@ -2352,11 +2520,17 @@ def timetable_edit(request, pk):
     """
     Edit existing timetable (e.g., adjust dates).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     timetable = get_object_or_404(Timetable, pk=pk, school=school)
     if request.method == 'POST':
@@ -2381,11 +2555,17 @@ def timetable_delete(request, pk):
     """
     Soft-delete timetable (set inactive or remove).
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     timetable = get_object_or_404(Timetable, pk=pk, school=school)
     if request.method == 'POST':
@@ -2516,11 +2696,17 @@ def lesson_list(request, timetable_id):
     """
     List all lessons for a specific timetable
     """
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     timetable = get_object_or_404(Timetable, id=timetable_id, school=school)
     lessons = timetable.lessons.select_related('subject', 'teacher').order_by('date', 'start_time')
@@ -2551,11 +2737,17 @@ def lesson_list(request, timetable_id):
 
 @login_required
 def lesson_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = LessonForm(request.POST, school=school)
@@ -2572,11 +2764,17 @@ def lesson_create(request):
 
 @login_required
 def lesson_edit(request, lesson_id):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     lesson = get_object_or_404(Lesson, id=lesson_id, timetable__school=school)
     
@@ -2597,11 +2795,17 @@ def lesson_edit(request, lesson_id):
 
 @login_required
 def lesson_delete(request, lesson_id):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-timetable')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     lesson = get_object_or_404(Lesson, id=lesson_id, timetable__school=school)
     timetable_id = lesson.timetable.id
@@ -2611,10 +2815,16 @@ def lesson_delete(request, lesson_id):
 
 @login_required
 def school_virtual_classes(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     query = request.GET.get('q', '')
@@ -2634,10 +2844,16 @@ def school_virtual_classes(request):
 
 @login_required
 def session_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -2656,10 +2872,16 @@ def session_create(request):
 @login_required
 def session_edit(request, session_id):
     session = get_object_or_404(Session, id=session_id)
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -2675,10 +2897,16 @@ def session_edit(request, session_id):
 @login_required
 def session_delete(request, session_id):
     session = get_object_or_404(Session, id=session_id)
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == 'POST':
@@ -2775,10 +3003,17 @@ from django.core.paginator import Paginator
 @login_required
 def attendance_dashboard(request):
     # ───── USER SCHOOL ─────
-    try:
-        user_school = request.user.staffprofile.school
-    except AttributeError:
-        return render(request, 'error/no_school_access.html', status=403)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     # ───── BASE QUERYSET ─────
     qs = Attendance.objects.select_related(
@@ -2789,7 +3024,7 @@ def attendance_dashboard(request):
         'term',
         'academic_year',
         'marked_by__user'
-    ).filter(enrollment__school=user_school)
+    ).filter(enrollment__school=school)
 
     # ───── FILTERS ─────
     filters = {
@@ -2888,12 +3123,12 @@ def attendance_dashboard(request):
         'subject_trends': list(subject_trends),
         'discipline_stats': discipline_stats,
         'filters': filters,
-        'academic_years': AcademicYear.objects.filter(school=user_school),
-        'terms': Term.objects.filter(school=user_school),
-        'grades': Grade.objects.filter(school=user_school),
-        'streams': Streams.objects.filter(school=user_school),
-        'subjects': Subject.objects.filter(school=user_school, is_active=True),
-        'school': user_school,
+        'academic_years': AcademicYear.objects.filter(school=school),
+        'terms': Term.objects.filter(school=school),
+        'grades': Grade.objects.filter(school=school),
+        'streams': Streams.objects.filter(school=school),
+        'subjects': Subject.objects.filter(school=school, is_active=True),
+        'school': school,
         'alerts': [],
     }
 
@@ -2934,147 +3169,6 @@ def export_attendance_csv(request):
 
     return response
 
-# @login_required
-# def school_attendance(request):
-#     # Ensure school admin
-#     try:
-#         school = request.user.school_admin_profile
-#     except AttributeError:
-#         messages.error(request, "Access denied: Admin privileges required.")
-#         return redirect('school:dashboard')
-
-#     # Base queryset
-#     qs = Attendance.objects.filter(
-#         enrollment__school=school
-#     ).select_related(
-#         'enrollment__student__user',
-#         'enrollment__student__grade_level',
-#         'enrollment__student__stream',
-#         'enrollment__subject',
-#         'term',
-#         'academic_year',
-#         'marked_by__user'
-#     )
-
-#     # --- Filters ---
-#     filters = {
-#         'date': request.GET.get('date'),
-#         'lesson': request.GET.get('lesson'),
-#         'grade': request.GET.get('grade'),
-#         'stream': request.GET.get('stream'),
-#         'subject': request.GET.get('subject'),
-#         'student': request.GET.get('student'),
-#         'term': request.GET.get('term'),
-#         'academic_year': request.GET.get('academic_year'),
-#     }
-
-#     if filters['date']:
-#         qs = qs.filter(date=filters['date'])
-#     if filters['lesson']:
-#         qs = qs.filter(enrollment__subject_id=filters['lesson'])
-#     if filters['grade']:
-#         qs = qs.filter(enrollment__student__grade_level_id=filters['grade'])
-#     if filters['stream']:
-#         qs = qs.filter(enrollment__student__stream_id=filters['stream'])
-#     if filters['subject']:
-#         qs = qs.filter(enrollment__subject_id=filters['subject'])
-#     if filters['student'] and filters['student'].isdigit():
-#         qs = qs.filter(enrollment__student__id=int(filters['student']))
-#     if filters['term']:
-#         qs = qs.filter(term_id=filters['term'])
-#     if filters['academic_year']:
-#         qs = qs.filter(academic_year_id=filters['academic_year'])
-
-#     # --- Aggregations ---
-#     stats = qs.aggregate(
-#         P=Count('id', filter=Q(status='P')),
-#         ET=Count('id', filter=Q(status='ET')),
-#         UT=Count('id', filter=Q(status='UT')),
-#         EA=Count('id', filter=Q(status='EA')),
-#         UA=Count('id', filter=Q(status='UA')),
-#         IB=Count('id', filter=Q(status='IB')),
-#         SUSP=Count('id', filter=Q(status='18')),
-#         EXPEL=Count('id', filter=Q(status='20')),
-#     )
-
-#     # Ensure defaults to 0
-#     for key in ['P','ET','UT','EA','UA','IB','SUSP','EXPEL']:
-#         if stats[key] is None:
-#             stats[key] = 0
-
-#     # --- Grade/Stream/Student Stats ---
-#     grade_stats = (
-#         qs.values(
-#             'enrollment__student__grade_level__name',
-#             'enrollment__student__stream__name',
-#             'enrollment__student__user__first_name',
-#             'enrollment__student__user__last_name',
-#             'academic_year__name',
-#             'term__name',
-#         )
-#         .annotate(
-#             total=Count('id'),
-#             present=Count('id', filter=Q(status='P')),
-#             tardy=Count('id', filter=Q(status__in=['ET','UT'])),
-#             absent=Count('id', filter=Q(status__in=['EA','UA'])),
-#         )
-#         .order_by('enrollment__student__grade_level__name','enrollment__student__stream__name')
-#     )
-
-#     # --- Subject Stats ---
-#     subject_stats = (
-#         qs.values('enrollment__subject__name')
-#         .annotate(
-#             total=Count('id'),
-#             present=Count('id', filter=Q(status='P')),
-#             absent=Count('id', filter=Q(status__in=['EA','UA'])),
-#             behavior=Count('id', filter=Q(status='IB')),
-#         )
-#     )
-
-#     # --- Daily Trend for charts ---
-#     daily_trend = (
-#         qs.values('date')
-#         .annotate(
-#             present=Count('id', filter=Q(status='P')),
-#             tardy=Count('id', filter=Q(status__in=['ET','UT'])),
-#             absent=Count('id', filter=Q(status__in=['EA','UA']))
-#         )
-#         .order_by('date')
-#     )
-
-#     # --- Status Pie Chart ---
-#     status_pie = [
-#         {'status': 'Present', 'count': stats['P']},
-#         {'status': 'Tardy', 'count': stats['ET'] + stats['UT']},
-#         {'status': 'Absent', 'count': stats['EA'] + stats['UA']},
-#         {'status': 'Behavior', 'count': stats['IB']},
-#         {'status': 'Suspension', 'count': stats['SUSP']},
-#         {'status': 'Expulsion', 'count': stats['EXPEL']},
-#     ]
-
-#     # --- Pagination ---
-#     paginator = Paginator(qs.order_by('-date','-marked_at'), 50)
-#     page = request.GET.get('page')
-#     attendances_page = paginator.get_page(page)
-
-#     context = {
-#         'school': school,
-#         'attendances': attendances_page,
-#         'grades': Grade.objects.filter(school=school),
-#         'streams': Streams.objects.filter(school=school),
-#         'subjects': Subject.objects.filter(school=school),
-#         'terms': Term.objects.filter(school=school),
-#         'academic_years': AcademicYear.objects.filter(school=school),
-#         'stats': stats,
-#         'grade_stats': grade_stats,
-#         'subject_stats': subject_stats,
-#         'daily_trend': daily_trend,
-#         'status_pie': status_pie,
-#         'filters': filters
-#     }
-
-#     return render(request, 'school/attendance_dashboard.html', context)
 
 @login_required
 def attendance_mark(request, lesson_id):
@@ -3165,10 +3259,16 @@ def attendance_delete(request, attendance_id):
 # Summary view
 @login_required
 def attendance_summary(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     # Generate summary data
@@ -3636,10 +3736,16 @@ def teacher_discipline_edit(request, record_id):
 
 @login_required
 def school_discipline(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     query = request.GET.get('q', '')
@@ -3674,11 +3780,17 @@ def school_discipline(request):
 
 @login_required
 def discipline_create(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-discipline')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = DisciplineRecordForm(request.POST, school=school)
@@ -3712,11 +3824,17 @@ def discipline_create(request):
 
 @login_required
 def discipline_edit(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-discipline')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     record = get_object_or_404(DisciplineRecord, id=pk, school=school)
     if request.method == 'POST':
@@ -3733,11 +3851,17 @@ def discipline_edit(request, pk):
 
 @login_required
 def discipline_delete(request, pk):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-discipline')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     record = get_object_or_404(DisciplineRecord, id=pk, school=school)
     if request.method == 'POST':
@@ -3748,10 +3872,16 @@ def discipline_delete(request, pk):
 
 @login_required
 def school_notifications(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     notifications = Notification.objects.filter(school=school).order_by('-sent_at')
@@ -3769,11 +3899,17 @@ def school_notifications(request):
 
 @login_required
 def notification_send(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
-        return redirect('school:school-notifications')
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     
     if request.method == 'POST':
         form = NotificationForm(request.POST, school=school)
@@ -3799,10 +3935,16 @@ def notification_send(request):
 
 @login_required
 def school_reports(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     # Generate on-the-fly or from SummaryReport
@@ -4043,10 +4185,16 @@ def student_submissions(request):
     return render(request, 'school/student_submissions.html', context)
 @login_required
 def school_fees(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     query = request.GET.get('q', '')
@@ -4074,10 +4222,16 @@ def process_mpesa_payment(request):
 
 @login_required
 def school_finance(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     subscriptions = SchoolSubscription.objects.filter(school=school)
@@ -4092,10 +4246,16 @@ def school_finance(request):
 
 @login_required
 def school_subscriptions(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     subscription = school.platform_subscription
@@ -4135,10 +4295,16 @@ def generate_invoice(request):
 @login_required
 def school_calendar(request):
     # Integrate with fullcalendar.js or similar in template
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     # Fetch events (use Session, Lesson, etc. as events)
@@ -4151,10 +4317,16 @@ def school_calendar(request):
 
 @login_required
 def school_events(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     # Events could be a new model or use existing (e.g., Sessions)
@@ -4166,10 +4338,16 @@ def school_events(request):
 # ------------------------------- SETTINGS & PERMISSIONS -------------------------------
 @login_required
 def school_settings(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     if request.method == 'POST':
@@ -4184,10 +4362,16 @@ def school_settings(request):
 
 @login_required
 def permissions_logs(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     # Log actions via middleware or signals; placeholder query
@@ -4197,10 +4381,16 @@ def permissions_logs(request):
 
 @login_required
 def contact_messages(request):
-    try:
-        school = request.user.school_admin_profile
-    except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
     
     messages_list = ContactMessage.objects.all().order_by('-created_at')
@@ -4227,7 +4417,17 @@ def mpesa_payment_callback(request):
 @login_required
 def grade_streams_view(request, grade_id):
 
-    school = request.user.school_admin_profile
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     grade = get_object_or_404(Grade, id=grade_id, school=school)
 
     streams = grade.streams.filter(is_active=True).order_by("name")
@@ -4244,8 +4444,18 @@ def grade_streams_view(request, grade_id):
 
 @login_required
 def create_stream(request, grade_id):
+    user = request.user
 
-    school = request.user.school_admin_profile
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
     grade = get_object_or_404(Grade, id=grade_id, school=school)
 
     if request.method == "POST":
@@ -4268,7 +4478,18 @@ def create_stream(request, grade_id):
 @login_required
 def edit_stream(request, stream_id):
 
-    school = request.user.school_admin_profile
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
     stream = get_object_or_404(Streams, id=stream_id, school=school)
 
     if request.method == "POST":
@@ -4286,7 +4507,17 @@ def edit_stream(request, stream_id):
 @login_required
 def delete_stream(request, stream_id):
 
-    school = request.user.school_admin_profile
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     stream = get_object_or_404(Streams, id=stream_id, school=school)
 
     if request.method == "POST":
@@ -4302,9 +4533,16 @@ def delete_stream(request, stream_id):
 @login_required
 def create_parent_student(request):
     # Ensure user is a school admin
-    school = getattr(request.user, 'school_admin_profile', None)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
-        messages.error(request, "You do not have permission to add members.")
+        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
     if request.method == "POST":
@@ -4343,8 +4581,17 @@ def create_parent_student(request):
 
 @login_required
 def assign_class_teacher_for_teacher(request, teacher_id):
-    school = request.user.staffprofile.school
+    user = request.user
 
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
     # Get teacher to assign
     teacher = get_object_or_404(StaffProfile, id=teacher_id, school=school)
 
@@ -4420,147 +4667,158 @@ def ajax_grades(request):
     return JsonResponse(list(grades), safe=False)
 
 
-# ───────────── POLICY MAKER DASHBOARD ─────────────@login_required
 @login_required
 @user_passes_test(is_policymaker)
 def policymaker_dashboard(request):
-    # ───── FILTERS ─────
-    county_id = request.GET.get('county')
-    subcounty_id = request.GET.get('subcounty')
-    school_id = request.GET.get('school')
-    grade_id = request.GET.get('grade')
-    subject_id = request.GET.get('subject')
 
-    # Base school queryset
-    schools_qs = School.objects.all()
+    county_id = request.GET.get("county")
+    subcounty_id = request.GET.get("subcounty")
+    school_id = request.GET.get("school")
+    grade_id = request.GET.get("grade")
+    subject_id = request.GET.get("subject")
+
+    # ───────── SCHOOL FILTER ─────────
+    schools = School.objects.filter(is_active=True)
+
     if county_id:
-        schools_qs = schools_qs.filter(county_id=county_id)
+        schools = schools.filter(county_id=county_id)
+
     if subcounty_id:
-        schools_qs = schools_qs.filter(sub_county_id=subcounty_id)
+        schools = schools.filter(sub_county_id=subcounty_id)
+
     if school_id:
-        schools_qs = schools_qs.filter(id=school_id)
+        schools = schools.filter(id=school_id)
 
-    # ───── KPI CARDS ─────
+    # ───────── ATTENDANCE BASE QUERY ─────────
+    attendance = (
+        Attendance.objects
+        .filter(enrollment__school__in=schools)
+        .select_related(
+            "enrollment__lesson__teacher__user",
+            "enrollment__lesson__subject",
+            "enrollment__lesson__stream__grade",
+            "enrollment__school__county"
+        )
+    )
+
+    if grade_id:
+        attendance = attendance.filter(
+            enrollment__lesson__stream__grade_id=grade_id
+        )
+
+    if subject_id:
+        attendance = attendance.filter(
+            enrollment__lesson__subject_id=subject_id
+        )
+
+    # ───────── SCHOOL RANKING ─────────
+    school_rankings = (
+        attendance.values(
+            "enrollment__school__id",
+            "enrollment__school__name"
+        )
+        .annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="P")),
+        )
+        .annotate(
+            present_rate=ExpressionWrapper(
+                F("present") * 100.0 / F("total"),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-present_rate")
+    )
+
+    # ───────── COUNTY RANKING ─────────
+    county_rankings = (
+        attendance.values(
+            "enrollment__school__county__name"
+        )
+        .annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="P")),
+        )
+        .annotate(
+            performance=ExpressionWrapper(
+                F("present") * 100.0 / F("total"),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-performance")
+    )
+
+    # ───────── TEACHER PERFORMANCE ─────────
+    teacher_rankings = (
+        attendance.values(
+            "enrollment__lesson__teacher__user__first_name",
+            "enrollment__lesson__teacher__user__last_name",
+        )
+        .annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="P")),
+        )
+        .annotate(
+            performance=ExpressionWrapper(
+                F("present") * 100.0 / F("total"),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-performance")
+    )
+
+    # ───────── GRADE PERFORMANCE ─────────
+    grade_rankings = (
+        attendance.values(
+            "enrollment__lesson__stream__grade__name"
+        )
+        .annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="P")),
+        )
+        .annotate(
+            performance=ExpressionWrapper(
+                F("present") * 100.0 / F("total"),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-performance")
+    )
+
+    # ───────── SUBJECT PERFORMANCE ─────────
+    subject_rankings = (
+        attendance.values(
+            "enrollment__lesson__subject__name"
+        )
+        .annotate(
+            total=Count("id"),
+            present=Count("id", filter=Q(status="P")),
+        )
+        .annotate(
+            performance=ExpressionWrapper(
+                F("present") * 100.0 / F("total"),
+                output_field=FloatField(),
+            )
+        )
+        .order_by("-performance")
+    )
+
+    # ───────── KPI CARDS ─────────
     stats_cards = [
-        {
-            "title": "Total Schools",
-            "value": schools_qs.count(),
-            "icon": "bi-building"
-        },
-        {
-            "title": "Total Students",
-            "value": Student.objects.filter(school__in=schools_qs).count(),
-            "icon": "bi-people"
-        },
-        {
-            "title": "Total Lessons",
-            "value": Lesson.objects.filter(timetable__school__in=schools_qs).count(),
-            "icon": "bi-journal-text"
-        },
-        {
-            "title": "Total Discipline Cases",
-            "value": DisciplineRecord.objects.filter(school__in=schools_qs).count(),
-            "icon": "bi-exclamation-triangle text-danger"
-        }
+        {"title": "Total Schools", "value": schools.count(), "icon": "bi-building"},
+        {"title": "Total Students", "value": Student.objects.filter(school__in=schools).count(), "icon": "bi-people"},
+        {"title": "Total Lessons", "value": Lesson.objects.filter(timetable__school__in=schools).count(), "icon": "bi-journal-text"},
+        {"title": "Discipline Cases", "value": DisciplineRecord.objects.filter(school__in=schools).count(), "icon": "bi-exclamation-triangle"},
     ]
-
-    # ───── ATTENDANCE STATS ─────
-    attendances_qs = Attendance.objects.filter(enrollment__school__in=schools_qs)
-    if grade_id:
-        attendances_qs = attendances_qs.filter(enrollment__lesson__stream__grade_id=grade_id)
-    if subject_id:
-        attendances_qs = attendances_qs.filter(enrollment__lesson__subject_id=subject_id)
-
-    school_rankings = []
-    for school in schools_qs:
-        total = attendances_qs.filter(enrollment__school=school).count()
-        present = attendances_qs.filter(enrollment__school=school, status='P').count()
-        absent = total - present
-        school_rankings.append({
-            "school": school.name,
-            "present_rate": round((present / total * 100) if total else 0, 1),
-            "absent_rate": round((absent / total * 100) if total else 0, 1)
-        })
-
-    # ───── GRADE LEVEL COMPARISON ─────
-    grades_qs = Grade.objects.filter(school__in=schools_qs)
-    if grade_id:
-        grades_qs = grades_qs.filter(id=grade_id)
-
-    grade_chart_labels = []
-    grade_present = []
-    grade_absent = []
-
-    for grade in grades_qs:
-        total = attendances_qs.filter(enrollment__lesson__stream__grade=grade).count()
-        present = attendances_qs.filter(enrollment__lesson__stream__grade=grade, status='P').count()
-        absent = total - present
-        grade_chart_labels.append(grade.name)
-        grade_present.append(round((present / total * 100) if total else 0, 1))
-        grade_absent.append(round((absent / total * 100) if total else 0, 1))
-
-    # ───── SUBJECT LEVEL COMPARISON ─────
-    subjects_qs = Subject.objects.filter(school__in=schools_qs)
-    if subject_id:
-        subjects_qs = subjects_qs.filter(id=subject_id)
-
-    subject_chart_labels = []
-    subject_present = []
-    subject_absent = []
-
-    for subject in subjects_qs:
-        total = attendances_qs.filter(enrollment__lesson__subject=subject).count()
-        present = attendances_qs.filter(enrollment__lesson__subject=subject, status='P').count()
-        absent = total - present
-        subject_chart_labels.append(subject.name)
-        subject_present.append(round((present / total * 100) if total else 0, 1))
-        subject_absent.append(round((absent / total * 100) if total else 0, 1))
-
-    # ───── LESSON HOURS PER SUBJECT ─────
-    lessons_qs = Lesson.objects.filter(timetable__school__in=schools_qs)
-    if grade_id:
-        lessons_qs = lessons_qs.filter(stream__grade_id=grade_id)
-    if subject_id:
-        lessons_qs = lessons_qs.filter(subject_id=subject_id)
-
-    lesson_labels = []
-    lesson_hours = []
-
-    for lesson in lessons_qs:
-        if lesson.time_slot and lesson.subject:
-            start_dt = datetime.combine(datetime.today(), lesson.time_slot.start_time)
-            end_dt = datetime.combine(datetime.today(), lesson.time_slot.end_time)
-            duration_hours = (end_dt - start_dt).total_seconds() / 3600
-            lesson_hours.append(round(duration_hours, 2))
-            lesson_labels.append(lesson.subject.name)
-
-    # ───── DROPDOWNS ─────
-    counties = County.objects.all()
-    subjects = Subject.objects.filter(school__in=schools_qs)
 
     context = {
         "stats_cards": stats_cards,
         "school_rankings": school_rankings,
-        "chart_labels": [s["school"] for s in school_rankings],
-        "chart_present": [s["present_rate"] for s in school_rankings],
-        "chart_absent": [s["absent_rate"] for s in school_rankings],
-        "grade_chart_labels": grade_chart_labels,
-        "grade_present": grade_present,
-        "grade_absent": grade_absent,
-        "subject_chart_labels": subject_chart_labels,
-        "subject_present": subject_present,
-        "subject_absent": subject_absent,
-        "lesson_labels": lesson_labels,
-        "lesson_hours": lesson_hours,
-        "counties": counties,
-        "subjects": subjects,
-        "filters": {
-            "county": county_id or "",
-            "subcounty": subcounty_id or "",
-            "school": school_id or "",
-            "grade": grade_id or "",
-            "subject": subject_id or ""
-        }
+        "county_rankings": county_rankings,
+        "teacher_rankings": teacher_rankings,
+        "grade_rankings": grade_rankings,
+        "subject_rankings": subject_rankings,
+        "counties": County.objects.all()
     }
 
     return render(request, "school/policy/dashboard.html", context)
@@ -4822,9 +5080,17 @@ def universal_excel_upload(request):
     except Exception as e:
         return JsonResponse({"error": f"Invalid Excel file: {str(e)}"}, status=400)
 
-    school = getattr(request.user, "school_admin_profile", None)
+    user = request.user
+
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "You do not have permission to access this dashboard.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(user)
+
     if not school:
-        return JsonResponse({"error": "You are not assigned to any school"}, status=403)
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
 
     results = {"created": 0, "errors": [], "warnings": []}
 

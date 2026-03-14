@@ -172,15 +172,14 @@
         <a class="side-link" href="{% url 'school:scan_logs' %}">IDs Scan Logs</a>
         <a class="side-link" href="{% url 'school:attendance-dashboard' %}">Attendance</a>
         <a class="side-link" href="{% url 'school:school-assignments' %}">Assignments</a>
+        <a class="side-link" href="{% url 'school:school-discipline' %}">Discipline</a>
+        <a class="side-link" href="">Payments</a>
+        <a class="side-link" href="{% url 'school:school-settings' %}">Settings</a>
+        <a class="side-link" href="{% url 'school:upload_excel_page' %}">Data Upload</a>
 
       </div>
 
-      <a class="side-link" href="{% url 'school:school-discipline' %}"><i class="bi bi-people"></i> Discipline</a>
-
-      <a class="side-link" href=""><i class="bi bi-people"></i> Payments</a>
-
-      <a class="side-link" href="{% url 'school:school-settings' %}"><i class="bi bi-gear"></i> Settings</a>
-      <a class="side-link" href="{% url 'school:upload_excel_page' %}"><i class="bi bi-gear"></i> Data Upload</a>
+      <a class="side-link" href="{% url 'userauths:teacher-dashboard' %}">Teacher Dashboard</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out
       </a>

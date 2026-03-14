@@ -169,7 +169,11 @@
 
       </div>
      
-
+      {% if request.user.is_admin or request.user.is_principal or request.user.is_deputy_principal %}
+      <a class="side-link" href="{% url 'school:dashboard' %}">
+          <i class="bi bi-speedometer2"></i> Admin Dashboard
+      </a>
+      {% endif %}
       <a class="side-link" href=""><i class="bi bi-gear"></i> Profile</a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-gear"></i> Sign Out
