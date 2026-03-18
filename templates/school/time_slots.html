@@ -1,5 +1,6 @@
 {% extends 'school/base.html' %}
 {% block title %}Time Slots | {{ school.name }}{% endblock %}
+
 {% block content %}
 <header class="header d-flex align-items-center justify-content-between mb-3">
   <div>
@@ -18,7 +19,7 @@
   </div>
 </header>
 
-<!-- Messages (for form errors/success) -->
+<!-- Messages -->
 {% if messages %}
 <div class="row mb-3">
   {% for message in messages %}
@@ -98,53 +99,26 @@
       <form method="post" id="timeSlotForm">
         {% csrf_token %}
         <div class="modal-body">
-          <!-- Non-field errors (if form passed from view) -->
           {% if form.non_field_errors %}
           <div class="alert alert-danger">
             {{ form.non_field_errors }}
           </div>
           {% endif %}
 
-          <!-- Preferred: Use Django form fields for auto-errors/widgets -->
-          {% if form %}
-          <div class="mb-3">
-            {{ form.start_time.label_tag }}
-            {{ form.start_time }}
-            {% if form.start_time.errors %}
-            <div class="invalid-feedback d-block">{{ form.start_time.errors }}</div>
-            {% endif %}
-          </div>
-          <div class="mb-3">
-            {{ form.end_time.label_tag }}
-            {{ form.end_time }}
-            {% if form.end_time.errors %}
-            <div class="invalid-feedback d-block">{{ form.end_time.errors }}</div>
-            {% endif %}
-          </div>
-          <div class="mb-3">
-            {{ form.description.label_tag }}
-            {{ form.description }}
-            {% if form.description.errors %}
-            <div class="invalid-feedback d-block">{{ form.description.errors }}</div>
-            {% endif %}
-          </div>
-          {% else %}
-          <!-- Fallback: Raw inputs (add this if not passing form) -->
           <div class="mb-3">
             <label for="id_start_time" class="form-label">Start Time <span class="text-danger">*</span></label>
-            <input type="time" name="start_time" id="id_start_time" class="form-control" required step="900">  <!-- step=15min -->
+            <input type="time" name="start_time" id="id_start_time" class="form-control" required>
             <div class="invalid-feedback" id="start_time_errors"></div>
           </div>
           <div class="mb-3">
             <label for="id_end_time" class="form-label">End Time <span class="text-danger">*</span></label>
-            <input type="time" name="end_time" id="id_end_time" class="form-control" required step="900">
+            <input type="time" name="end_time" id="id_end_time" class="form-control" required>
             <div class="invalid-feedback" id="end_time_errors"></div>
           </div>
           <div class="mb-3">
             <label for="id_description" class="form-label">Description</label>
             <input type="text" name="description" id="id_description" class="form-control" placeholder="Optional description" maxlength="100">
           </div>
-          {% endif %}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -202,11 +176,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Client-side validation (time-specific)
+  // Client-side validation
   timeSlotForm.addEventListener('submit', function (e) {
     const startInput = document.getElementById('id_start_time');
     const endInput = document.getElementById('id_end_time');
-    if (!startInput || !endInput) return;  // Skip if using form fields
     clearErrors();
 
     let isValid = true;
@@ -251,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Delete handler (unchanged)
+  // Delete modal
   const deleteModal = document.getElementById('deleteModal');
   const deleteForm = document.getElementById('deleteForm');
   if (deleteModal) {

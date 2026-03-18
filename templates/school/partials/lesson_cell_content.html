@@ -1,0 +1,21 @@
+<div class="border p-1 bg-light mb-1" id="lesson-{{ lesson.id }}">
+  <div class="fw-bold small">{{ lesson.subject.name }}</div>
+  <div class="small">{{ lesson.stream.name }}</div>
+  <div class="small">{{ lesson.teacher.user.get_full_name }}</div>
+
+  <div class="d-flex gap-1 mt-1">
+    <button class="btn btn-sm btn-primary w-50 attendance-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#attendanceModal"
+        data-lesson="{{ lesson.id }}">
+  Att
+</button>
+
+    <button class="btn btn-sm btn-warning w-50"
+            data-bs-toggle="modal"
+            data-bs-target="#lessonModal"
+            data-lesson="{{ lesson.id }}">
+      Edit
+    </button>
+  </div>
+</div>

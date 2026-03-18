@@ -1,0 +1,78 @@
+{% load dic_filters %}
+
+<form method="post"
+      id="attendanceForm"
+      action="{% url 'school:lesson-attendance' lesson.id %}">
+{% csrf_token %}
+
+<h6 class="mb-3">
+  {{ lesson.subject.name }} - {{ lesson.lesson_date }}
+</h6>
+
+<div class="table-responsive">
+<table class="table table-bordered table-sm align-middle">
+
+  <thead class="table-light">
+    <tr>
+      <th style="width: 40%">Student</th>
+      <th style="width: 30%">Status</th>
+      <th style="width: 30%">Remarks</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for e in enrollments %}
+      {% with att=attendance_map|get_item:e.id %}
+      <tr>
+
+        <!-- STUDENT -->
+        <td class="small">
+          {{ e.student }}
+        </td>
+
+        <!-- STATUS -->
+        <td>
+          <select name="status_{{ e.id }}"
+                  class="form-select form-select-sm">
+
+            {% for val, label in status_choices %}
+              <option value="{{ val }}"
+                {% if att and att.status == val %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+
+          </select>
+        </td>
+
+        <!-- REMARKS -->
+        <td>
+          <input type="text"
+                 name="remarks_{{ e.id }}"
+                 class="form-control form-control-sm"
+                 placeholder="Optional..."
+                 value="{% if att %}{{ att.remarks }}{% endif %}">
+        </td>
+
+      </tr>
+      {% endwith %}
+    {% empty %}
+      <tr>
+        <td colspan="3" class="text-center text-muted">
+          No students enrolled
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+
+</table>
+</div>
+
+<!-- ACTIONS -->
+<div class="d-flex gap-2 mt-3">
+  <button type="submit" class="btn btn-success w-100">
+    💾 Save Attendance
+  </button>
+</div>
+
+</form>

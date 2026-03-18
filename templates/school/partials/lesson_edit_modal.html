@@ -1,0 +1,19 @@
+<div class="modal fade" id="lessonModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Lesson</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body" id="lessonFormContainer">
+        {% if error_msg %}
+          <div class="alert alert-danger small">{{ error_msg }}</div>
+        {% endif %}
+        {% include "school/partials/lesson_form.html" %}
+      </div>
+
+    </div>
+  </div>
+</div>

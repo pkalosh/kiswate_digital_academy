@@ -1,0 +1,87 @@
+<form id="lessonEditForm" method="post" action="{% url 'school:lesson-edit' lesson.id %}" data-lesson="{{ lesson.id }}">
+  {% csrf_token %}
+
+  <div class="row g-2">
+
+    <!-- SUBJECT -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Subject</label>
+      <select name="subject" class="form-select form-select-sm">
+        {% for s in subjects %}
+          <option value="{{ s.id }}" {% if lesson.subject_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- STREAM -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Stream</label>
+      <select name="stream" class="form-select form-select-sm">
+        {% for s in streams %}
+          <option value="{{ s.id }}" {% if lesson.stream_id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- TEACHER -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Teacher</label>
+      <select name="teacher" class="form-select form-select-sm select2">
+        {% for t in teachers %}
+          <option value="{{ t.id }}" {% if lesson.teacher_id == t.id %}selected{% endif %}>
+            {{ t.user.get_full_name }} | {{ t.user.email }} | {{ t.phone }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- DAY -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Day</label>
+      <select name="day_of_week" class="form-select form-select-sm">
+        {% for val,label in weekday_choices %}
+          <option value="{{ val }}" {% if lesson.day_of_week == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- TIMESLOT -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Time Slot</label>
+      <select name="time_slot" class="form-select form-select-sm">
+        {% for t in timeslots %}
+          <option value="{{ t.id }}" {% if lesson.time_slot_id == t.id %}selected{% endif %}>
+            {{ t.start_time }} - {{ t.end_time }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- ROOM -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Room</label>
+      <input type="text" name="room" value="{{ lesson.room }}" class="form-control form-control-sm">
+    </div>
+
+    <!-- LESSON DATE -->
+    <div class="col-md-6">
+      <label class="small fw-bold">Lesson Date</label>
+      <input type="date" name="lesson_date" value="{{ lesson.lesson_date|date:'Y-m-d' }}" class="form-control form-control-sm">
+    </div>
+
+    <!-- CANCELLED -->
+    <div class="col-md-6 d-flex align-items-center mt-3">
+      <input type="checkbox" name="is_canceled" {% if lesson.is_canceled %}checked{% endif %}>
+      <label class="ms-2 small">Canceled</label>
+    </div>
+
+    <!-- NOTES -->
+    <div class="col-12">
+      <label class="small fw-bold">Notes</label>
+      <textarea name="notes" class="form-control form-control-sm" rows="2">{{ lesson.notes }}</textarea>
+    </div>
+
+  </div>
+
+  <button class="btn btn-success w-100 mt-3 btn-sm">Save Changes</button>
+</form>

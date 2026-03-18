@@ -98,11 +98,13 @@ urlpatterns = [
     path('timetables/create/', views.timetable_create, name='timetable-create'),
     path('timetables/<int:pk>/edit/', views.timetable_edit, name='timetable-edit'),
     path('timetables/<int:pk>/delete/', views.timetable_delete, name='timetable-delete'),
+    path('attendance/<int:lesson_id>/', views.lesson_attendance, name='lesson-attendance'),
+    path("lessons/<int:lesson_id>/edit/", views.lesson_edit, name="lesson-edit"),
     
     # Lessons Management
     path('timetable/<int:timetable_id>/lessons/', views.lesson_list, name='lesson-list'),
     path('lessons/create/', views.lesson_create, name='lesson-create'),
-    path('lessons/<int:lesson_id>/edit/', views.lesson_edit, name='lesson-edit'),
+    # path('lessons/<int:lesson_id>/edit/', views.lesson_edit, name='lesson-edit'),
     path('lessons/<int:lesson_id>/delete/', views.lesson_delete, name='lesson-delete'),
 
     # Time Slots

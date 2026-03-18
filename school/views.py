@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.http import require_http_methods
 from django.db.models import Q
 from django.core.paginator import Paginator
 from userauths.models import User
@@ -2416,65 +2417,206 @@ def enrollment_delete(request, pk):
 
 @login_required
 def school_timetable(request):
-    """
-    List all timetables with search/filter by grade, term, year.
-    Displays lessons/sessions under each timetable.
-    """
     user = request.user
 
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
-        messages.error(request, "You do not have permission to access this dashboard.")
+        messages.error(request, "No permission.")
         return redirect("userauths:sign-in")
 
     school = get_user_school(user)
-
     if not school:
-        messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
-    query = request.GET.get('q', '')
-    timetables = Timetable.objects.filter(
-        school=school, is_active=True
-    ).select_related('grade').order_by('-year', 'term')
+    # ---------------- WEEK NAV ----------------
+    today = timezone.now().date()
+    week_offset = int(request.GET.get("week", 0))
 
-    if query:
-        timetables = timetables.filter(
-            Q(grade__name__icontains=query) |
-            Q(term__icontains=query) |
-            Q(year__icontains=query)
+    start_of_week = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+    end_of_week = start_of_week + timedelta(days=4)
+
+    # ---------------- LESSONS ----------------
+    lessons = Lesson.objects.filter(
+        timetable__school=school,
+        lesson_date__range=[start_of_week, end_of_week]
+    ).select_related(
+        'subject', 'teacher__user', 'stream', 'time_slot', 'timetable__grade'
+    )
+
+    # ---------------- GROUP ----------------
+    grid = defaultdict(lambda: defaultdict(list))
+    time_slots = set()
+
+    for lesson in lessons:
+        day = lesson.lesson_date.strftime('%A')
+        grid[lesson.time_slot][day].append(lesson)
+        time_slots.add(lesson.time_slot)
+
+    time_slots = sorted(time_slots, key=lambda x: x.start_time)
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    return render(request, "school/timetable.html", {
+        "grid": grid,
+        "time_slots": time_slots,
+        "start_of_week": start_of_week,
+        "end_of_week": end_of_week,
+        "week_offset": week_offset,
+        "days": days,
+    })
+
+# views.py
+WEEKDAY_CHOICES = [
+    ('monday', 'Monday'),
+    ('tuesday', 'Tuesday'),
+    ('wednesday', 'Wednesday'),
+    ('thursday', 'Thursday'),
+    ('friday', 'Friday'),
+    ('saturday', 'Saturday'),
+    ('sunday', 'Sunday'),
+]
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def lesson_edit(request, lesson_id):
+    lesson = get_object_or_404(Lesson, id=lesson_id)
+
+    if request.method == "POST":
+        # Store old position
+        old_day = lesson.day_of_week
+        old_slot = lesson.time_slot_id
+
+        # Update lesson
+        lesson.subject_id = request.POST.get("subject")
+        lesson.stream_id = request.POST.get("stream")
+        lesson.teacher_id = request.POST.get("teacher")
+        lesson.day_of_week = request.POST.get("day_of_week")
+        lesson.time_slot_id = request.POST.get("time_slot")
+        lesson.room = request.POST.get("room")
+        lesson.lesson_date = request.POST.get("lesson_date") or None
+        lesson.notes = request.POST.get("notes")
+        lesson.is_canceled = request.POST.get("is_canceled") == "on"
+        lesson.save()
+
+        # New position
+        new_day = lesson.day_of_week
+        new_slot = lesson.time_slot_id
+
+        # Send SMS
+        # try:
+        #     send_sms_to_teacher(lesson)
+        # except Exception as e:
+        #     print("SMS error:", e)
+
+        # Return updated HTML
+        cell_html = render_to_string(
+            "school/partials/lesson_cell_content.html",
+            {"lesson": lesson},
+            request=request
         )
 
-    # Pagination
-    paginator = Paginator(timetables, 10)
-    page_number = request.GET.get('page')
-    timetables_page = paginator.get_page(page_number)
-
-    # For each timetable, fetch sample lessons (limit to avoid overload)
-    timetables_with_lessons = []
-    for tt in timetables_page:
-        lessons_qs = Lesson.objects.filter(timetable=tt).select_related('subject', 'teacher', 'stream', 'time_slot').order_by('lesson_date')
-        lessons_count = lessons_qs.count()
-        timetables_with_lessons.append({
-            'timetable': tt,
-            'lessons': lessons_qs,
-            'lessons_count': lessons_count,
-            'active': timezone.now().date() >= tt.start_date and timezone.now().date() <= tt.end_date,
+        return JsonResponse({
+            "success": True,
+            "lesson_id": lesson.id,
+            "cell_html": cell_html,
+            "old_day": old_day,
+            "old_slot": old_slot,
+            "new_day": new_day,
+            "new_slot": new_slot,
         })
 
-    # Instantiate forms
-    timetable_form = TimetableForm(school=school)
-    lesson_form = LessonForm(school=school)  # Pass school if your form requires it
-
+    # GET → load form
     context = {
-        'timetables': timetables_with_lessons,
-        'form': timetable_form,
-        'lesson_form': lesson_form,  # <-- pass to template
-        'school': school,
-        'query': query,
+        "lesson": lesson,
+        "subjects": Subject.objects.all(),
+        "streams": Streams.objects.all(),
+        "teachers": StaffProfile.objects.select_related("user"),
+        "timeslots": TimeSlot.objects.all(),
+        "weekday_choices": WEEKDAY_CHOICES,
     }
 
-    return render(request, 'school/timetable.html', context)
+    return render(request, "school/partials/lesson_form.html", context)
 
+@login_required
+def lesson_attendance(request, lesson_id):
+    lesson = get_object_or_404(Lesson, id=lesson_id)
+
+    enrollments = Enrollment.objects.filter(
+        lesson=lesson,
+        status='active'
+    ).select_related('student')
+
+    if request.method == "POST":
+        with transaction.atomic():
+            for e in enrollments:
+                status = request.POST.get(f"status_{e.id}")
+                remarks = request.POST.get(f"remarks_{e.id}")
+
+                if not status:
+                    continue
+
+                # Update or create attendance record
+                att, created = Attendance.objects.update_or_create(
+                    enrollment=e,
+                    date=lesson.lesson_date,
+                    defaults={
+                        "status": status,
+                        "remarks": remarks,
+                        "marked_by": getattr(request.user, "staffprofile", None)
+                    }
+                )
+
+                # 🔥 Update student suspension/expulsion flags
+                student = e.student
+                if status == '18':  # Suspension
+                    student.suspended = True
+                    student.expelled = False  # can't be expelled at the same time
+                    student.save(update_fields=['suspended', 'expelled'])
+                elif status == '20':  # Expulsion
+                    student.expelled = True
+                    student.suspended = False  # can't be suspended at the same time
+                    student.is_active = False  # maybe deactivate
+                    student.save(update_fields=['expelled', 'suspended', 'is_active'])
+                else:
+                    # Reset flags if normal attendance
+                    if student.suspended or student.expelled:
+                        student.suspended = False
+                        student.expelled = False
+                        student.save(update_fields=['suspended', 'expelled'])
+
+        # Reload fresh attendance data
+        updated_attendance = Attendance.objects.filter(
+            enrollment__lesson=lesson,
+            date=lesson.lesson_date
+        ).select_related("enrollment")
+
+        attendance_map = {a.enrollment_id: a for a in updated_attendance}
+
+        html = render_to_string(
+            "school/partials/attendance_modal.html",
+            {
+                "lesson": lesson,
+                "enrollments": enrollments,
+                "attendance_map": attendance_map,
+                "status_choices": Attendance.ATTENDANCE_STATUS_CHOICES,
+            },
+            request=request
+        )
+
+        return JsonResponse({"success": True, "html": html})
+
+    # GET request — load existing data
+    attendance_map = {
+        a.enrollment_id: a
+        for a in Attendance.objects.filter(
+            enrollment__lesson=lesson,
+            date=lesson.lesson_date
+        )
+    }
+
+    return render(request, "school/partials/attendance_modal.html", {
+        "lesson": lesson,
+        "enrollments": enrollments,
+        "attendance_map": attendance_map,
+        "status_choices": Attendance.ATTENDANCE_STATUS_CHOICES,
+    })
 @login_required
 def timetable_create(request):
     """
@@ -2762,35 +2904,35 @@ def lesson_create(request):
     return redirect('school:lesson-list', timetable_id=request.POST.get('timetable'))
 
 
-@login_required
-def lesson_edit(request, lesson_id):
-    user = request.user
+# @login_required
+# def lesson_edit(request, lesson_id):
+#     user = request.user
 
-    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
-        messages.error(request, "You do not have permission to access this dashboard.")
-        return redirect("userauths:sign-in")
+#     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+#         messages.error(request, "You do not have permission to access this dashboard.")
+#         return redirect("userauths:sign-in")
 
-    school = get_user_school(user)
+#     school = get_user_school(user)
 
-    if not school:
-        messages.error(request, "Access denied.")
-        return redirect('school:dashboard')
+#     if not school:
+#         messages.error(request, "Access denied.")
+#         return redirect('school:dashboard')
     
-    lesson = get_object_or_404(Lesson, id=lesson_id, timetable__school=school)
+#     lesson = get_object_or_404(Lesson, id=lesson_id, timetable__school=school)
     
-    if request.method == 'POST':
-        form = LessonForm(request.POST, instance=lesson, school=school)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Lesson for {lesson.subject} on {lesson.lesson_date} updated.')
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    if field == '__all__':
-                        messages.error(request, error)
-                    else:
-                        messages.error(request, f"{form.fields[field].label}: {error}")
-    return redirect('school:school-timetable')
+#     if request.method == 'POST':
+#         form = LessonForm(request.POST, instance=lesson, school=school)
+#         if form.is_valid():
+#             form.save()
+#             messages.success(request, f'Lesson for {lesson.subject} on {lesson.lesson_date} updated.')
+#         else:
+#             for field, errors in form.errors.items():
+#                 for error in errors:
+#                     if field == '__all__':
+#                         messages.error(request, error)
+#                     else:
+#                         messages.error(request, f"{form.fields[field].label}: {error}")
+#     return redirect('school:school-timetable')
 
 
 @login_required
@@ -3448,7 +3590,15 @@ def teacher_attendance_mark(request, lesson_id):
         for code in ['P','ET','UT','EA','UA']:
             student_trend[code] = round(qs.filter(status=code).count() * 100 / total, 0)
         trend_map[e.student.id] = student_trend
-
+    disabled_attendance = {}
+    for e in enrollments:
+        # Check if student has '18' or '20' today
+        att = Attendance.objects.filter(
+            enrollment=e,
+            date=lesson.lesson_date,
+            status__in=['18', '20']
+        ).first()
+        disabled_attendance[e.id] = bool(att)  # True if they have suspension/expulsion
     return render(request, 'school/teacher/attendance_mark.html', {
         'lesson': lesson,
         'enrollments': enrollments,
@@ -3458,6 +3608,7 @@ def teacher_attendance_mark(request, lesson_id):
         'can_override': can_override,
         'ATTENDANCE_CODES': ['P','ET','UT','EA','UA'],
         'DISCIPLINE_CODES': ['IB','18','20'],
+        'disabled_attendance': disabled_attendance,
         'INCIDENT_TYPE_CHOICES': INCIDENT_TYPE_CHOICES,
         'SEVERITY_CHOICES': DisciplineRecord._meta.get_field('severity').choices,
         'trend_map': trend_map,

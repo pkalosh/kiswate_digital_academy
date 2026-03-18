@@ -341,6 +341,8 @@ class Student(models.Model):
     profile_picture = models.ImageField(upload_to='students/', blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
     is_active = models.BooleanField(default=True)
+    suspended = models.BooleanField(default=False)  # New: For marking suspensions
+    expelled = models.BooleanField(default=False)  # New: For marking expulsions
 
     def __str__(self):
         return f"{self.user.get_full_name()} ({self.student_id})"
