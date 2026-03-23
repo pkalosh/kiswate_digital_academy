@@ -50,19 +50,24 @@ Attendance | {{ lesson.subject.name }}
 
                                 <!-- ATTENDANCE RADIO BUTTONS -->
                                 <td>
-                                    {% for s in status_choices %}
-                                    {% if s.code not in DISCIPLINE_CODES %}
-                                    <label class="badge bg-{{ s.color }} text-dark me-1">
-                                        <input type="radio"
-                                            name="status_{{ e.id }}"
-                                            value="{{ s.code }}"
-                                            {% if current_statuses|get_item:e.id == s.code %}checked{% endif %}
-                                            {% if attendance_locked and not can_override %}disabled{% endif %}
-                                            {% if disabled_attendance|get_item:e.id %}disabled{% endif %}>  <!-- 🔥 NEW -->
-                                        {{ s.code }}
-                                    </label>
+                                    {% if disabled_attendance|get_item:e.id %}
+                                        <span class="badge bg-dark">
+                                            {{ forced_status_map|get_item:e.id }}
+                                        </span>
+                                    {% else %}
+                                        {% for s in status_choices %}
+                                            {% if s.code not in DISCIPLINE_CODES %}
+                                            <label class="badge bg-{{ s.color }} text-dark me-1">
+                                                <input type="radio"
+                                                    name="status_{{ e.id }}"
+                                                    value="{{ s.code }}"
+                                                    {% if current_statuses|get_item:e.id == s.code %}checked{% endif %}
+                                                    {% if disabled_attendance|get_item:e.id %}disabled{% endif %}>
+                                                {{ s.code }}
+                                            </label>
+                                            {% endif %}
+                                        {% endfor %}
                                     {% endif %}
-                                {% endfor %}
                                 </td>
 
                                 <!-- TRENDS (populated by JS) -->
@@ -72,6 +77,11 @@ Attendance | {{ lesson.subject.name }}
 
                                 <!-- DISCIPLINE BUTTONS -->
                                 <td>
+                                    {% if disabled_attendance|get_item:e.id %}
+                                        <span class="badge bg-dark">
+                                            {{ forced_status_map|get_item:e.id }}
+                                        </span>
+                                    {% else %}
                                     {% for s in status_choices %}
                                         {% if s.code in DISCIPLINE_CODES %}
                                             {% if s.code == "IB" or can_override %}
@@ -84,6 +94,7 @@ Attendance | {{ lesson.subject.name }}
                                             {% endif %}
                                         {% endif %}
                                     {% endfor %}
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

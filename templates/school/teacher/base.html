@@ -162,10 +162,11 @@
         <i class="bi bi-chevron-down small"></i>
       </a>
       <div class="collapse ps-4" id="agencyMenu">
-          <a class="side-link" href="{% url 'school:teacher-lessons' request.user.staffprofile.id %}">Lessons</a>
+          <a class="side-link" href="{% url 'school:teacher-lessons' request.user.staffprofile.id %}"><i class="bi bi-people"></i> Lessons</a>
 
-        <a class="side-link" href="{% url 'school:school-assignments' %}">Assignments</a>
+        <a class="side-link" href="{% url 'school:school-assignments' %}"><i class="bi bi-people"></i> Assignments</a>
       <a class="side-link" href="{% url 'school:teacher-discipline' %}"><i class="bi bi-people"></i> Discipline</a>
+      <a class="side-link" href="{% url 'school:teacher-attendance' %}"><i class="bi bi-check-circle"></i> Attendance History</a>
 
       </div>
      

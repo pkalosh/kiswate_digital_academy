@@ -1,0 +1,298 @@
+{% extends "school/teacher/base.html" %}
+{% load static %}
+{% load dict_filters school_extras %}
+
+{% block title %}
+Teacher Attendance Dashboard
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    <!-- HEADER -->
+    <div class="card shadow-sm rounded-4 mb-3 p-3">
+        <h5 class="mb-1">Attendance Dashboard</h5>
+        <small class="text-muted">
+            School: {{ school.name }} |
+            Period: {{ period_start }} → {{ period_end }}
+        </small>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="card shadow-sm rounded-4 mb-3 p-3">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Stream</label>
+                <select name="stream" class="form-select">
+                    <option value="">All Streams</option>
+                    {% for s in streams %}
+                        <option value="{{ s.id }}" {% if selected_stream == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Grade</label>
+                <select name="grade" class="form-select">
+                    <option value="">All Grades</option>
+                    {% for g in grades %}
+                        <option value="{{ g.id }}" {% if selected_grade == g.id|stringformat:"s" %}selected{% endif %}>{{ g.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start" value="{{ period_start }}" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end" value="{{ period_end }}" class="form-control">
+            </div>
+            <div class="col-md-12 text-end mt-2">
+                <button class="btn btn-primary">Apply Filters</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- EXPORT BUTTONS -->
+    <div class="mb-2 text-end">
+        <button class="btn btn-outline-success btn-sm" id="exportCsvBtn">Export CSV</button>
+        <button class="btn btn-outline-primary btn-sm" id="exportExcelBtn">Export Excel</button>
+    </div>
+
+    <!-- ATTENDANCE TABLE -->
+    <div class="card shadow-sm rounded-4 p-3 mb-3">
+        <table id="attendanceTable" class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Lesson</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Marked By</th>
+                    <th>Discipline</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for att in attendances %}
+                <tr>
+                    <td>{{ att.enrollment.student.user.get_full_name }}</td>
+                    <td>{{ att.enrollment.lesson.subject.name }} | {{ att.enrollment.lesson.stream.name }}</td>
+                    <td>{{ att.date }}</td>
+                    <td>
+                        <span class="badge
+                            {% if att.status == 'P' %}bg-success
+                            {% elif att.status == 'ET' or att.status == 'UT' %}bg-warning
+                            {% elif att.status == 'EA' or att.status == 'UA' %}bg-danger
+                            {% else %}bg-dark{% endif %}">
+                            {{ att.get_status_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if att.marked_by %}
+                            {{ att.marked_by.user.get_full_name }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if att.status == 'IB' or att.status == '18' or att.status == '20' %}
+                            <button type="button" class="btn btn-sm btn-outline-dark disciplineBtn"
+                                    data-student="{{ att.enrollment.student.id }}"
+                                    data-code="{{ att.status }}">
+                                {{ att.status }}
+                            </button>
+                        {% elif att.marked_by %}
+                            {% if att.marked_by.position == 'deputy_principal' or att.marked_by.position == 'principal' %}
+                                <button type="button" class="btn btn-sm btn-outline-dark disciplineBtn"
+                                        data-student="{{ att.enrollment.student.id }}"
+                                        data-code="{{ att.status }}">
+                                    {{ att.status }}
+                                </button>
+                            {% else %}
+                                -
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No attendance records found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- PAGINATION -->
+        {% if attendances.has_other_pages %}
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center">
+                {% if attendances.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ attendances.previous_page_number }}{% if selected_stream %}&stream={{ selected_stream }}{% endif %}{% if selected_grade %}&grade={{ selected_grade }}{% endif %}&start={{ period_start }}&end={{ period_end }}">Previous</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for num in attendances.paginator.page_range %}
+                    {% if attendances.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if selected_stream %}&stream={{ selected_stream }}{% endif %}{% if selected_grade %}&grade={{ selected_grade }}{% endif %}&start={{ period_start }}&end={{ period_end }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if attendances.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ attendances.next_page_number }}{% if selected_stream %}&stream={{ selected_stream }}{% endif %}{% if selected_grade %}&grade={{ selected_grade }}{% endif %}&start={{ period_start }}&end={{ period_end }}">Next</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-4 p-3 text-center">
+                <h6>Present</h6>
+                <span class="fs-4 badge bg-success">{{ present_pct }}%</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-4 p-3 text-center">
+                <h6>Absent</h6>
+                <span class="fs-4 badge bg-danger">{{ absent_pct }}%</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-4 p-3 text-center">
+                <h6>Tardy</h6>
+                <span class="fs-4 badge bg-warning">{{ tardy_pct }}%</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DISCIPLINE MODAL -->
+<div class="modal fade" id="disciplineModal" tabindex="-1" aria-labelledby="disciplineModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <div class="modal-header">
+                <h5 class="modal-title" id="disciplineModalLabel">Record Discipline / Incident</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="disciplineStudent">
+                <input type="hidden" id="disciplineCode">
+                <textarea id="modalDesc" class="form-control mb-3" rows="3" placeholder="Description of incident"></textarea>
+                <select id="modalType" class="form-select mb-3">
+                    {% for value, label in INCIDENT_TYPE_CHOICES %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select id="modalSeverity" class="form-select mb-3">
+                    {% for value, label in SEVERITY_CHOICES %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <textarea id="modalAction" class="form-control" rows="2" placeholder="Action taken (optional)"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveDisciplineBtn">Save Incident</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+// Discipline modal
+document.querySelectorAll('.disciplineBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('disciplineStudent').value = btn.dataset.student;
+        document.getElementById('disciplineCode').value = btn.dataset.code;
+        new bootstrap.Modal(document.getElementById('disciplineModal')).show();
+    });
+});
+
+document.getElementById('saveDisciplineBtn')?.addEventListener('click', () => {
+    const studentId = document.getElementById('disciplineStudent').value;
+    const code = document.getElementById('disciplineCode').value;
+    const description = document.getElementById('modalDesc').value.trim();
+    const incidentType = document.getElementById('modalType').value;
+    const severity = document.getElementById('modalSeverity').value;
+    const action = document.getElementById('modalAction').value.trim();
+
+    if (!description) return alert('Please enter a description');
+
+    fetch("{% url 'school:teacher-discipline-create-ajax' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: new URLSearchParams({
+            student_id: studentId,
+            code: code,
+            description: description,
+            incident_type: incidentType,
+            severity: severity,
+            action: action
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Discipline record saved');
+            bootstrap.Modal.getInstance(document.getElementById('disciplineModal')).hide();
+        } else {
+            alert(data.error || 'Failed to save discipline record');
+        }
+    });
+});
+
+// CSV / Excel export
+function downloadCSV(csv, filename) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+}
+
+function tableToCSV(table) {
+    let csv = [];
+    table.querySelectorAll('tr').forEach(row => {
+        let cols = row.querySelectorAll('td, th');
+        let rowData = [];
+        cols.forEach(col => rowData.push('"' + col.innerText.replace(/"/g, '""') + '"'));
+        csv.push(rowData.join(','));
+    });
+    return csv.join('\n');
+}
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    const table = document.getElementById('attendanceTable');
+    const csv = tableToCSV(table);
+    downloadCSV(csv, 'attendance.csv');
+});
+
+document.getElementById('exportExcelBtn').addEventListener('click', () => {
+    const table = document.getElementById('attendanceTable');
+    const wb = XLSX.utils.table_to_book(table, { sheet: "Attendance" });
+    XLSX.writeFile(wb, 'attendance.xlsx');
+});
+</script>
+
+{% endblock %}

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'django.contrib.humanize',
+
     # 'ratelimit',
     'crispy_forms',
     'crispy_bootstrap5',

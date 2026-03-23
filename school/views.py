@@ -55,6 +55,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+from django.db.models import Count, Q, OuterRef, Exists,Prefetch
+from django.utils.dateparse import parse_date
+
 import csv
 from io import StringIO
 import logging
@@ -315,115 +318,167 @@ def get_user_school(user):
 
     return None
 
-
-
-
-
 @login_required
 def dashboard(request):
     user = request.user
 
-    # ------------------- Permissions -------------------
+    # Permission check
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
         messages.error(request, "You do not have permission to access this dashboard.")
         return redirect("userauths:sign-in")
 
+    # Get school
     school = get_user_school(user)
     if not school:
         return render(request, "school/error.html", {"message": "No school profile found."})
-    # Focus date
+
+    # Active term
+    active_term = Term.objects.filter(school=school, is_active=True).first()
+    term_filter = Q(date__range=(active_term.start_date, active_term.end_date)) if active_term else Q()
+
+    # Week focus
     date_str = request.GET.get("date")
     try:
         focus_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else timezone.localdate()
     except ValueError:
         focus_date = timezone.localdate()
-
-    # Week start-end
     week_start = focus_date - timedelta(days=focus_date.weekday())
-    week_end = week_start + timedelta(days=4)
     week_days = [week_start + timedelta(days=i) for i in range(5)]
     prev_week = week_start - timedelta(days=7)
     next_week = week_start + timedelta(days=7)
 
-    # ------------------- KPIs -------------------
-    total_teachers = StaffProfile.objects.filter(position="teacher").count()
-    total_students = Student.objects.filter(is_active=True).count()
-    total_parents = Parent.objects.count()
-
-    # Missed lessons = UA + UT
+    # ---------------- KPIs ----------------
+    total_teachers = StaffProfile.objects.filter(position="teacher", school=school).count()
+    total_students = Student.objects.filter(is_active=True, school=school).count()
+    total_parents = Parent.objects.filter(school=school).count()
     total_missed = Attendance.objects.filter(
-        status__in=['UT','UA'],
-        date__range=(week_start, week_end)
-    ).count()
-
-    # Lateness = ET + UT
+        status__in=['UT','UA'], 
+        enrollment__school=school
+    ).filter(term_filter).count()
     total_lateness = Attendance.objects.filter(
-        status__in=['ET','UT'],
-        date__range=(week_start, week_end)
-    ).count()
+        status__in=['ET','UT'], 
+        enrollment__school=school
+    ).filter(term_filter).count()
+    kpis = [
+        {"label": "Teachers", "value": total_teachers, "icon": "people"},
+        {"label": "Students", "value": total_students, "icon": "person"},
+        {"label": "Parents", "value": total_parents, "icon": "person-hearts"},
+        {"label": "Missed", "value": total_missed, "icon": "calendar-x"},
+        {"label": "Lateness", "value": total_lateness, "icon": "clock-history"},
+    ]
 
-    # ------------------- Top Teachers by Missed Lessons -------------------
-    top_teachers = (
-        StaffProfile.objects.filter(position="teacher")
-        .annotate(
-            missed_lessons=Count(
-                'lessons_taught__l_enrollments__attendances',
-                filter=Q(
-                    lessons_taught__l_enrollments__attendances__status__in=['UT','UA'],
-                    lessons_taught__l_enrollments__attendances__date__range=(week_start, week_end)
-                )
+    # ---------------- Teachers Missed Lessons ----------------
+    teachers_missed_qs = StaffProfile.objects.filter(position='teacher', school=school).annotate(
+        missed_count=Count(
+            'lessons_taught__l_enrollments__attendances',
+            filter=Q(
+                lessons_taught__l_enrollments__attendances__status__in=['UT','UA'],
+                lessons_taught__l_enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
             )
         )
-        .order_by('-missed_lessons')[:10]
-    )
+    ).filter(missed_count__gt=0).select_related('user')
 
-    # ------------------- Classes with highest UA/UT -------------------
-    top_classes = (
-        Streams.objects.annotate(
-            missed=Count(
-                'lessons__l_enrollments__attendances',
-                filter=Q(
-                    lessons__l_enrollments__attendances__status__in=['UT','UA'],
-                    lessons__l_enrollments__attendances__date__range=(week_start, week_end)
-                )
-            )
-        ).order_by('-missed')[:10]
-    )
+    teachers_missed = [
+        {"teacher": teacher.user.get_full_name(), "missed_count": teacher.missed_count}
+        for teacher in teachers_missed_qs
+    ]
 
-    # ------------------- Student Lateness Heatmap -------------------
-    student_lateness = (
-        Student.objects.annotate(
-            lateness=Count(
+    # ---------------- Students Missed Lessons grouped by stream ----------------
+    student_missed_by_stream = []
+    streams = Streams.objects.filter(school=school)
+    for stream in streams:
+        students_data = Student.objects.filter(
+            enrollments__lesson__stream=stream,
+            enrollments__attendances__status__in=['UT','UA'],
+            enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
+        ).annotate(
+            missed_count=Count(
                 'enrollments__attendances',
                 filter=Q(
-                    enrollments__attendances__status__in=['ET','UT'],
-                    enrollments__attendances__date__range=(week_start, week_end)
+                    enrollments__attendances__status__in=['UT','UA'],
+                    enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
                 )
             )
-        ).order_by('-lateness')[:20]
-    )
+        ).distinct()
 
-    # ------------------- Weekly Attendance Trends -------------------
-    week_counts = defaultdict(lambda: {'P':0,'ET':0,'UT':0,'EA':0,'UA':0})
-    for day in week_days:
-        day_attendance = Attendance.objects.filter(date=day)
-        for status in ['P','ET','UT','EA','UA']:
-            week_counts[day][status] = day_attendance.filter(status=status).count()
+        if students_data.exists():
+            student_missed_by_stream.append({
+                "stream": stream.name,
+                "students": [{"student": s.user.get_full_name(), "missed_count": s.missed_count} for s in students_data]
+            })
+
+    # ---------------- Suspensions / Expulsions ----------------
+    suspensions_qs = Attendance.objects.filter(
+        status='18', enrollment__school=school,
+        date__range=(week_start, week_start + timedelta(days=4))
+    ).select_related('enrollment__student__user')
+    expulsions_qs = Attendance.objects.filter(
+        status='20', enrollment__school=school,
+        date__range=(week_start, week_start + timedelta(days=4))
+    ).select_related('enrollment__student__user')
+
+    suspension_paginator = Paginator(suspensions_qs.order_by('enrollment__student__user__first_name'), 10)
+    expulsion_paginator = Paginator(expulsions_qs.order_by('enrollment__student__user__first_name'), 10)
+
+    suspension_page = request.GET.get('susp_page')
+    expulsion_page = request.GET.get('exp_page')
+
+    suspensions_paginated = suspension_paginator.get_page(suspension_page)
+    expulsions_paginated = expulsion_paginator.get_page(expulsion_page)
+
+    # ---------------- Weekly Attendance ----------------
+    week_counts = {status: [] for status in ['P','ET','UT','EA','UA']}
+    for status in ['P','ET','UT','EA','UA']:
+        day_counts = Attendance.objects.filter(
+            status=status,
+            date__range=(week_start, week_start + timedelta(days=4)),
+            enrollment__school=school
+        ).values('date').annotate(count=Count('id'))
+        day_dict = {d['date']: d['count'] for d in day_counts}
+        for day in week_days:
+            week_counts[status].append(day_dict.get(day, 0))
+
+    # ---------------- Teacher Heatmap ----------------
+    heat_data = Enrollment.objects.filter(
+        lesson__teacher__school=school,
+        attendances__status__in=['UT','UA'],
+        attendances__date__range=(week_start, week_start + timedelta(days=4))
+    ).values(
+        teacher_id=F('lesson__teacher__id'),
+        att_date=F('attendances__date')  # renamed to avoid conflict
+    ).annotate(count=Count('attendances'))
+
+    teacher_heatmap = {}
+    for entry in heat_data:
+        tid = entry['teacher_id']
+        day = entry['att_date']
+        teacher_heatmap.setdefault(tid, {})
+        teacher_heatmap[tid][day] = entry['count']
+
+    teachers_list = StaffProfile.objects.filter(position='teacher', school=school).select_related('user')
+    teacher_heatmap_final = []
+    for t in teachers_list:
+        day_counts = {d: teacher_heatmap.get(t.id, {}).get(d, 0) for d in week_days}
+        max_missed = max(day_counts.values()) if day_counts else 1
+        day_colors = {d: f'rgba(220,53,69,{day_counts[d]/max_missed if max_missed else 0})' for d in week_days}
+        teacher_heatmap_final.append({
+            "teacher": t.user.get_full_name(),
+            "day_counts": day_counts,
+            "day_colors": day_colors
+        })
 
     context = {
-        "total_teachers": total_teachers,
-        "total_students": total_students,
-        "total_parents": total_parents,
-        "total_missed": total_missed,
-        "total_lateness": total_lateness,
+        "school": school,
+        "kpis": kpis,
         "week_days": week_days,
         "prev_week": prev_week,
         "next_week": next_week,
-        "top_teachers": top_teachers,
-        "top_classes": top_classes,
-        "student_lateness": student_lateness,
+        "teachers_missed": teachers_missed,
+        "student_missed_by_stream": student_missed_by_stream,
+        "suspensions": suspensions_paginated,
+        "expulsions": expulsions_paginated,
         "week_counts": week_counts,
-        "selected_date": focus_date,
+        "teacher_heatmap": teacher_heatmap_final,
     }
 
     return render(request, "school/dashboard.html", context)
@@ -3144,15 +3199,14 @@ from django.db.models import Count, Q, F
 from django.core.paginator import Paginator
 @login_required
 def attendance_dashboard(request):
-    # ───── USER SCHOOL ─────
     user = request.user
 
+    # ───── PERMISSIONS ─────
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
         messages.error(request, "You do not have permission to access this dashboard.")
         return redirect("userauths:sign-in")
 
     school = get_user_school(user)
-
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:dashboard')
@@ -3163,6 +3217,7 @@ def attendance_dashboard(request):
         'enrollment__student__grade_level',
         'enrollment__student__stream',
         'enrollment__lesson__subject',
+        'enrollment__lesson__teacher__user',
         'term',
         'academic_year',
         'marked_by__user'
@@ -3176,33 +3231,45 @@ def attendance_dashboard(request):
         'stream': request.GET.get('stream', ''),
         'subject': request.GET.get('subject', ''),
         'student': request.GET.get('student', ''),
-        'date': request.GET.get('date', ''),
+        'date_from': request.GET.get('date_from', ''),
+        'date_to': request.GET.get('date_to', ''),
     }
 
     if filters['academic_year'].isdigit():
         qs = qs.filter(academic_year_id=filters['academic_year'])
+
     if filters['term'].isdigit():
         qs = qs.filter(term_id=filters['term'])
+
     if filters['grade'].isdigit():
         qs = qs.filter(enrollment__student__grade_level_id=filters['grade'])
+
     if filters['stream'].isdigit():
         qs = qs.filter(enrollment__student__stream_id=filters['stream'])
+
     if filters['subject'].isdigit():
         qs = qs.filter(enrollment__lesson__subject_id=filters['subject'])
+
     if filters['student'].strip():
         s = filters['student'].strip()
         qs = qs.filter(
-            Q(enrollment__student__admission_number__icontains=s) |
+            Q(enrollment__student__student_id__icontains=s) |
             Q(enrollment__student__user__first_name__icontains=s) |
             Q(enrollment__student__user__last_name__icontains=s)
         )
-    if filters['date']:
-        from django.utils.dateparse import parse_date
-        parsed = parse_date(filters['date'])
-        if parsed:
-            qs = qs.filter(date=parsed)
 
-    # ───── ATTENDANCE STATS ─────
+    # ───── DATE RANGE ─────
+    date_from = parse_date(filters['date_from']) if filters['date_from'] else None
+    date_to = parse_date(filters['date_to']) if filters['date_to'] else None
+
+    if date_from and date_to:
+        qs = qs.filter(date__range=(date_from, date_to))
+    elif date_from:
+        qs = qs.filter(date__gte=date_from)
+    elif date_to:
+        qs = qs.filter(date__lte=date_to)
+
+    # ───── STATUS CARDS ─────
     stats = qs.aggregate(
         P=Count('id', filter=Q(status='P')),
         ET=Count('id', filter=Q(status='ET')),
@@ -3210,59 +3277,124 @@ def attendance_dashboard(request):
         EA=Count('id', filter=Q(status='EA')),
         UA=Count('id', filter=Q(status='UA')),
     )
+
     stats = {k: v or 0 for k, v in stats.items()}
 
     status_cards = [
-        {'status': 'P', 'label': 'Present', 'color': 'success', 'count': stats['P']},
-        {'status': 'ET', 'label': 'Tardy', 'color': 'warning', 'count': stats['ET'] + stats['UT']},
-        {'status': 'EA', 'label': 'Absent', 'color': 'danger', 'count': stats['EA'] + stats['UA']},
+        {'label': 'Present', 'color': 'success', 'count': stats['P']},
+        {'label': 'Tardy', 'color': 'warning', 'count': stats['ET'] + stats['UT']},
+        {'label': 'Absent', 'color': 'danger', 'count': stats['EA'] + stats['UA']},
     ]
 
+    # ───── FULL STATUS TREND ─────
+    status_trend = qs.values('date').annotate(
+        P=Count('id', filter=Q(status='P')),
+        ET=Count('id', filter=Q(status='ET')),
+        UT=Count('id', filter=Q(status='UT')),
+        EA=Count('id', filter=Q(status='EA')),
+        UA=Count('id', filter=Q(status='UA')),
+        IB=Count('id', filter=Q(status='IB')),
+        S18=Count('id', filter=Q(status='18')),
+        S20=Count('id', filter=Q(status='20')),
+    ).order_by('date')
+
+    # ───── MISSING ATTENDANCE ─────
+    lesson_qs = Lesson.objects.filter(
+        timetable__school=school,
+        lesson_date__lt=localdate()
+    )
+
+    attendance_exists = Attendance.objects.filter(
+        enrollment__lesson=OuterRef('pk')
+    )
+
+    missing_lessons = lesson_qs.annotate(
+        has_attendance=Exists(attendance_exists)
+    ).filter(has_attendance=False)
+
+    missing_lessons_count = missing_lessons.count()
+
+    # ───── TEACHER MISSED LESSONS ─────
+    teacher_missed_trends = missing_lessons.values(
+        'teacher__user__first_name',
+        'teacher__user__last_name'
+    ).annotate(
+        missed=Count('id')
+    ).order_by('-missed')[:10]
+
+    # ───── DISCIPLINE BASE ─────
+    discipline_qs = DisciplineRecord.objects.filter(
+        school=school,
+        linked_attendance__in=qs
+    )
+
     # ───── DISCIPLINE STATS ─────
-    discipline_qs = DisciplineRecord.objects.filter(linked_attendance__in=qs)
     discipline_stats = discipline_qs.aggregate(
         total=Count('id'),
         unresolved=Count('id', filter=Q(resolved=False)),
         severe=Count('id', filter=Q(severity='severe')),
     )
+
     discipline_stats = {k: v or 0 for k, v in discipline_stats.items()}
 
-    # ───── TRENDS ─────
-    today = localdate()
-    daily_trend = qs.filter(date__gte=today - timedelta(days=30)).values('date').annotate(
+    # ───── DISCIPLINE DAILY TREND (FIXED ✅ uses date) ─────
+    discipline_daily = discipline_qs.values('date').annotate(
+        total=Count('id'),
+        severe=Count('id', filter=Q(severity='severe'))
+    ).order_by('date')
+
+    # ───── DISCIPLINE PER GRADE ─────
+    discipline_by_grade = discipline_qs.values(
+        'linked_attendance__enrollment__student__grade_level__name'
+    ).annotate(
+        total=Count('id'),
+        severe=Count('id', filter=Q(severity='severe')),
+        repeats=Sum('frequency_count')
+    )
+
+    # ───── INCIDENT TYPE TREND (NEW 🔥) ─────
+    discipline_by_type = discipline_qs.values('incident_type').annotate(
+        total=Count('id')
+    ).order_by('-total')
+
+    # ───── TOP REPEAT OFFENDERS (NEW 🔥) ─────
+    repeat_offenders = discipline_qs.values(
+        'student__user__first_name',
+        'student__user__last_name'
+    ).annotate(
+        total_cases=Count('id'),
+        repeat_score=Sum('frequency_count')
+    ).order_by('-repeat_score')[:10]
+
+    # ───── DEFAULT TREND ─────
+    trend_qs = qs
+    if not (date_from or date_to):
+        today = localdate()
+        trend_qs = qs.filter(date__gte=today - timedelta(days=30))
+
+    daily_trend = trend_qs.values('date').annotate(
         present=Count('id', filter=Q(status='P')),
         absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
     ).order_by('date')
-
-    grade_trends = qs.values('enrollment__student__grade_level__name').annotate(
-        P=Count('id', filter=Q(status='P')),
-        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
-        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
-    ).order_by('enrollment__student__grade_level__name')
-
-    stream_trends = qs.values('enrollment__student__stream__name').annotate(
-        P=Count('id', filter=Q(status='P')),
-        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
-        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
-    ).order_by('enrollment__student__stream__name')
-
-    subject_trends = qs.values('enrollment__lesson__subject__name').annotate(
-        P=Count('id', filter=Q(status='P')),
-        Tardy=Count('id', filter=Q(status__in=['ET', 'UT'])),
-        Absent=Count('id', filter=Q(status__in=['EA', 'UA'])),
-    ).order_by('enrollment__lesson__subject__name')
 
     # ───── PAGINATION ─────
     paginator = Paginator(qs.order_by('-date', '-id'), 25)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    context = {
+    # ───── FINAL CONTEXT ─────
+    return render(request, 'school/attendance_dashboard.html', {
         'attendances': page_obj,
         'status_cards': status_cards,
         'daily_trend': list(daily_trend),
-        'grade_trends': list(grade_trends),
-        'stream_trends': list(stream_trends),
-        'subject_trends': list(subject_trends),
+
+        'status_trend': list(status_trend),
+        'teacher_missed_trends': list(teacher_missed_trends),
+        'discipline_daily': list(discipline_daily),
+        'discipline_by_grade': list(discipline_by_grade),
+        'discipline_by_type': list(discipline_by_type),
+        'repeat_offenders': list(repeat_offenders),
+        'missing_lessons_count': missing_lessons_count,
+
         'discipline_stats': discipline_stats,
         'filters': filters,
         'academic_years': AcademicYear.objects.filter(school=school),
@@ -3272,12 +3404,7 @@ def attendance_dashboard(request):
         'subjects': Subject.objects.filter(school=school, is_active=True),
         'school': school,
         'alerts': [],
-    }
-
-    return render(request, 'school/attendance_dashboard.html', context)
-
-
-
+    })
 @login_required
 def get_streams_by_grade(request):
     grade_id = request.GET.get('grade')
@@ -3440,22 +3567,97 @@ def attendance_summary(request):
 @login_required
 def teacher_attendance(request):
     try:
-        school = request.user.staffprofile.school
+        teacher = request.user.staffprofile
+        school = teacher.school
     except AttributeError:
-        messages.error(request, "Access denied: Admin privileges required.")
+        messages.error(request, "Access denied.")
         return redirect('userauths:teacher-dashboard')
-    
-    attendances = Attendance.objects.filter(lesson__teacher=request.user.staffprofile).select_related('enrollment__student', 'lesson')
-    
-    paginator = Paginator(attendances, 50)
+
+    # ───────────── DATE FILTER ─────────────
+    start = request.GET.get('start')
+    end = request.GET.get('end')
+
+    if start and end:
+        try:
+            start = datetime.strptime(start, "%Y-%m-%d").date()
+            end = datetime.strptime(end, "%Y-%m-%d").date()
+        except ValueError:
+            start = timezone.now().date().replace(day=1)
+            end = timezone.now().date()
+    else:
+        start = timezone.now().date().replace(day=1)
+        end = timezone.now().date()
+
+    # ───────────── STREAM & GRADE FILTER ─────────────
+    stream_id = request.GET.get('stream')
+    grade_id = request.GET.get('grade')
+
+    # ───────────── LESSONS FOR TEACHER ─────────────
+    lessons = Lesson.objects.filter(
+        lesson_date__range=[start, end],
+        teacher=teacher,
+        is_canceled=False
+    ).select_related('stream', 'subject')
+
+    if stream_id:
+        lessons = lessons.filter(stream_id=stream_id)
+    if grade_id:
+        lessons = lessons.filter(stream__grade_id=grade_id)
+
+    # ───────────── ATTENDANCE QUERY ─────────────
+    attendances_qs = Attendance.objects.filter(
+        enrollment__lesson__in=lessons,
+        enrollment__status='active'
+    ).select_related(
+        'enrollment__student__user',
+        'enrollment__lesson__stream',
+        'enrollment__lesson__subject',
+        'marked_by'
+    ).order_by('-date')
+
+    # ───────────── SUMMARY ─────────────
+    total_records = attendances_qs.count()
+    summary_qs = attendances_qs.values('status').annotate(count=Count('status'))
+    summary = {row['status']: row['count'] for row in summary_qs}
+
+    present = summary.get('P', 0)
+    absent = summary.get('UA', 0) + summary.get('EA', 0)
+    tardy = summary.get('ET', 0) + summary.get('UT', 0)
+
+    present_pct = (present / total_records * 100) if total_records else 0
+    absent_pct = (absent / total_records * 100) if total_records else 0
+    tardy_pct = (tardy / total_records * 100) if total_records else 0
+
+    # ───────────── PAGINATION ─────────────
+    paginator = Paginator(attendances_qs, 50)
     page = request.GET.get('page')
     attendances_page = paginator.get_page(page)
-    
+
+    # ───────────── FILTER DROPDOWNS ─────────────
+    streams = Streams.objects.filter(school=school)
+    grades = Grade.objects.filter(school=school)
+
     context = {
         'attendances': attendances_page,
         'school': school,
+
+        # Filters
+        'period_start': start,
+        'period_end': end,
+        'streams': streams,
+        'grades': grades,
+        'selected_stream': stream_id,
+        'selected_grade': grade_id,
+
+        # Summary
+        'summary': summary,
+        'total_records': total_records,
+        'present_pct': round(present_pct, 2),
+        'absent_pct': round(absent_pct, 2),
+        'tardy_pct': round(tardy_pct, 2),
     }
-    return render(request, 'school/teacher/attendance.html', context)
+
+    return render(request, 'school/teacher/teacher_attendance_dashboard.html', context)
 
 
 def send_parent_discipline_notification(parent, student, discipline, lesson):
@@ -3490,29 +3692,41 @@ def send_parent_discipline_notification(parent, student, discipline, lesson):
 # Constants
 DISCIPLINE_CODES = ['IB', '18', '20']
 ATTENDANCE_CODES = ['P', 'ET', 'UT', 'EA', 'UA']
-
 @login_required
 def teacher_attendance_mark(request, lesson_id):
-    lesson = get_object_or_404(Lesson, id=lesson_id, teacher=request.user.staffprofile)
+    lesson = get_object_or_404(
+        Lesson,
+        id=lesson_id,
+        teacher=request.user.staffprofile
+    )
+
     teacher = request.user.staffprofile
     can_override = teacher.position in ['principal', 'deputy_principal']
 
     enrollments = Enrollment.objects.filter(
-        lesson=lesson, status='active'
+        lesson=lesson,
+        status='active'
     ).select_related('student', 'student__user')
 
-    attendance_locked = Attendance.objects.filter(
+    # 🔥 Prefetch today's attendance
+    today_attendance_qs = Attendance.objects.filter(
         enrollment__in=enrollments,
         date=lesson.lesson_date
-    ).exists()
+    ).select_related('enrollment')
 
-    # Build current attendance statuses from DB
-    current_statuses = {
-        a.enrollment_id: a.status
-        for a in Attendance.objects.filter(enrollment__in=enrollments, date=lesson.lesson_date)
+    today_attendance_map = {
+        a.enrollment_id: a for a in today_attendance_qs
     }
 
-    # Status & discipline choices
+    # 🔥 REMOVE HARD LOCK (teachers can edit)
+    attendance_locked = False
+
+    # Current statuses
+    current_statuses = {
+        eid: att.status for eid, att in today_attendance_map.items()
+    }
+
+    # Status choices
     status_choices = [
         {'code': 'P',  'label': 'Present', 'color': 'success'},
         {'code': 'ET', 'label': 'Excused Tardy', 'color': 'warning'},
@@ -3523,25 +3737,53 @@ def teacher_attendance_mark(request, lesson_id):
         {'code': '18', 'label': 'Suspension', 'color': 'dark'},
         {'code': '20', 'label': 'Expulsion', 'color': 'dark'},
     ]
-    if not can_override:
-        status_choices = [s for s in status_choices if s['code'] not in ['18','20']]
 
-    # ────────────────────────────────────────────────
-    #                POST → save + notifications
-    # ────────────────────────────────────────────────
+    # 🔥 Hide 18 & 20 from teachers
+    if not can_override:
+        status_choices = [s for s in status_choices if s['code'] not in ['18', '20']]
+
+    # 🔥 Detect suspended/expelled from STUDENT MODEL
+    disabled_attendance = {}
+    forced_status_map = {}
+
+    for e in enrollments:
+        student = e.student
+
+        if student.expelled:
+            disabled_attendance[e.id] = True
+            forced_status_map[e.id] = '20'
+        elif student.suspended:
+            disabled_attendance[e.id] = True
+            forced_status_map[e.id] = '18'
+        else:
+            disabled_attendance[e.id] = False
+
+    # ───────────────────────── POST ─────────────────────────
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        if attendance_locked and not can_override:
-            return JsonResponse({'success': False, 'error': 'Attendance locked'}, status=403)
 
         with transaction.atomic():
-            # Save all attendances
             updated_attendances = []
-            for e in enrollments:
-                status = request.POST.get(f'status_{e.id}')
-                if status not in [s['code'] for s in status_choices]:
-                    status = 'P'
 
-                att, created = Attendance.objects.update_or_create(
+            for e in enrollments:
+
+                # 🔥 FORCE from student flags (cannot override)
+                if e.id in forced_status_map:
+                    status = forced_status_map[e.id]
+
+                else:
+                    status = request.POST.get(f'status_{e.id}')
+
+                    # 🔥 Prevent teacher from setting 18/20
+                    if not can_override and status in ['18', '20']:
+                        previous = today_attendance_map.get(e.id)
+                        status = previous.status if previous else 'P'
+
+                    # Validate
+                    valid_codes = [s['code'] for s in status_choices]
+                    if status not in valid_codes:
+                        status = 'P'
+
+                att, _ = Attendance.objects.update_or_create(
                     enrollment=e,
                     date=lesson.lesson_date,
                     defaults={
@@ -3551,28 +3793,22 @@ def teacher_attendance_mark(request, lesson_id):
                         'marked_by': teacher
                     }
                 )
+
                 updated_attendances.append(att)
 
-        # ─── After successful save ───────────────────────────────────────
-        # Decide whether to notify (only if this is first or last slot)
+        # 🔥 NOTIFICATIONS (UNCHANGED)
         is_first = is_first_slot(lesson)
-        print(f"Is first slot: {is_first}")
         is_last  = is_last_slot(lesson)
 
         if is_first or is_last:
-            # For first slot → per-lesson notifications
+
             if is_first:
                 for attendance in updated_attendances:
-                    # Only notify if actually marked present/absent/tardy (optional filter)
                     if attendance.status in ['P', 'ET', 'UT', 'EA', 'UA']:
                         notify_first_lesson(attendance)
 
-            # For last slot → daily summary per student
             if is_last:
-                # Group by student (in case one student has multiple lessons)
-                from collections import defaultdict
                 students_notified = set()
-
                 for att in updated_attendances:
                     student = att.enrollment.student
                     if student.id not in students_notified:
@@ -3581,39 +3817,44 @@ def teacher_attendance_mark(request, lesson_id):
 
         return JsonResponse({'success': True})
 
-    # Trends for JS
-    trend_map = {}
-    for e in enrollments:
-        qs = Attendance.objects.filter(enrollment__student=e.student, term=lesson.timetable.term)
-        total = qs.count() or 1
-        student_trend = {}
+    # ───────────────────────── TRENDS ─────────────────────────
+    term_attendance = Attendance.objects.filter(
+        enrollment__student__in=[e.student for e in enrollments],
+        term=lesson.timetable.term
+    ).values('enrollment__student_id', 'status')
+
+    trend_map = defaultdict(lambda: {'P':0,'ET':0,'UT':0,'EA':0,'UA':0,'total':0})
+
+    for row in term_attendance:
+        sid = row['enrollment__student_id']
+        status = row['status']
+
+        if status in trend_map[sid]:
+            trend_map[sid][status] += 1
+
+        trend_map[sid]['total'] += 1
+
+    # Convert to %
+    for sid in trend_map:
+        total = trend_map[sid]['total'] or 1
         for code in ['P','ET','UT','EA','UA']:
-            student_trend[code] = round(qs.filter(status=code).count() * 100 / total, 0)
-        trend_map[e.student.id] = student_trend
-    disabled_attendance = {}
-    for e in enrollments:
-        # Check if student has '18' or '20' today
-        att = Attendance.objects.filter(
-            enrollment=e,
-            date=lesson.lesson_date,
-            status__in=['18', '20']
-        ).first()
-        disabled_attendance[e.id] = bool(att)  # True if they have suspension/expulsion
+            trend_map[sid][code] = round((trend_map[sid][code] / total) * 100, 0)
+
     return render(request, 'school/teacher/attendance_mark.html', {
         'lesson': lesson,
         'enrollments': enrollments,
         'status_choices': status_choices,
         'current_statuses': current_statuses,
-        'attendance_locked': attendance_locked,
+        'attendance_locked': attendance_locked,  # now always False
         'can_override': can_override,
         'ATTENDANCE_CODES': ['P','ET','UT','EA','UA'],
         'DISCIPLINE_CODES': ['IB','18','20'],
         'disabled_attendance': disabled_attendance,
+        'forced_status_map': forced_status_map,
         'INCIDENT_TYPE_CHOICES': INCIDENT_TYPE_CHOICES,
         'SEVERITY_CHOICES': DisciplineRecord._meta.get_field('severity').choices,
-        'trend_map': trend_map,
+        'trend_map': dict(trend_map),
     })
-
 
 @login_required
 def teacher_attendance_smart(request, lesson_id):
@@ -3747,31 +3988,57 @@ def teacher_attendance_delete(request, attendance_id):
 @login_required
 def teacher_attendance_summary(request):
     try:
-        school = request.user.staffprofile.school
+        teacher = request.user.staffprofile
+        school = teacher.school
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('userauths:teacher-dashboard')
-    
+
+    # ─── DATE FILTER ─────────────────────────
     period_start = request.GET.get('start')
     period_end = request.GET.get('end')
-    if not period_start or not period_end:
+
+    if period_start and period_end:
+        try:
+            period_start = datetime.strptime(period_start, "%Y-%m-%d").date()
+            period_end = datetime.strptime(period_end, "%Y-%m-%d").date()
+        except ValueError:
+            period_start = timezone.now().date().replace(day=1)
+            period_end = timezone.now().date()
+    else:
         period_start = timezone.now().date().replace(day=1)
         period_end = timezone.now().date()
-    
-    lessons = Lesson.objects.filter(lesson_date__range=[period_start, period_end], teacher=request.user.staffprofile)
-    attendances = Attendance.objects.filter(lesson__in=lessons)
-    
-    summary = attendances.values('status').annotate(count=Count('status'))
-    total_sessions = lessons.count()
-    present_pct = (summary.get('P', {'count': 0})['count'] / (len(enrollments) * total_sessions)) * 100 if total_sessions else 0
-    
+
+    # ─── LESSONS ─────────────────────────
+    lessons = Lesson.objects.filter(
+        lesson_date__range=[period_start, period_end],
+        teacher=teacher
+    )
+
+    # ─── ATTENDANCE ─────────────────────────
+    attendances = Attendance.objects.filter(
+        enrollment__lesson__in=lessons
+    )
+
+    total_records = attendances.count()
+
+    # ─── SUMMARY ─────────────────────────
+    summary_qs = attendances.values('status').annotate(count=Count('status'))
+    summary = {row['status']: row['count'] for row in summary_qs}
+
+    present_count = summary.get('P', 0)
+
+    present_pct = (present_count / total_records * 100) if total_records else 0
+
     context = {
         'summary': summary,
         'period_start': period_start,
         'period_end': period_end,
         'present_pct': round(present_pct, 2),
         'school': school,
+        'total_records': total_records,
     }
+
     return render(request, 'school/teacher/attendance_summary.html', context)
 
 #teacher discipline
