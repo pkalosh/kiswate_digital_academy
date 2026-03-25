@@ -407,6 +407,12 @@ class Enrollment(models.Model):
     status = models.CharField(max_length=20, choices=ENROLLMENT_STATUS_CHOICES, default='active')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='enrollments')
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['lesson']),
+            models.Index(fields=['student']),
+        ]
+
     def __str__(self):
         return f"{self.student} → {self.lesson.subject if self.lesson else 'No Lesson'}"
 
@@ -596,6 +602,11 @@ class Attendance(models.Model):
             raise ValidationError("Suspensions/Expulsions can only be marked by Deputy Principal or Principal.")
         super().clean()
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['enrollment']),
+        ]
+
     def __str__(self):
         return f"{self.enrollment.student} - {self.enrollment.lesson.subject} on {self.date}"
 
@@ -617,8 +628,8 @@ class DisciplineRecord(models.Model):
     resolved = models.BooleanField(default=False)  # New: For follow-up
 
     class Meta:
-        indexes = [models.Index(fields=['student', 'date', 'severity'])]
-
+        indexes = [models.Index(fields=['student', 'date', 'severity']),models.Index(fields=['teacher', 'date']),
+models.Index(fields=['school', 'date']),]
     def __str__(self):
         return f"{self.get_incident_type_display()} - {self.student} ({self.severity})"
 
@@ -1244,3 +1255,13 @@ class AttendanceAlert(models.Model):
 
     def __str__(self):
         return f"Alert for {self.school} - {self.attendance_rate}%"
+
+
+class Upload(models.Model):
+    file = models.FileField(upload_to='uploads/')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='uploads', blank=True, null=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Upload by {self.uploaded_by}"

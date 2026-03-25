@@ -3,76 +3,97 @@
 <form method="post"
       id="attendanceForm"
       action="{% url 'school:lesson-attendance' lesson.id %}">
-{% csrf_token %}
+  {% csrf_token %}
 
-<h6 class="mb-3">
-  {{ lesson.subject.name }} - {{ lesson.lesson_date }}
-</h6>
+  <h6 class="mb-3">{{ lesson.subject.name }} - {{ lesson.lesson_date }}</h6>
 
-<div class="table-responsive">
-<table class="table table-bordered table-sm align-middle">
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm align-middle">
+      <thead class="table-light">
+        <tr>
+          <th style="width: 40%">Student</th>
+          <th style="width: 30%">Status</th>
+          <th style="width: 30%">Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in enrollments %}
+          {% with att=attendance_map|get_item:e.id %}
+          <tr
+              {% if e.student.suspended %}class="table-warning"{% elif e.student.expelled %}class="table-danger"{% endif %}>
 
-  <thead class="table-light">
-    <tr>
-      <th style="width: 40%">Student</th>
-      <th style="width: 30%">Status</th>
-      <th style="width: 30%">Remarks</th>
-    </tr>
-  </thead>
+            <!-- STUDENT -->
+            <td class="small">{{ e.student }}</td>
 
-  <tbody>
-    {% for e in enrollments %}
-      {% with att=attendance_map|get_item:e.id %}
-      <tr>
+            <!-- STATUS -->
+            <td>
+              <select name="status_{{ e.id }}" class="form-select form-select-sm"
+                      {% if e.student.suspended or e.student.expelled %}disabled{% endif %}>
 
-        <!-- STUDENT -->
-        <td class="small">
-          {{ e.student }}
-        </td>
+                {% for val, label in status_choices %}
+                  {% if e.student.suspended %}
+                    <option value="18" {% if att and att.status == '18' %}selected{% endif %}>Suspension</option>
+                  {% elif e.student.expelled %}
+                    <option value="20" {% if att and att.status == '20' %}selected{% endif %}>Expulsion</option>
+                  {% else %}
+                    <option value="{{ val }}" {% if att and att.status == val %}selected{% endif %}>{{ label }}</option>
+                  {% endif %}
+                {% endfor %}
 
-        <!-- STATUS -->
-        <td>
-          <select name="status_{{ e.id }}"
-                  class="form-select form-select-sm">
+              </select>
+            </td>
 
-            {% for val, label in status_choices %}
-              <option value="{{ val }}"
-                {% if att and att.status == val %}selected{% endif %}>
-                {{ label }}
-              </option>
-            {% endfor %}
+            <!-- REMARKS -->
+            <td>
+              <input type="text"
+                     name="remarks_{{ e.id }}"
+                     class="form-control form-control-sm"
+                     placeholder="Optional..."
+                     value="{% if att %}{{ att.remarks }}{% endif %}"
+                     {% if e.student.suspended or e.student.expelled %}readonly{% endif %}>
+            </td>
 
-          </select>
-        </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-muted">No students enrolled</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-        <!-- REMARKS -->
-        <td>
-          <input type="text"
-                 name="remarks_{{ e.id }}"
-                 class="form-control form-control-sm"
-                 placeholder="Optional..."
-                 value="{% if att %}{{ att.remarks }}{% endif %}">
-        </td>
-
-      </tr>
-      {% endwith %}
-    {% empty %}
-      <tr>
-        <td colspan="3" class="text-center text-muted">
-          No students enrolled
-        </td>
-      </tr>
-    {% endfor %}
-  </tbody>
-
-</table>
-</div>
-
-<!-- ACTIONS -->
-<div class="d-flex gap-2 mt-3">
-  <button type="submit" class="btn btn-success w-100">
-    💾 Save Attendance
-  </button>
-</div>
-
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-success w-100">💾 Save Attendance</button>
+  </div>
 </form>
+
+<script>
+// ---------------- ATTENDANCE SAVE ----------------
+$(document).off("submit", "#attendanceForm").on("submit", "#attendanceForm", function(e){
+    e.preventDefault();
+    const $form = $(this);
+
+    $.post($form.attr("action"), $form.serialize(), function(res){
+        if(res.success){
+            // Refresh modal content
+            $("#attendanceContent").html(res.html);
+
+            // Show success notification on timetable page
+            $("<div class='alert alert-success alert-dismissible fade show' role='alert'>Attendance saved successfully ✅<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>")
+                .prependTo("#attendanceNotifications")
+                .delay(4000)
+                .fadeOut(500, function(){ $(this).remove(); });
+
+            // Close modal
+            $("#attendanceModal").modal("hide");
+        } else {
+            $("<div class='alert alert-danger alert-dismissible fade show' role='alert'>Failed to save attendance ❌<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>")
+                .prependTo("#attendanceNotifications")
+                .delay(4000)
+                .fadeOut(500, function(){ $(this).remove(); });
+        }
+    });
+});
+</script>

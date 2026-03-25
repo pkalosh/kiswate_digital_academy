@@ -18,6 +18,9 @@ from school.views import send_email, _send_sms_via_eujim
 from django.db.models import Q
 import random
 from django_ratelimit.decorators import ratelimit
+from django.db.models import Count, Q, F, FloatField, ExpressionWrapper
+from django.db.models import Count, Case, When, FloatField, F,BooleanField
+from django.db.models.functions import Cast
 
 import logging
 
@@ -500,7 +503,6 @@ from django.utils import timezone
 from datetime import timedelta
 from school.models import Lesson, Session
 
-
 @login_required
 def teacher_dashboard(request):
     user = request.user
@@ -511,164 +513,128 @@ def teacher_dashboard(request):
     try:
         teacher_profile = user.staffprofile
     except StaffProfile.DoesNotExist:
-        #redirect to login
-        return render(
-            request,
-            'school/teacher/not_authorized.html',
-            status=403
-        )
+        return render(request, 'school/teacher/not_authorized.html', status=403)
 
     if teacher_profile.position != 'teacher':
-        return render(
-            request,
-            'school/teacher/not_authorized.html',
-            status=403
-        )
+        return render(request, 'school/teacher/not_authorized.html', status=403)
 
     school = teacher_profile.school
-
-    # ----------------------------
-    # Date Handling
-    # ----------------------------
     today = timezone.localdate()
-    selected_date = today
-
-    selected_date_str = request.GET.get('date')
-    if selected_date_str:
-        try:
-            selected_date = timezone.datetime.strptime(
-                selected_date_str, "%Y-%m-%d"
-            ).date()
-        except ValueError:
-            pass
+    now_time = timezone.localtime().time()
 
     # ----------------------------
-    # Week Calculation
+    # Week calculation
     # ----------------------------
-    week_start = selected_date - timedelta(days=selected_date.weekday())
+    start_date_str = request.GET.get('start_date')
+    nav = request.GET.get('nav')
+    try:
+        start_date = timezone.datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else today
+    except ValueError:
+        start_date = today
+
+    if nav == 'prev':
+        start_date -= timedelta(days=7)
+    elif nav == 'next':
+        start_date += timedelta(days=7)
+
+    week_start = start_date - timedelta(days=start_date.weekday())
     week_end = week_start + timedelta(days=6)
     week_days = [week_start + timedelta(days=i) for i in range(7)]
 
     # ----------------------------
-    # Lessons (Weekly)
+    # Lessons
     # ----------------------------
     assigned_lessons = Lesson.objects.filter(
         teacher=teacher_profile,
         lesson_date__range=(week_start, week_end),
         timetable__school=school
-    ).select_related(
-        'timetable__grade',
-        'subject',
-        'time_slot',
-        'stream'
-    ).order_by(
-        'lesson_date',
-        'time_slot__start_time'
+    ).select_related('timetable__grade', 'subject', 'time_slot', 'stream').order_by(
+        'lesson_date', 'time_slot__start_time'
     )
 
     # ----------------------------
-    # Time Slots
+    # Time slots & timetable grid
     # ----------------------------
-    time_slots = sorted(
-        {lesson.time_slot for lesson in assigned_lessons if lesson.time_slot},
-        key=lambda ts: ts.start_time
-    )
-
-    # ----------------------------
-    # Timetable Structure
-    # { Grade : { TimeSlot : { date : [lessons] } } }
-    # ----------------------------
-    timetable_by_grade = {}
-
+    time_slots = sorted({lesson.time_slot for lesson in assigned_lessons if lesson.time_slot}, key=lambda ts: ts.start_time)
+    timetable_by_slot = {}
     for lesson in assigned_lessons:
         if not lesson.time_slot:
             continue
+        timetable_by_slot.setdefault(lesson.time_slot, {}).setdefault(lesson.lesson_date, []).append(lesson)
 
-        grade = lesson.timetable.grade
-        timetable_by_grade.setdefault(grade, {})
-        timetable_by_grade[grade].setdefault(lesson.time_slot, {})
-        timetable_by_grade[grade][lesson.time_slot].setdefault(
-            lesson.lesson_date, []
-        )
-        timetable_by_grade[grade][lesson.time_slot][lesson.lesson_date].append(lesson)
+    timetable_grid = []
+    for slot in time_slots:
+        row = {'slot': slot, 'lessons_by_day': []}
+        for day in week_days:
+            lessons = timetable_by_slot.get(slot, {}).get(day, [])
+            for lesson in lessons:
+                # mark LIVE NOW
+                lesson.live_now = lesson.lesson_date == today and slot.start_time <= now_time <= slot.end_time
+                # disable attendance button if not happening today
+                lesson.can_mark_attendance = lesson.lesson_date == today and slot.start_time <= now_time <= slot.end_time
+            row['lessons_by_day'].append({'day': day, 'lessons': lessons})
+        timetable_grid.append(row)
 
     # ----------------------------
-    # Dashboard Statistics
+    # Dashboard stats
     # ----------------------------
-
-    # 1. Discipline records
     discipline_count = DisciplineRecord.objects.filter(
         teacher=teacher_profile,
-        school=school
+        school=school,
+        date__range=(week_start, week_end)
     ).count()
 
-    # 2. Assignments (from teacher subjects)
     assignment_count = Assignment.objects.filter(
         subject__in=teacher_profile.subjects.all(),
         school=school
     ).count()
 
-    # 3. Lessons today
-    today_lessons_count = assigned_lessons.filter(
-        lesson_date=selected_date
-    ).count()
-
-    # 4. Lessons this week
+    today_lessons_count = assigned_lessons.filter(lesson_date=today).count()
     week_lessons_count = assigned_lessons.count()
 
     stats = [
-        {
-            'title': "Today's Lessons",
-            'value': today_lessons_count,
-            'icon': 'fa-chalkboard-teacher',
-            'color': 'success',
-            'url': '#',  # future: teacher_today_lessons
-        },
-        {
-            'title': "This Week's Lessons",
-            'value': week_lessons_count,
-            'icon': 'fa-calendar-week',
-            'color': 'primary',
-            'url': '#',  # future: teacher_week_lessons
-        },
-        {
-            'title': "Discipline",
-            'value': discipline_count,
-            'icon': 'fa-gavel',
-            'color': 'warning',
-            'url': '#',  # future: teacher_discipline_list
-        },
-        {
-            'title': "Assignments",
-            'value': assignment_count,
-            'icon': 'fa-tasks',
-            'color': 'info',
-            'url': '#',  # future: teacher_assignments
-        },
+        {'title': "Today's Lessons", 'value': today_lessons_count, 'icon': 'fa-chalkboard-teacher', 'color': 'success'},
+        {'title': "Week's Lessons", 'value': week_lessons_count, 'icon': 'fa-calendar-week', 'color': 'success'},
+        {'title': "Discipline", 'value': discipline_count, 'icon': 'fa-gavel', 'color': 'success'},
+        {'title': "Assignments", 'value': assignment_count, 'icon': 'fa-tasks', 'color': 'success'},
     ]
 
     # ----------------------------
-    # Context
+    # Attendance analytics per class/stream
     # ----------------------------
+    attendance_analytics = Enrollment.objects.filter(
+        lesson__teacher=teacher_profile,
+        school=school,
+        status='active',
+        lesson__lesson_date__range=(week_start, week_end)
+    ).values(
+        grade_name=F('lesson__timetable__grade__name'),
+        stream_name=F('lesson__stream__name')
+    ).annotate(
+        total_students=Count('student', distinct=True),
+        attended=Count(
+            Case(
+                When(attendances__status='P', then=1)
+            )
+        ),
+    ).annotate(
+        attendance_rate=Cast(F('attended') * 100.0 / F('total_students'), FloatField())
+    )
+
     context = {
         'school': school,
         'today': today,
-        'selected_date': selected_date,
+        'now_time': now_time,
         'week_days': week_days,
+        'timetable_grid': timetable_grid,
         'time_slots': time_slots,
-        'assigned_lessons': assigned_lessons,
-        'today_lessons': assigned_lessons.filter(lesson_date=selected_date),
-        'timetable_by_grade': timetable_by_grade,
         'stats': stats,
+        'start_date': week_start,
+        'end_date': week_end,
+        'attendance_analytics': attendance_analytics,
     }
 
-    return render(
-        request,
-        'school/teacher/dashboard.html',
-        context
-    )
-
-
+    return render(request, 'school/teacher/dashboard.html', context)
 
 
 @login_required

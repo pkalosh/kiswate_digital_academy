@@ -1,28 +1,28 @@
 {% extends 'school/teacher/base.html' %}
 {% load static %}
-{% load dict_filters %}
-
 {% block title %}Teacher Dashboard{% endblock %}
 
 {% block content %}
-<div class="container my-4">
+<div class="container-fluid my-4">
 
-    <!-- ── Header & Stats Cards ── -->
+    <!-- Header & Stats -->
     <div class="mb-4">
-        <h2 class="mb-1">Welcome, {{ request.user.get_full_name }}</h2>
+        <h2>Welcome, {{ request.user.get_full_name }}</h2>
         <p class="text-muted">School: {{ school.name }}</p>
 
-        <!-- Date Picker -->
-        <form method="get" class="mb-3 d-flex align-items-center">
-            <label for="dashboard-date" class="me-2">Select Date:</label>
-            <input type="date" id="dashboard-date" name="date" value="{{ selected_date }}" class="form-control me-2" style="max-width:200px;">
-            <button type="submit" class="btn btn-primary">Go</button>
+        <!-- Date Navigation -->
+        <form method="get" class="d-flex mb-3 align-items-center">
+            <button name="nav" value="prev" class="btn btn-outline-success me-2">&larr; Previous</button>
+            <input type="date" name="start_date" value="{{ start_date }}" class="form-control me-2" style="max-width:200px;">
+            <button type="submit" class="btn btn-success me-2">Go</button>
+            <button name="nav" value="next" class="btn btn-outline-success">Next &rarr;</button>
         </form>
 
+        <!-- Stats Cards -->
         <div class="row mt-3">
             {% for stat in stats %}
             <div class="col-md-3 mb-3">
-                <div class="card shadow-sm bg-white text-center border-0">
+                <div class="card shadow-sm text-center border-0">
                     <div class="card-body">
                         <i class="fas {{ stat.icon }} fa-2x text-{{ stat.color }}"></i>
                         <h6 class="mt-2">{{ stat.title }}</h6>
@@ -34,80 +34,82 @@
         </div>
     </div>
 
-    <!-- ── Today's Lessons ── -->
-    <div class="mb-5">
-        <h4>Lessons for {{ selected_date|date:"D, M d, Y" }}</h4>
-        {% if today_lessons %}
-            <ul class="list-group">
-                {% for lesson in today_lessons %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center
-                        {% if lesson.is_canceled %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
-                        {{ lesson.subject.name }} - {{ lesson.timetable.grade.name }} {{ lesson.stream.name }}
-                        <span>{{ lesson.time_slot.start_time }} - {{ lesson.time_slot.end_time }}</span>
-                        <a href="{% url 'school:teacher-attendance-mark' lesson.id %}" class="btn btn-sm btn-light {% if lesson.is_canceled %}disabled{% endif %}">
-                            {% if lesson.is_canceled %}Canceled{% else %}Mark Attendance{% endif %}
-                        </a>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <div class="text-muted">No lessons scheduled for this day.</div>
-        {% endif %}
-    </div>
-
-    <!-- ── Weekly Timetable ── -->
+    <!-- Weekly Timetable -->
     <div class="mb-5">
         <h4>Weekly Timetable</h4>
-        {% if timetable_by_grade %}
-            {% for grade, slots_dict in timetable_by_grade.items %}
-                <div class="mb-5">
-                    <h5>{{ grade.name }}</h5>
-                    <div class="table-responsive">
-                        <table class="table table-bordered text-center align-middle">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Time Slot</th>
-                                    {% for day in week_days %}
-                                        <th>{{ day|date:"D M d" }}</th>
-                                    {% endfor %}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for slot, days_dict in slots_dict.items %}
-                                    <tr>
-                                        <td>{{ slot.start_time }} - {{ slot.end_time }}</td>
-                                        {% for day in week_days %}
-                                            <td>
-                                                {% if days_dict|get_item:day %}
-                                                    {% for lesson in days_dict|get_item:day %}
-                                                        <div class="p-2 mb-1 rounded shadow-sm 
-                                                            {% if lesson.is_canceled %}bg-danger text-white{% else %}bg-success text-white{% endif %}"
-                                                            title="Stream: {{ lesson.stream.name }} | Room: {{ lesson.room|default:'N/A' }}">
-                                                            <div class="fw-bold">{{ lesson.subject.name }}</div>
-                                                            <small>Stream: {{ lesson.stream.name }} | Room: {{ lesson.room|default:'N/A' }}</small>
-                                                            <div class="mt-1">
-                                                                <a href="{% url 'school:teacher-attendance-mark' lesson.id %}" 
-                                                                   class="btn btn-sm btn-light {% if lesson.is_canceled %}disabled{% endif %}">
-                                                                    {% if lesson.is_canceled %}Canceled{% else %}Mark Attendance{% endif %}
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    {% endfor %}
-                                                {% else %}
-                                                    <div class="text-muted">-</div>
-                                                {% endif %}
-                                            </td>
-                                        {% endfor %}
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            {% endfor %}
-        {% else %}
-            <div class="text-muted">No grades or lessons found for this week.</div>
-        {% endif %}
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle sticky-top bg-white">
+                <thead class="table-light">
+                    <tr>
+                        <th>Time Slot</th>
+                        {% for day in week_days %}
+                        <th class="{% if day == today %}bg-success-subtle{% endif %}">{{ day|date:"D M d" }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in timetable_grid %}
+                    <tr>
+                        <td class="fw-bold">{{ row.slot.start_time }} - {{ row.slot.end_time }}</td>
+                        {% for day_info in row.lessons_by_day %}
+                        <td>
+                            {% for lesson in day_info.lessons %}
+                            <div class="card rounded-3 shadow-sm p-2 mb-2 
+                                {% if lesson.is_canceled %}bg-danger text-white
+                                {% elif lesson.live_now %}bg-success text-white
+                                {% else %}bg-success-subtle{% endif %}">
+                                <div class="fw-bold">{{ lesson.subject.name }}</div>
+                                <small>{{ lesson.timetable.grade.name }} - {{ lesson.stream.name }}</small>
+                                <div>Room: {{ lesson.room|default:"N/A" }}</div>
+                                {% if lesson.live_now %}
+                                    <span class="badge bg-warning text-dark">LIVE NOW</span>
+                                {% endif %}
+                                <div class="mt-1">
+                                    <a href="{% url 'school:teacher-attendance-mark' lesson.id %}" 
+                                       class="btn btn-sm btn-light {% if not lesson.can_mark_attendance %}disabled{% endif %}">
+                                        {% if lesson.is_canceled %}Canceled{% else %}Mark Attendance{% endif %}
+                                    </a>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="text-muted">-</div>
+                            {% endfor %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <!-- Attendance Analytics -->
+    <div class="mb-5">
+        <h4>Attendance Analytics (This Week)</h4>
+        <canvas id="attendanceChart" style="height:300px;"></canvas>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+        const ctx = document.getElementById('attendanceChart').getContext('2d');
+        const data = {
+            labels: [{% for item in attendance_analytics %}'{{ item.grade_name }}-{{ item.stream_name }}',{% endfor %}],
+            datasets: [{
+                label: 'Attendance %',
+                data: [{% for item in attendance_analytics %}{{ item.attendance_rate|default:0 }},{% endfor %}],
+                backgroundColor: 'rgba(25, 135, 84, 0.7)', // green
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1
+            }]
+        };
+        new Chart(ctx, {
+            type: 'bar',
+            data: data,
+            options: {
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { legend: { display: false } }
+            }
+        });
+        </script>
+    </div>
+
 </div>
 {% endblock %}

@@ -6,6 +6,9 @@
 
 <div class="container-fluid py-3">
 
+  <!-- TIMETABLE NOTIFICATIONS -->
+  <div id="attendanceNotifications" class="mb-3"></div>
+
   <!-- WEEK NAV -->
   <div class="d-flex justify-content-between mb-3">
     <a href="?week={{ week_offset|add:'-1' }}" class="btn btn-sm btn-outline-secondary">← Prev</a>
@@ -47,7 +50,7 @@
   </table>
 </div>
 
-<!-- MODAL -->
+<!-- LESSON MODAL -->
 <div class="modal fade" id="lessonModal">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
@@ -58,13 +61,14 @@
   </div>
 </div>
 
+<!-- ATTENDANCE MODAL -->
 {% include "school/partials/attendance_modal_container.html" %}
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
 
-// LOAD LESSON FORM
+// ---------------- LOAD LESSON FORM ----------------
 $(document).on("click", "[data-bs-target='#lessonModal']", function() {
     const lessonId = $(this).data("lesson");
 
@@ -75,8 +79,7 @@ $(document).on("click", "[data-bs-target='#lessonModal']", function() {
     });
 });
 
-
-// SUBMIT LESSON FORM
+// ---------------- SUBMIT LESSON FORM ----------------
 $(document).on("submit", "#lessonEditForm", function(e){
     e.preventDefault();
 
@@ -86,13 +89,11 @@ $(document).on("submit", "#lessonEditForm", function(e){
 
         if (res.success) {
 
-            // REMOVE OLD
+            // REMOVE OLD LESSON
             $(`#lesson-${res.lesson_id}`).remove();
 
             // FIND NEW CELL
-            const newCell = $(
-                `td[data-day="${res.new_day}"][data-slot="${res.new_slot}"]`
-            );
+            const newCell = $(`td[data-day="${res.new_day}"][data-slot="${res.new_slot}"]`);
 
             // REMOVE "-"
             newCell.find("span.text-muted").remove();
@@ -101,10 +102,7 @@ $(document).on("submit", "#lessonEditForm", function(e){
             newCell.append(res.cell_html);
 
             // CLEAN OLD CELL
-            const oldCell = $(
-                `td[data-day="${res.old_day}"][data-slot="${res.old_slot}"]`
-            );
-
+            const oldCell = $(`td[data-day="${res.old_day}"][data-slot="${res.old_slot}"]`);
             if (oldCell.children().length === 0) {
                 oldCell.html('<span class="text-muted">-</span>');
             }
@@ -113,28 +111,56 @@ $(document).on("submit", "#lessonEditForm", function(e){
         }
     });
 });
-
-
-// ATTENDANCE LOAD
+// ---------------- ATTENDANCE LOAD ----------------
 $(document).on("click", "[data-lesson]", function(e){
     if ($(this).text().trim() !== "Att") return;
-
     const id = $(this).data("lesson");
 
-    // 🔥 cache buster included here
     $.get(`/attendance/${id}/?t=${new Date().getTime()}`, function(html){
         $("#attendanceContent").html(html);
+
+        // Highlight suspended/expelled rows
+        $("#attendanceContent table tbody tr").each(function(){
+            const status = $(this).find("select").val();
+            if(status === '18'){ // Suspension
+                $(this).addClass("table-warning");
+            } else if(status === '20'){ // Expulsion
+                $(this).addClass("table-danger");
+            }
+        });
+
+        // Show modal
+        $("#attendanceModal").modal("show");
     });
 });
-// ATTENDANCE SAVE
+
+// ---------------- ATTENDANCE SAVE ----------------
 $(document).on("submit", "#attendanceForm", function(e){
     e.preventDefault();
 
     const $form = $(this);
 
     $.post($form.attr("action"), $form.serialize(), function(res){
-        if (res.success) {
+        if(res.success){
+
+            // Refresh modal content
             $("#attendanceContent").html(res.html);
+
+            // Show success notification on timetable page
+            $("<div class='alert alert-success alert-dismissible fade show' role='alert'>Attendance saved successfully ✅<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>")
+                .prependTo("#attendanceNotifications")
+                .delay(4000)
+                .fadeOut(500, function(){ $(this).remove(); });
+
+            // Close modal
+            $("#attendanceModal").modal("hide");
+
+        } else {
+            // Show error notification on timetable page
+            $("<div class='alert alert-danger alert-dismissible fade show' role='alert'>Failed to save attendance ❌<button type='button' class='btn-close' data-bs-dismiss='alert'></button></div>")
+                .prependTo("#attendanceNotifications")
+                .delay(4000)
+                .fadeOut(500, function(){ $(this).remove(); });
         }
     });
 });
