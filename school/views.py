@@ -248,7 +248,7 @@ def notify_first_lesson(attendance):
         attendance.date                   # Lesson date
     )
     for parent in parents:
-        _send_sms_via_eujim(parent.phone, message)
+        # _send_sms_via_eujim(parent.phone, message)
         if parent.user.email:
             send_mail("Lesson Attendance Notification", message, None, [parent.user.email], fail_silently=True)
 
@@ -258,7 +258,7 @@ def notify_last_lesson(student, date):
     message = build_daily_summary(student, date)
 
     for parent in parents:
-        _send_sms_via_eujim(parent.phone, message)
+        # _send_sms_via_eujim(parent.phone, message)
         if parent.user.email:
             send_mail(
                 "Daily Attendance Summary",
@@ -4122,7 +4122,7 @@ def teacher_discipline_create(request):
 
             for parent in parents:
                 # Send SMS
-                _send_sms_via_eujim(parent.phone, message_text)
+                # _send_sms_via_eujim(parent.phone, message_text)
 
                 # Create Notification in DB
                 if parent.user:
