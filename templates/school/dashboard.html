@@ -116,6 +116,7 @@
               <th>Student</th>
               <th>Lesson</th>
               <th>Date</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -124,6 +125,9 @@
                 <td>{{ att.enrollment.student.user.get_full_name }}</td>
                 <td>{% if att.enrollment.lesson %}{{ att.enrollment.lesson.subject.name }}{% else %}N/A{% endif %}</td>
                 <td>{{ att.date }}</td>
+                <td>
+                  <a href="#" class="btn btn-sm btn-primary">Terminate</a>
+                  </td>
               </tr>
             {% endfor %}
           </tbody>
