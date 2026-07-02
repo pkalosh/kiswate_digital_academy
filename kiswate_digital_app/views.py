@@ -19,6 +19,7 @@ from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
+from django.core.paginator import Paginator
 
 
 from .models import (
@@ -804,8 +805,16 @@ def _get_profile(request):
         return request.user.profile
     except UserProfile.DoesNotExist:
         return None
- 
- 
+
+
+def _is_kiswate_or_admin(user):
+    return user.is_kiswate_admin or user.is_kiswate_user or user.is_admin
+
+
+def _is_notification_admin(user):
+    return user.is_kiswate_admin or user.is_admin or user.is_principal or user.is_deputy_principal
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MODULE 1: USER MANAGEMENT
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -843,10 +852,13 @@ def register_done(request):
 @login_required
 def user_list(request):
     """Admin: list all users with filter by role/vetting status."""
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     role = request.GET.get('role', '')
     status = request.GET.get('status', '')
     search = request.GET.get('q', '')
- 
+
     profiles = UserProfile.objects.select_related('user', 'school').order_by('-created_at')
     if role:
         profiles = profiles.filter(role=role)
@@ -858,14 +870,19 @@ def user_list(request):
             Q(user__last_name__icontains=search) |
             Q(user__email__icontains=search)
         )
- 
+
+    paginator = Paginator(profiles, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'dim/users/user_list.html', {
-        'profiles': profiles, 'role': role, 'status': status, 'search': search,
+        'profiles': page_obj, 'page_obj': page_obj, 'role': role, 'status': status, 'search': search,
     })
  
  
 @login_required
 def user_detail(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = get_object_or_404(UserProfile, pk=pk)
     guardians = profile.guardians.all() if profile.role == 'student' else []
     enrollments = profile.enrollments.select_related('program') if profile.role == 'student' else []
@@ -877,6 +894,9 @@ def user_detail(request, pk):
 @login_required
 def vet_user(request, pk):
     """Admin: approve or reject a user profile."""
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = get_object_or_404(UserProfile, pk=pk)
     if request.method == 'POST':
         form = VettingForm(request.POST, instance=profile)
@@ -894,6 +914,9 @@ def vet_user(request, pk):
  
 @login_required
 def add_guardian(request, student_pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     student = get_object_or_404(UserProfile, pk=student_pk, role='student')
     if request.method == 'POST':
         form = GuardianForm(request.POST)
@@ -911,12 +934,20 @@ def add_guardian(request, student_pk):
  
 @login_required
 def enrollment_list(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     enrollments = Enrollment.objects.select_related('student__user', 'program').order_by('-enrolled_at')
-    return render(request, 'dim/users/enrollment_list.html', {'enrollments': enrollments})
+    paginator = Paginator(enrollments, 25)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'dim/users/enrollment_list.html', {'enrollments': page_obj, 'page_obj': page_obj})
  
  
 @login_required
 def enroll_student(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = _get_profile(request)
     school = profile.school if profile else None
     if request.method == 'POST':
@@ -961,6 +992,9 @@ def virtual_class_list(request):
  
 @login_required
 def virtual_class_create(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = _get_profile(request)
     if request.method == 'POST':
         form = VirtualClassForm(request.POST, teacher_profile=profile)
@@ -999,6 +1033,9 @@ def virtual_class_detail(request, pk):
  
 @login_required
 def virtual_class_edit(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     vc = get_object_or_404(VirtualClass, pk=pk)
     profile = _get_profile(request)
     if request.method == 'POST':
@@ -1015,6 +1052,9 @@ def virtual_class_edit(request, pk):
  
 @login_required
 def virtual_class_cancel(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     vc = get_object_or_404(VirtualClass, pk=pk)
     if request.method == 'POST':
         vc.is_cancelled = True
@@ -1036,13 +1076,19 @@ def join_class(request, pk):
         record, created = record_join_attendance(vc, profile)
         if created:
             messages.info(request, "Your attendance has been recorded.")
- 
+
+    if not vc.meeting_link:
+        messages.error(request, "No meeting link has been set for this class.")
+        return redirect('kiswate_digital_app:virtual_class_detail', pk=pk)
     return redirect(vc.meeting_link)
  
  
 @login_required
 def mark_attendance_manual(request, pk):
     """Teacher manually marks attendance for a class."""
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     vc = get_object_or_404(VirtualClass, pk=pk)
     if request.method == 'POST':
         form = AttendanceManualForm(request.POST, virtual_class=vc)
@@ -1065,6 +1111,9 @@ def mark_attendance_manual(request, pk):
  
 @login_required
 def upload_recording(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     vc = get_object_or_404(VirtualClass, pk=pk)
     if request.method == 'POST':
         form = RecordingUploadForm(request.POST, instance=vc)
@@ -1087,11 +1136,16 @@ def lesson_list(request):
     elif profile and profile.role == 'student':
         enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
         lessons = lessons.filter(program_id__in=enrolled, is_published=True)
-    return render(request, 'dim/virtual_learning/lesson_list.html', {'lessons': lessons})
+    paginator = Paginator(lessons, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'dim/virtual_learning/lesson_list.html', {'lessons': page_obj, 'page_obj': page_obj})
  
  
 @login_required
 def lesson_create(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = _get_profile(request)
     if request.method == 'POST':
         form = LessonForm(request.POST, request.FILES)
@@ -1117,6 +1171,9 @@ def lesson_detail(request, pk):
  
 @login_required
 def lesson_edit(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     lesson = get_object_or_404(Lesson, pk=pk)
     if request.method == 'POST':
         form = LessonForm(request.POST, request.FILES, instance=lesson)
@@ -1137,12 +1194,17 @@ def assignment_list(request):
     if profile and profile.role == 'student':
         enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
         assignments = assignments.filter(program_id__in=enrolled, is_published=True)
+    paginator = Paginator(assignments, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'dim/virtual_learning/assignment_list.html',
-                  {'assignments': assignments, 'profile': profile})
+                  {'assignments': page_obj, 'page_obj': page_obj, 'profile': profile})
  
  
 @login_required
 def assignment_create(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     if request.method == 'POST':
         form = AssignmentForm(request.POST, request.FILES)
         if form.is_valid():
@@ -1178,6 +1240,9 @@ def assignment_detail(request, pk):
 def submit_assignment(request, pk):
     assignment = get_object_or_404(Assignment, pk=pk)
     profile = _get_profile(request)
+    if not profile:
+        messages.error(request, "No profile found.")
+        return redirect('userauths:sign-in')
     existing = AssignmentSubmission.objects.filter(assignment=assignment, student=profile).first()
     if existing:
         messages.warning(request, "You have already submitted this assignment.")
@@ -1200,6 +1265,9 @@ def submit_assignment(request, pk):
  
 @login_required
 def grade_submission(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     submission = get_object_or_404(AssignmentSubmission, pk=pk)
     if request.method == 'POST':
         form = GradeSubmissionForm(request.POST, instance=submission)
@@ -1227,12 +1295,17 @@ def assessment_list(request):
     if profile and profile.role == 'student':
         enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
         assessments = assessments.filter(program_id__in=enrolled, is_published=True)
+    paginator = Paginator(assessments, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'dim/assessments/assessment_list.html',
-                  {'assessments': assessments, 'profile': profile})
+                  {'assessments': page_obj, 'page_obj': page_obj, 'profile': profile})
  
  
 @login_required
 def assessment_create(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     profile = _get_profile(request)
     if request.method == 'POST':
         form = AssessmentForm(request.POST)
@@ -1277,6 +1350,9 @@ def assessment_questions(request, pk):
  
 @login_required
 def question_create(request, assessment_pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     assessment = get_object_or_404(Assessment, pk=assessment_pk)
     if request.method == 'POST':
         form = QuestionForm(request.POST)
@@ -1298,6 +1374,9 @@ def question_create(request, assessment_pk):
  
 @login_required
 def question_edit(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     question = get_object_or_404(Question, pk=pk)
     if request.method == 'POST':
         form = QuestionForm(request.POST, instance=question)
@@ -1319,7 +1398,10 @@ def take_assessment(request, pk):
     """Student takes an assessment."""
     assessment = get_object_or_404(Assessment, pk=pk)
     profile = _get_profile(request)
- 
+    if not profile:
+        messages.error(request, "No student profile found.")
+        return redirect('userauths:sign-in')
+
     # Check time window
     now = timezone.now()
     if assessment.start_time and now < assessment.start_time:
@@ -1369,6 +1451,10 @@ def take_assessment(request, pk):
 @login_required
 def assessment_result(request, pk):
     attempt = get_object_or_404(StudentAssessmentAttempt, pk=pk)
+    profile = _get_profile(request)
+    if profile and attempt.student != profile and not _is_kiswate_or_admin(request.user):
+        messages.error(request, "You can only view your own results.")
+        return redirect('kiswate_digital_app:assessment_list')
     answers = attempt.answers.select_related('question', 'selected_choice').all()
     return render(request, 'dim/assessments/result.html',
                   {'attempt': attempt, 'answers': answers})
@@ -1376,6 +1462,9 @@ def assessment_result(request, pk):
  
 @login_required
 def publish_results(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     assessment = get_object_or_404(Assessment, pk=pk)
     if request.method == 'POST':
         assessment.results_published = True
@@ -1390,18 +1479,29 @@ def publish_results(request, pk):
  
 @login_required
 def notification_list(request):
-    logs = NotificationLog.objects.select_related('recipient__user').order_by('-created_at')[:100]
-    return render(request, 'dim/communication/notification_list.html', {'logs': logs})
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+    logs = NotificationLog.objects.select_related('recipient__user').order_by('-created_at')
+    paginator = Paginator(logs, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'dim/communication/notification_list.html', {'logs': page_obj, 'page_obj': page_obj})
  
  
 @login_required
 def notification_template_list(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     templates = NotificationTemplate.objects.all()
     return render(request, 'dim/communication/template_list.html', {'templates': templates})
  
  
 @login_required
 def notification_template_create(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     if request.method == 'POST':
         form = NotificationTemplateForm(request.POST)
         if form.is_valid():
@@ -1416,6 +1516,9 @@ def notification_template_create(request):
  
 @login_required
 def notification_template_edit(request, pk):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     template = get_object_or_404(NotificationTemplate, pk=pk)
     if request.method == 'POST':
         form = NotificationTemplateForm(request.POST, instance=template)
@@ -1431,6 +1534,9 @@ def notification_template_edit(request, pk):
  
 @login_required
 def send_bulk_notification(request):
+    if not _is_notification_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     if request.method == 'POST':
         form = BulkNotificationForm(request.POST)
         if form.is_valid():
@@ -1460,6 +1566,9 @@ def send_bulk_notification(request):
 @login_required
 def send_class_reminder(request, pk):
     """Quick action: send reminder for an upcoming class."""
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     vc = get_object_or_404(VirtualClass, pk=pk)
     if request.method == 'POST':
         notify_class_reminder(vc)
@@ -1474,6 +1583,9 @@ def send_class_reminder(request, pk):
 @login_required
 def reports_dashboard(request):
     """Main reports landing page with summary tiles."""
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     from .models import School, Program
     schools = School.objects.filter(is_active=True)
     programs = Program.objects.filter(is_active=True)
@@ -1483,6 +1595,9 @@ def reports_dashboard(request):
  
 @login_required
 def student_performance_report(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     program_id = request.GET.get('program')
     school_id = request.GET.get('school')
     program = None
@@ -1507,6 +1622,9 @@ def attendance_report(request):
     Attendance report built from ClassAttendance records.
     Shows per-class and per-student attendance derived from join-click and teacher-marked data.
     """
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     program_id = request.GET.get('program')
     program = None
     classes_data = []
@@ -1528,6 +1646,9 @@ def attendance_report(request):
  
 @login_required
 def teacher_activity_report(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     teachers = UserProfile.objects.filter(role='teacher', vetting_status='approved')
     report = [get_teacher_activity_report(t) for t in teachers]
     return render(request, 'dim/reports/teacher_activity.html', {'report': report})
@@ -1535,6 +1656,9 @@ def teacher_activity_report(request):
  
 @login_required
 def school_utilization_report(request):
+    if not _is_kiswate_or_admin(request.user):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
     schools = School.objects.filter(is_active=True)
     report = [get_school_utilization_report(s) for s in schools]
     return render(request, 'dim/reports/school_utilization.html', {'report': report})
@@ -1544,6 +1668,9 @@ def school_utilization_report(request):
 def my_performance(request):
     """Student's personal performance view."""
     profile = _get_profile(request)
+    if not profile:
+        messages.error(request, "No profile found.")
+        return redirect('userauths:sign-in')
     attempts = StudentAssessmentAttempt.objects.filter(
         student=profile, is_graded=True
     ).select_related('assessment__program').order_by('-submitted_at')
