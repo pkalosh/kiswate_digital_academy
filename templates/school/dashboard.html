@@ -223,7 +223,7 @@
         <div>
           <span class="fw-semibold" style="font-size:.9rem">Weekly Attendance</span>
           <span class="ms-2 text-muted" style="font-size:.75rem">
-            {{ week_days.0|date:"M d" }} – {{ week_days.4|date:"M d, Y" }}
+            {{ week_days.0|date:"M d" }} – {{ week_days.6|date:"M d, Y" }}
           </span>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -431,7 +431,7 @@
     <div class="card border-0 shadow-sm" style="border-radius:.7rem">
       <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
         <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-person-x text-warning me-1"></i>Students with Absences — by Stream</span>
-        <span class="text-muted" style="font-size:.72rem">{{ week_days.0|date:"M d" }}–{{ week_days.4|date:"d" }}</span>
+        <span class="text-muted" style="font-size:.72rem">{{ week_days.0|date:"M d" }}–{{ week_days.6|date:"d" }}</span>
       </div>
       <div class="card-body p-0">
         {% if student_missed_by_stream %}

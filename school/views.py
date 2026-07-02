@@ -365,8 +365,8 @@ def dashboard(request):
     except ValueError:
         focus_date = today
     week_start = focus_date - timedelta(days=focus_date.weekday())
-    week_end   = week_start + timedelta(days=4)
-    week_days  = [week_start + timedelta(days=i) for i in range(5)]
+    week_end   = week_start + timedelta(days=6)
+    week_days  = [week_start + timedelta(days=i) for i in range(7)]
     prev_week  = week_start - timedelta(days=7)
     next_week  = week_start + timedelta(days=7)
     is_current_week = week_start == today - timedelta(days=today.weekday())
@@ -435,8 +435,8 @@ def dashboard(request):
 
     chart_labels  = [d.strftime('%a %-d %b') for d in week_days]
     chart_present = week_counts['P']
-    chart_absent  = [week_counts['UA'][i] + week_counts['EA'][i] for i in range(5)]
-    chart_tardy   = [week_counts['UT'][i] + week_counts['ET'][i] for i in range(5)]
+    chart_absent  = [week_counts['UA'][i] + week_counts['EA'][i] for i in range(len(week_days))]
+    chart_tardy   = [week_counts['UT'][i] + week_counts['ET'][i] for i in range(len(week_days))]
 
     # ── Attendance donut (today) ───────────────────────────────────────────────
     donut_data = [
@@ -1182,10 +1182,10 @@ def view_timetable_week(request):
     except (ValueError, TypeError):
         focus_date = timezone.localdate()
 
-    # ── Week range (Monday → Friday) ─────────────────────────────────────────
+    # ── Week range (Monday → Sunday) ─────────────────────────────────────────
     week_start = focus_date - timedelta(days=focus_date.weekday())
-    week_end = week_start + timedelta(days=4)
-    week_days = [week_start + timedelta(days=i) for i in range(5)]
+    week_end = week_start + timedelta(days=6)
+    week_days = [week_start + timedelta(days=i) for i in range(7)]
 
     # ── Time slots ───────────────────────────────────────────────────────────
     time_slots = TimeSlot.objects.filter(school=school).order_by('start_time')
@@ -1266,7 +1266,7 @@ def teacher_timetable_view(request):
     else:
         focus_date = timezone.localdate()
     monday = focus_date - timedelta(days=focus_date.weekday())
-    week_days = [monday + timedelta(days=i) for i in range(5)]
+    week_days = [monday + timedelta(days=i) for i in range(7)]
 
     lessons_qs = Lesson.objects.filter(teacher=teacher, date__range=(week_days[0], week_days[-1])).order_by('lesson_date')
 
@@ -5841,6 +5841,8 @@ def generate_lesson_dates(term, weekday):
         "wednesday": 2,
         "thursday": 3,
         "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
     }
 
     target = weekday_map[weekday.lower()]
@@ -5851,8 +5853,7 @@ def generate_lesson_dates(term, weekday):
 
     dates = []
     while current <= term.end_date:
-        if current.weekday() < 5:
-            dates.append(current)
+        dates.append(current)
         current += timedelta(days=7)
 
     return dates
