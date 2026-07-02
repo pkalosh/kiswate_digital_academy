@@ -10,11 +10,11 @@ from decimal import Decimal
 from django.db.models import Q
 import uuid
 from .models import (
-    Grade, Parent, StaffProfile, Student, Subject, Enrollment, Timetable, Lesson,
+    Grade, Parent, StaffProfile, Student, Subject, SubjectCatalog, Enrollment, Timetable, Lesson,
     Session, Attendance, DisciplineRecord, Notification, SmartID, Payment,
-    Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile,
+    Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan, UploadedFile,
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
-    Certificate,Term,School,Streams, TimeSlot  # Include if needed, but per request, exclude LMS parts where possible
+    Certificate, Term, School, Streams, TimeSlot, CURRICULUM_CHOICES, Complaint,
 )
 from django.db import transaction
 
@@ -307,7 +307,7 @@ class SmartIDForm(BaseForm):
 
 
 # ------------------------------- PARENT FORMS -------------------------------
-from .models import Student, Parent, Grade, GENDER_CHOICES  # Assuming GENDER_CHOICES defined
+from .models import Student, Parent, Grade, Streams, GENDER_CHOICES  # noqa: F811
 
 class BaseForm(forms.ModelForm):
     """Base form with common styling."""
@@ -333,7 +333,7 @@ class StudentCreationForm(BaseForm):
         model = Student
         fields = [
             'student_id', 'date_of_birth', 'gender', 'enrollment_date',
-            'grade_level', 'bio', 'profile_picture', 'parents'
+            'grade_level', 'stream', 'bio', 'profile_picture', 'parents'
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
@@ -348,6 +348,8 @@ class StudentCreationForm(BaseForm):
         self.school = school  # Ensure set after BaseForm (which also sets it)
         if self.school:
             self.fields['grade_level'].queryset = Grade.objects.filter(school=self.school)
+            self.fields['stream'].queryset = Streams.objects.filter(school=self.school)
+            self.fields['stream'].required = False
 
     def generate_temp_password(self):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -363,7 +365,6 @@ class StudentCreationForm(BaseForm):
             is_student=True,
             is_verified=True,
         )
-        print(f"Created user {user.email} with temp password {temp_password}")
         student = super().save(commit=False)
         student.user = user
         student.school = self.school  # Now self.school is set correctly
@@ -417,7 +418,6 @@ class ParentCreationForm(BaseForm):
             is_parent=True,
             is_verified=True,
         )
-        print(f"Created user {user.email} with temp password {password}")
         parent = super().save(commit=False)
         parent.user = user
         parent.phone = self.cleaned_data['phone_number']
@@ -486,7 +486,6 @@ class ParentStudentCreationForm(BaseForm):
             is_verified=True,
             is_parent=True,
         )
-        print(f"Created parent user {parent_user.email} with temp password {parent_password}")
         parent = Parent.objects.create(
             user=parent_user,
             parent_id=self.cleaned_data['parent_id'],
@@ -509,7 +508,6 @@ class ParentStudentCreationForm(BaseForm):
             is_verified=True,
             is_student=True,
         )
-        print(f"Created student user {student_user.email} with temp password {student_password}")
         student = Student.objects.create(
             user=student_user,
             student_id=self.cleaned_data['student_id'],
@@ -989,3 +987,187 @@ class StaffUpdateForm(StaffCreationForm):  # Assuming StaffCreationForm exists, 
             # Update user fields similarly
             pass
         return staff
+
+
+# ------------------------------- SUBJECT CATALOG FORM (Kiswate admin) --------
+class SubjectCatalogForm(forms.ModelForm):
+    class Meta:
+        model = SubjectCatalog
+        fields = ['name', 'code', 'description', 'curriculum', 'is_core', 'is_elective',
+                  'sessions_per_week_default', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Mathematics'}),
+            'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., MATH'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'curriculum': forms.Select(attrs={'class': 'form-select'}),
+            'sessions_per_week_default': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'is_core': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_elective': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+# ------------------------------- SUBJECT ACTIVATION FORM (principal) ---------
+class SubjectActivationForm(forms.Form):
+    """Used by principals to activate catalog subjects for their school."""
+    start_date = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        help_text='Activation start date (defaults to today)',
+    )
+    catalog_ids = forms.ModelMultipleChoiceField(
+        queryset=SubjectCatalog.objects.filter(is_active=True),
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+        label='',
+    )
+
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+        if school:
+            already_active = Subject.objects.filter(
+                school=school, catalog_ref__isnull=False
+            ).values_list('catalog_ref_id', flat=True)
+            self.fields['catalog_ids'].queryset = SubjectCatalog.objects.filter(
+                is_active=True
+            ).exclude(id__in=already_active)
+
+    def activate(self, school):
+        """Create Subject instances for each selected catalog entry."""
+        created = []
+        start_date = self.cleaned_data['start_date']
+        for cat in self.cleaned_data['catalog_ids']:
+            subj, new = Subject.objects.get_or_create(
+                school=school,
+                catalog_ref=cat,
+                defaults={
+                    'name': cat.name,
+                    'code': cat.code,
+                    'description': cat.description,
+                    'is_elective': cat.is_elective,
+                    'sessions_per_week': cat.sessions_per_week_default,
+                    'start_date': start_date,
+                    'is_active': True,
+                }
+            )
+            if new:
+                created.append(subj)
+        return created
+
+
+# ─── COMPLAINT FORM (parent self-service) ────────────────────────────────────
+
+class ComplaintForm(forms.ModelForm):
+    class Meta:
+        model = Complaint
+        fields = ['student', 'category', 'subject', 'description', 'is_anonymous']
+        widgets = {
+            'subject': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Brief summary'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4,
+                                                 'placeholder': 'Describe the issue in detail…'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'student': forms.Select(attrs={'class': 'form-select'}),
+            'is_anonymous': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, parent=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = parent
+        if parent:
+            self.fields['student'].queryset = parent.children.select_related('user', 'grade_level')
+            self.fields['student'].required = False
+            self.fields['student'].label = 'Regarding child (optional)'
+            self.fields['student'].empty_label = '— All children / General —'
+
+
+# ─── BULK SUBJECT UPLOAD FORM ────────────────────────────────────────────────
+
+class BulkSubjectUploadForm(forms.Form):
+    file = forms.FileField(
+        help_text='Excel (.xlsx) with columns: name, code, curriculum, is_core, is_elective, sessions_per_week_default, description',
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.xlsx,.xls'}),
+    )
+
+    def clean_file(self):
+        f = self.cleaned_data['file']
+        ext = f.name.rsplit('.', 1)[-1].lower()
+        if ext not in ('xlsx', 'xls'):
+            raise forms.ValidationError('Only .xlsx / .xls files are accepted.')
+        if f.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('File must be under 5 MB.')
+        return f
+
+
+# ─── BULK NOTIFICATION FORM ───────────────────────────────────────────────────
+
+class BulkNotificationForm(forms.Form):
+    AUDIENCE_CHOICES = [
+        ('all_parents',     'All Parents'),
+        ('all_students',    'All Students'),
+        ('all_staff',       'All Staff'),
+        ('all',             'Everyone (parents, students, staff)'),
+        ('grade_parents',   'Parents of a Grade'),
+        ('grade_students',  'Students in a Grade'),
+        ('stream_parents',  'Parents of a Stream'),
+        ('stream_students', 'Students in a Stream'),
+    ]
+
+    title = forms.CharField(
+        max_length=160,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Notification title / SMS header',
+        }),
+    )
+    message = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'class': 'form-control', 'rows': 4,
+            'placeholder': 'Type the message…',
+            'id': 'id_bulk_message',
+        }),
+    )
+    audience = forms.ChoiceField(
+        choices=AUDIENCE_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_audience'}),
+    )
+    grade = forms.ModelChoiceField(
+        queryset=Grade.objects.none(),
+        required=False,
+        empty_label='— Select grade —',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    stream = forms.ModelChoiceField(
+        queryset=Grade.objects.none(),
+        required=False,
+        empty_label='— Select stream —',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    channel_inapp = forms.BooleanField(
+        required=False, initial=True, label='In-App (web)',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    channel_email = forms.BooleanField(
+        required=False, label='Email',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    channel_sms = forms.BooleanField(
+        required=False, label='SMS',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['grade'].queryset = Grade.objects.filter(school=school)
+            self.fields['stream'].queryset = Streams.objects.filter(school=school)
+
+    def clean(self):
+        cleaned = super().clean()
+        audience = cleaned.get('audience', '')
+        if 'grade' in audience and not cleaned.get('grade'):
+            raise forms.ValidationError('Please select a grade for this audience.')
+        if 'stream' in audience and not cleaned.get('stream'):
+            raise forms.ValidationError('Please select a stream for this audience.')
+        if not any([cleaned.get('channel_inapp'), cleaned.get('channel_email'), cleaned.get('channel_sms')]):
+            raise forms.ValidationError('Select at least one delivery channel.')
+        return cleaned

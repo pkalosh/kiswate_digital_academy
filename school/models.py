@@ -48,7 +48,6 @@ ATTENDANCE_STATUS_CHOICES = [
 # Expanded INCIDENT_TYPE_CHOICES for discipline
 INCIDENT_TYPE_CHOICES = [
     ('late', 'Late Arrival'),
-    ('expulsion', 'Expulsion'),
     ('tardy', 'Tardy'),
     ('absence', 'Absence'),
     ('misconduct', 'Misconduct'),
@@ -253,10 +252,54 @@ class Role(models.Model):
 
 
 # Subject
+CURRICULUM_CHOICES = [
+    ('cbc', 'CBC (Competency-Based)'),
+    ('kcse', 'KCSE'),
+    ('kcpe', 'KCPE'),
+    ('igcse', 'IGCSE'),
+    ('other', 'Other'),
+]
+
+
+class SubjectCatalog(models.Model):
+    """Platform-level subject catalog managed by Kiswate admins.
+    Schools activate entries from here rather than creating subjects from scratch."""
+    name = models.CharField(max_length=255, unique=True)
+    code = models.CharField(max_length=50, unique=True)
+    description = models.TextField(blank=True)
+    curriculum = models.CharField(max_length=20, choices=CURRICULUM_CHOICES, default='cbc')
+    is_core = models.BooleanField(default=True, help_text='Core/mandatory subject')
+    is_elective = models.BooleanField(default=False)
+    sessions_per_week_default = models.PositiveIntegerField(default=2)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Subject Catalog'
+        verbose_name_plural = 'Subject Catalog'
+        indexes = [
+            models.Index(fields=['curriculum', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
 class Subject(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     code = models.CharField(max_length=100, blank=True)
+
+    catalog_ref = models.ForeignKey(
+        SubjectCatalog,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='school_subjects',
+        help_text='Platform catalog entry this subject was activated from'
+    )
 
     school = models.ForeignKey(School, on_delete=models.CASCADE)
     grade = models.ManyToManyField(Grade, related_name='subjects')
@@ -503,6 +546,10 @@ class Lesson(models.Model):
     class Meta:
         ordering = ['day_of_week','lesson_date', 'time_slot__start_time']
         unique_together = ['timetable', 'subject', 'day_of_week', 'time_slot', 'stream','lesson_date']
+        indexes = [
+            models.Index(fields=['teacher', 'lesson_date']),
+            models.Index(fields=['timetable', 'day_of_week']),
+        ]
 
     def __str__(self):
         if self.time_slot:
@@ -605,6 +652,8 @@ class Attendance(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['enrollment']),
+            models.Index(fields=['date', 'status']),
+            models.Index(fields=['marked_by', 'date']),
         ]
 
     def __str__(self):
@@ -662,9 +711,17 @@ class Notification(models.Model):
     is_read = models.BooleanField(default=False)
     sent_at = models.DateTimeField(auto_now_add=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
+    # Delivery status tracking (None = not attempted, True = success, False = failed)
+    sms_sent = models.BooleanField(null=True, blank=True)
+    email_sent = models.BooleanField(null=True, blank=True)
+    sms_error = models.CharField(max_length=500, blank=True)
+    email_error = models.CharField(max_length=500, blank=True)
 
     class Meta:
         ordering = ['-sent_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', 'sent_at']),
+        ]
 
     def __str__(self):
         return f"{self.title} to {self.recipient.get_full_name()}"
@@ -706,7 +763,7 @@ class GradeAttendance(models.Model):
     def __str__(self):
         return f"{self.student.user.get_full_name()} - {self.status}"    
 
-# Payment model 
+# Payment model
 class Payment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)  # Nullable for general payments
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
@@ -716,6 +773,12 @@ class Payment(models.Model):
     paid_at = models.DateTimeField(blank=True, null=True)
     description = models.TextField(blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['student', 'status']),
+            models.Index(fields=['school', 'paid_at']),
+        ]
 
     def __str__(self):
         return f"{self.get_payment_type_display()} - {self.amount} for {self.student or 'General'}"
@@ -1265,3 +1328,165 @@ class Upload(models.Model):
 
     def __str__(self):
         return f"Upload by {self.uploaded_by}"
+
+
+# ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+class AuditLog(models.Model):
+    ACTION_CHOICES = [('create', 'Created'), ('update', 'Updated'), ('delete', 'Deleted')]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, null=True, blank=True, related_name='audit_logs')
+    model_name = models.CharField(max_length=100, db_index=True)
+    object_id = models.PositiveIntegerField()
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    description = models.TextField(blank=True)
+    changes = models.JSONField(default=dict, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['actor', 'timestamp']),
+            models.Index(fields=['school', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.action} {self.model_name}#{self.object_id} by {self.actor} at {self.timestamp}"
+
+
+# ─── COMPLAINT ───────────────────────────────────────────────────────────────
+class Complaint(models.Model):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_review', 'In Review'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    ]
+    CATEGORY_CHOICES = [
+        ('academic', 'Academic'),
+        ('discipline', 'Discipline'),
+        ('fees', 'Fees'),
+        ('health', 'Health & Safety'),
+        ('bullying', 'Bullying'),
+        ('teacher', 'Teacher Conduct'),
+        ('facilities', 'Facilities'),
+        ('other', 'Other'),
+    ]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='complaints')
+    parent = models.ForeignKey(Parent, on_delete=models.CASCADE, related_name='complaints')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='complaints')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    subject = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='open')
+    response = models.TextField(blank=True)
+    responded_by = models.ForeignKey(
+        StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='complaint_responses'
+    )
+    responded_at = models.DateTimeField(null=True, blank=True)
+    is_anonymous = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['school', 'status']),
+            models.Index(fields=['parent', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.subject} ({self.get_status_display()})"
+
+
+# ─── ANNOUNCEMENT ─────────────────────────────────────────────────────────────
+class Announcement(models.Model):
+    AUDIENCE_CHOICES = [
+        ('all', 'Everyone'),
+        ('students', 'Students Only'),
+        ('parents', 'Parents Only'),
+        ('staff', 'Staff Only'),
+    ]
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='announcements')
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    audience = models.CharField(max_length=20, choices=AUDIENCE_CHOICES, default='all')
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True, related_name='announcements')
+    is_pinned = models.BooleanField(default=False)
+    created_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='announcements')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-is_pinned', '-created_at']
+        indexes = [
+            models.Index(fields=['school', 'audience', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.school.name})"
+
+    @property
+    def is_active(self):
+        from django.utils import timezone
+        if self.expires_at:
+            return timezone.now() <= self.expires_at
+        return True
+
+
+# ─── FEE INVOICE ──────────────────────────────────────────────────────────────
+class FeeInvoice(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('partial', 'Partially Paid'),
+        ('paid', 'Fully Paid'),
+        ('waived', 'Waived'),
+    ]
+    PAYMENT_METHOD_CHOICES = [
+        ('mpesa', 'M-Pesa STK Push'),
+        ('cash', 'Cash'),
+        ('cheque', 'Cheque'),
+        ('bank', 'Bank Transfer'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fee_invoices')
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='fee_invoices')
+    term = models.ForeignKey(Term, on_delete=models.SET_NULL, null=True, blank=True)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.SET_NULL, null=True, blank=True)
+    description = models.CharField(max_length=255, default='School Fees')
+    amount_required = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    due_date = models.DateField(null=True, blank=True)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, null=True, blank=True)
+    cheque_number = models.CharField(max_length=50, blank=True)
+    receipt_number = models.CharField(max_length=50, unique=True, blank=True, db_index=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='fee_invoices_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['student', 'status']),
+            models.Index(fields=['school', 'term']),
+        ]
+
+    def __str__(self):
+        return f"{self.student} – {self.description} ({self.status})"
+
+    @property
+    def balance(self):
+        return self.amount_required - self.amount_paid
+
+    def save(self, *args, **kwargs):
+        if not self.receipt_number:
+            import uuid
+            self.receipt_number = f"RCP-{str(uuid.uuid4()).upper()[:8]}"
+        if self.amount_paid >= self.amount_required:
+            self.status = 'paid'
+        elif self.amount_paid > 0:
+            self.status = 'partial'
+        else:
+            self.status = 'pending'
+        super().save(*args, **kwargs)

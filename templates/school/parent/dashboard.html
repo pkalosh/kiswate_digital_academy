@@ -1,132 +1,205 @@
 {% extends 'school/parent/base.html' %}
 {% load static %}
 {% block title %}Parent Dashboard | {{ request.user.get_full_name }}{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
-<section class="container-fluid py-4">
+<style>
+.stat-card { border-radius:12px; border:none; box-shadow:0 2px 10px rgba(0,0,0,.07); transition:transform .15s; }
+.stat-card:hover { transform:translateY(-3px); }
+.student-card { border-radius:14px; border:none; box-shadow:0 3px 14px rgba(0,0,0,.08); }
+.balance-bar { height:6px; border-radius:99px; }
+.att-ring { width:56px;height:56px;border-radius:50%;border:4px solid #e9ecef;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem; }
+</style>
 
-<h3 class="mb-4">Welcome, {{ request.user.get_full_name }}</h3>
+<div class="container-fluid py-3">
 
-<div class="accordion" id="schoolAccordion">
-    {% for school, students in schools.items %}
-    <div class="accordion-item">
-        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
-                {{ school.name }}
-                <span class="ms-3">
-                    {% for student_data in students %}
-                        <span class="badge bg-success me-1">{{ student_data.student.user.get_full_name }} (Grade: {{ student_data.student.grade_level.name }}, Admission No: {{ student_data.student.student_id }})</span>
-                    {% endfor %}
-                </span>
-            </button>
-        </h2>
-        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#schoolAccordion">
-            <div class="accordion-body">
-
-                <!-- Student Tabs -->
-                {% if students|length > 1 %}
-                <ul class="nav nav-tabs" id="studentTabs{{ forloop.counter }}" role="tablist">
-                    {% for student_data in students %}
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link {% if forloop.first %}active{% endif %}" id="student-tab-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" data-bs-toggle="tab" data-bs-target="#student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" type="button" role="tab" aria-controls="student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
-                            {{ student_data.student.user.get_full_name }} - {{ student_data.student.grade_level.name }} {{ student_data.student.stream.name }}
-                        </button>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-
-                <div class="tab-content mt-3" id="studentTabsContent{{ forloop.counter }}">
-                    {% for student_data in students %}
-                    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="student-{{ forloop.parentloop.counter }}-{{ forloop.counter }}" role="tabpanel" aria-labelledby="student-tab-{{ forloop.parentloop.counter }}-{{ forloop.counter }}">
-
-                        <!-- Stats -->
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-3 col-6">
-                                <div class="card text-center shadow-sm">
-                                    <div class="card-body">
-                                        <i class="bi bi-book-fill fs-3 text-success"></i>
-                                        <div class="small text-muted mt-1">Lessons</div>
-                                        <div class="h5 fw-bold">{{ student_data.total_lessons }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 col-6">
-                                <div class="card text-center shadow-sm">
-                                    <div class="card-body">
-                                        <i class="bi bi-check-circle-fill fs-3 text-success"></i>
-                                        <div class="small text-muted mt-1">Attendance</div>
-                                        <div class="h5 fw-bold">{{ student_data.attended }}/{{ student_data.total_lessons }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 col-6">
-                                <div class="card text-center shadow-sm">
-                                    <div class="card-body">
-                                        <i class="bi bi-exclamation-triangle-fill fs-3 text-success"></i>
-                                        <div class="small text-muted mt-1">Discipline</div>
-                                        <div class="h5 fw-bold">{{ student_data.discipline_count }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Upcoming Lessons Table -->
-                        <h6>Upcoming Lessons (Next 7 Days)</h6>
-                        <div class="table-responsive">
-                        <table class="table table-sm table-bordered table-striped">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Subject</th>
-                                    <th>Teacher</th>
-                                    <th>Time</th>
-                                    <th>Room</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for lesson in student_data.upcoming_lessons %}
-                                <tr>
-                                    <td>{{ lesson.lesson_date|date:"M. d, Y" }}</td>
-                                    <td>{{ lesson.subject.name }}</td>
-                                    <td>{{ lesson.teacher.get_full_name }}</td>
-                                    <td>{{ lesson.time_slot.start_time|time:"g:i a" }} - {{ lesson.time_slot.end_time|time:"g:i a" }}</td>
-                                    <td>{{ lesson.room }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-muted text-center">No upcoming lessons</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        </div>
-
-                        <!-- Notifications -->
-                        <h6 class="mt-3">Notifications</h6>
-                        <ul class="list-group">
-                            {% for note in student_data.notifications %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ note.title }}
-                                {% if note.is_read %}
-                                <span class="badge bg-secondary">Read</span>
-                                {% else %}
-                                <span class="badge bg-success">New</span>
-                                {% endif %}
-                            </li>
-                            {% empty %}
-                            <li class="list-group-item text-muted">No notifications</li>
-                            {% endfor %}
-                        </ul>
-
-                    </div>
-                    {% endfor %}
-                </div>
-
-            </div>
-        </div>
+  <!-- Greeting + Total Balance -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <h4 class="fw-bold mb-0">Welcome, {{ request.user.get_full_name }}</h4>
+      <small class="text-muted">Here's an overview of your children's progress.</small>
     </div>
-    {% endfor %}
-</div>
+    <div class="col-md-6 d-flex justify-content-md-end gap-2 align-items-center">
+      <a href="{% url 'school:parent-notifications' %}" class="btn btn-outline-secondary btn-sm position-relative">
+        <i class="bi bi-bell"></i> Notifications
+        {% if unread_count %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ unread_count }}</span>{% endif %}
+      </a>
+      <a href="{% url 'school:parent-complaints' %}" class="btn btn-outline-secondary btn-sm position-relative">
+        <i class="bi bi-chat-square-text"></i> Complaints
+        {% if open_complaints %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">{{ open_complaints }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
 
+  <!-- Top KPI Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card stat-card text-center p-3">
+        <i class="bi bi-people fs-2 text-success mb-1"></i>
+        <div class="small text-muted">Children</div>
+        <div class="h4 fw-bold mb-0">{{ child_data|length }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card text-center p-3">
+        <i class="bi bi-cash-coin fs-2 text-{% if total_balance > 0 %}warning{% else %}success{% endif %} mb-1"></i>
+        <div class="small text-muted">Total Fee Balance</div>
+        <div class="h4 fw-bold mb-0 text-{% if total_balance > 0 %}danger{% else %}success{% endif %}">
+          KES {{ total_balance|floatformat:0 }}
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card text-center p-3">
+        <i class="bi bi-bell fs-2 text-info mb-1"></i>
+        <div class="small text-muted">Unread Alerts</div>
+        <div class="h4 fw-bold mb-0">{{ unread_count }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card text-center p-3">
+        <i class="bi bi-chat-square-text fs-2 text-danger mb-1"></i>
+        <div class="small text-muted">Open Complaints</div>
+        <div class="h4 fw-bold mb-0">{{ open_complaints }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if not child_data %}
+  <div class="alert alert-info text-center py-5">
+    <i class="bi bi-person-x display-4 d-block mb-2"></i>
+    No children linked to your account yet. Please contact the school administrator.
+  </div>
+  {% endif %}
+
+  {% for cd in child_data %}
+  <div class="card student-card mb-4">
+    <!-- Student Header -->
+    <div class="card-header bg-white border-0 py-3">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center fw-bold" style="width:46px;height:46px;font-size:1.1rem;">
+            {{ cd.student.user.first_name|slice:":1" }}{{ cd.student.user.last_name|slice:":1" }}
+          </div>
+          <div>
+            <h6 class="fw-bold mb-0">{{ cd.student.user.get_full_name }}</h6>
+            <small class="text-muted">Adm No: {{ cd.student.student_id }} &bull; {{ cd.school.name }}</small>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge bg-light text-dark border">
+            <i class="bi bi-mortarboard me-1"></i>{{ cd.student.grade_level.name }}
+            {% if cd.student.stream %} – {{ cd.student.stream.name }}{% endif %}
+          </span>
+          <span class="badge bg-{{ cd.status_color }}-subtle text-{{ cd.status_color }} border border-{{ cd.status_color }}">
+            {{ cd.status_label|upper }}
+          </span>
+          {% if cd.active_term %}
+          <span class="badge bg-light text-muted border">
+            <i class="bi bi-calendar3 me-1"></i>{{ cd.active_term.name }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="row g-3">
+
+        <!-- Attendance + Fee -->
+        <div class="col-md-4">
+          <div class="row g-2">
+            <div class="col-6">
+              <div class="card border-0 bg-success-subtle p-3 text-center h-100">
+                <div class="att-ring mx-auto mb-2 border-success text-success">
+                  {{ cd.att_rate }}%
+                </div>
+                <small class="text-muted">Attendance</small>
+                <div class="small fw-semibold">{{ cd.present_att }} / {{ cd.total_att }} lessons</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="card border-0 {% if cd.fee_balance > 0 %}bg-danger-subtle{% else %}bg-success-subtle{% endif %} p-3 text-center h-100">
+                <i class="bi bi-cash-stack fs-3 {% if cd.fee_balance > 0 %}text-danger{% else %}text-success{% endif %} mb-1"></i>
+                <small class="text-muted">Fee Balance</small>
+                <div class="fw-bold {% if cd.fee_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                  KES {{ cd.fee_balance|floatformat:0 }}
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="card border-0 bg-warning-subtle p-3 text-center h-100">
+                <i class="bi bi-exclamation-triangle fs-3 text-warning mb-1"></i>
+                <small class="text-muted">Discipline</small>
+                <div class="fw-bold">{{ cd.discipline_count }}</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="card border-0 bg-info-subtle p-3 text-center h-100">
+                <i class="bi bi-book fs-3 text-info mb-1"></i>
+                <small class="text-muted">Upcoming</small>
+                <div class="fw-bold">{{ cd.upcoming_lessons|length }} lessons</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upcoming Lessons -->
+        <div class="col-md-4">
+          <h6 class="fw-semibold mb-2"><i class="bi bi-calendar-week me-1 text-success"></i>Next 7 Days</h6>
+          {% if cd.upcoming_lessons %}
+          <div class="list-group list-group-flush">
+            {% for lesson in cd.upcoming_lessons %}
+            <div class="list-group-item px-0 py-1 border-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <span class="fw-semibold small">{{ lesson.subject.name }}</span>
+                  <div class="text-muted" style="font-size:.75rem;">{{ lesson.teacher.user.get_full_name }}</div>
+                </div>
+                <div class="text-end">
+                  <div class="small text-muted">{{ lesson.lesson_date|date:"D d M" }}</div>
+                  <div style="font-size:.72rem;" class="text-muted">{{ lesson.time_slot.start_time|time:"H:i" }}</div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted small">No upcoming lessons in the next 7 days.</p>
+          {% endif %}
+        </div>
+
+        <!-- Announcements -->
+        <div class="col-md-4">
+          <h6 class="fw-semibold mb-2"><i class="bi bi-megaphone me-1 text-primary"></i>Announcements</h6>
+          {% if cd.announcements %}
+          {% for ann in cd.announcements %}
+          <div class="card border-0 bg-light mb-2 p-2">
+            <div class="d-flex align-items-start gap-2">
+              {% if ann.is_pinned %}<i class="bi bi-pin-angle-fill text-danger mt-1 flex-shrink-0"></i>{% else %}<i class="bi bi-megaphone text-primary mt-1 flex-shrink-0"></i>{% endif %}
+              <div>
+                <div class="fw-semibold small">{{ ann.title }}</div>
+                <div class="text-muted" style="font-size:.75rem;">{{ ann.body|truncatechars:80 }}</div>
+                <div class="text-muted" style="font-size:.7rem;">{{ ann.created_at|date:"d M Y" }}</div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p class="text-muted small">No announcements.</p>
+          {% endif %}
+          <div class="mt-2">
+            <a href="{% url 'school:parent-fees' %}" class="btn btn-sm btn-outline-success w-100">
+              <i class="bi bi-cash me-1"></i>View Fee Details
+            </a>
+          </div>
+        </div>
+
+      </div><!-- /row -->
+    </div><!-- /card-body -->
+  </div><!-- /student-card -->
+  {% endfor %}
+
+</div>
 {% endblock %}

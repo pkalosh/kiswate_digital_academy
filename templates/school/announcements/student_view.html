@@ -1,0 +1,50 @@
+{% extends 'school/student/base.html' %}
+{% block title %}Announcements{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+  <div class="mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-megaphone me-2 text-primary"></i>School Announcements</h5>
+    <small class="text-muted">Notices and updates from {{ student.school.name }}</small>
+  </div>
+
+  {% if not announcements %}
+  <div class="alert alert-info text-center py-5">
+    <i class="bi bi-megaphone display-4 d-block mb-2 opacity-50"></i>
+    No announcements at the moment.
+  </div>
+  {% endif %}
+
+  {% for ann in announcements %}
+  <div class="card border-0 shadow-sm mb-3 {% if ann.is_pinned %}border-start border-4 border-danger{% endif %}">
+    <div class="card-body">
+      <div class="d-flex align-items-start gap-2">
+        {% if ann.is_pinned %}<i class="bi bi-pin-angle-fill text-danger mt-1 flex-shrink-0"></i>{% else %}<i class="bi bi-megaphone text-primary mt-1 flex-shrink-0"></i>{% endif %}
+        <div class="flex-grow-1">
+          <h6 class="fw-bold mb-1">{{ ann.title }}</h6>
+          <p class="mb-2">{{ ann.body }}</p>
+          <div class="d-flex gap-3 flex-wrap" style="font-size:.78rem;">
+            {% if ann.grade %}<span class="badge bg-light text-dark border">{{ ann.grade.name }}</span>{% endif %}
+            <span class="text-muted"><i class="bi bi-calendar3 me-1"></i>{{ ann.created_at|date:"d M Y" }}</span>
+            {% if ann.expires_at %}<span class="text-warning"><i class="bi bi-clock me-1"></i>Expires {{ ann.expires_at|date:"d M Y" }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if announcements.has_other_pages %}
+  <nav>
+    <ul class="pagination pagination-sm justify-content-center">
+      {% if announcements.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ announcements.previous_page_number }}">&laquo;</a></li>{% endif %}
+      {% for n in announcements.paginator.page_range %}
+        {% if announcements.number == n %}<li class="page-item active"><span class="page-link">{{ n }}</span></li>
+        {% elif n > announcements.number|add:-3 and n < announcements.number|add:3 %}<li class="page-item"><a class="page-link" href="?page={{ n }}">{{ n }}</a></li>{% endif %}
+      {% endfor %}
+      {% if announcements.has_next %}<li class="page-item"><a class="page-link" href="?page={{ announcements.next_page_number }}">&raquo;</a></li>{% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

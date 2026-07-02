@@ -22,7 +22,7 @@ from .serializers import (
     TeacherStatsSerializer,ParentChildrenSerializer,TeacherLessonSerializer,StudentListSerializer,GradeAttendanceCreateSerializer,GradeAttendanceSerializer
 )
 from school.models import (
-    StaffProfile, Student, Parent, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
+    StaffProfile, Student, Parent, SubjectEnrollment, TimeSlot, Lesson, School, Grade,Enrollment, Streams,Attendance, DisciplineRecord, Assignment, 
     ContactMessage,Submission,Term, Subject, Notification,GradeAttendance
 )
 from rest_framework.decorators import action
@@ -137,9 +137,7 @@ class TeacherTimetableView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request, teacher_id):
-        print(f"Fetching timetable for teacher ID: {teacher_id}")
         teacher = get_object_or_404(StaffProfile, staff_id=teacher_id)
-        print(f"Found teacher: {teacher.user.get_full_name()}")
         user_role = get_user_role(request.user)
         if user_role != 'teacher' or request.user != teacher.user:
             # Allow admins or same school staff
@@ -153,9 +151,7 @@ class TeacherLessonsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, teacher_id):
-        print(f"Fetching lessons for teacher ID: {teacher_id}")
         teacher = get_object_or_404(StaffProfile, staff_id=teacher_id)
-        print(f"Found teacher: {teacher.user.get_full_name()}")
 
         user_role = get_user_role(request.user)
         # Authorization: Allow teacher themselves, admins, or same-school staff
@@ -187,27 +183,51 @@ class TeacherLessonsView(APIView):
 
 class StudentsListView(APIView):
     """
-    GET: List all students in the user's school (for teachers/admins).
-    Returns serialized list of students with id, full_name, grade_level_name, stream_name.
+    GET: List all students in the user's school (for admins/teachers)
+    Includes enrolled subjects per student.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user_role = get_user_role(request.user)
+
         if user_role not in ['admin', 'teacher']:
-            return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
-        
+            return Response(
+                {'error': 'Insufficient permissions'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         school = get_user_school(request.user, user_role)
+
         if not school:
-            return Response({'error': 'No school access'}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Query students in the school, optimized with select_related and ordering
-        queryset = Student.objects.filter(school=school).select_related(
-            'user', 'grade_level', 'stream'
-        ).order_by('user__last_name', 'user__first_name')
-        
+            return Response(
+                {'error': 'No school access'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 🔥 Optimized queryset
+        queryset = Student.objects.filter(
+            school=school,
+            is_active=True
+        ).select_related(
+            'user',
+            'grade_level',
+            'stream'
+        ).prefetch_related(
+            Prefetch(
+                'subject_enrollments',
+                queryset=SubjectEnrollment.objects.filter(
+                    is_active=True
+                ).select_related('subject')
+            )
+        ).order_by(
+            'user__last_name',
+            'user__first_name'
+        )
+
         serializer = StudentListSerializer(queryset, many=True)
-        return Response(serializer.data)  # Empty list [] if no students
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class StudentTimetableView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -240,30 +260,13 @@ class AttendanceRecordsView(APIView):
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
         
         # Real query
-        queryset = Attendance.objects.filter(  # Filter as in ViewSet
-            enrollment__school=request.user.staffprofile.school  # Assume user has school via profile
+        school = get_user_school(request.user, user_role)
+        if not school:
+            return Response({'error': 'No school access'}, status=status.HTTP_403_FORBIDDEN)
+        queryset = Attendance.objects.filter(
+            enrollment__school=school
         ).select_related('enrollment__student', 'marked_by')
         
-        if not queryset.exists():
-            # Fallback sample with string IDs
-            sample_data = [  # Your full sample
-                {
-                    "id": "att_001",
-                    "className": "Form 3A",
-                    "studentName": "John Doe",
-                    "date": "2024-01-15",
-                    "present": 1,
-                    "absent": 0,
-                    "total": 1,
-                    "status": "Present"
-                },
-                # ... all 5 from sample
-            ]
-            serializer = AttendanceRecordSerializer(data=sample_data, many=True)
-            serializer.is_valid()
-            return Response(serializer.data)
-        
-        # Real: Use model serializer
         serializer = AttendanceModelSerializer(queryset, many=True)
         return Response(serializer.data)
     
@@ -292,7 +295,8 @@ class AttendanceDetailView(APIView):
             return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
         
         attendance = get_object_or_404(Attendance, pk=pk)
-        if attendance.enrollment.school != request.user.staffprofile.school:
+        school = get_user_school(request.user, user_role)
+        if attendance.enrollment.school != school:
             return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
         
         serializer = AttendanceUpdateSerializer(attendance, data=request.data, context={'request': request})
@@ -508,130 +512,22 @@ class AssignmentsView(APIView):
         queryset = Assignment.objects.filter(school=school).select_related('subject', 'school')
         
         if user_role == 'student':
-            # Enrollments for student
-            enrollments = Enrollment.objects.filter(student=request.user.student, status='active')
-            subjects = [e.subject for e in enrollments]
-            queryset = queryset.filter(subject__in=subjects)
+            from school.models import SubjectEnrollment
+            subject_ids = SubjectEnrollment.objects.filter(
+                student=request.user.student, is_active=True
+            ).values_list('subject_id', flat=True)
+            queryset = queryset.filter(subject_id__in=subject_ids)
         elif user_role == 'parent':
-            parent = request.user.parent
-            students = parent.children.all()
-            enrollments = Enrollment.objects.filter(student__in=students, status='active')
-            subjects = [e.subject for e in enrollments]
-            queryset = queryset.filter(subject__in=subjects)
+            from school.models import SubjectEnrollment
+            students = request.user.parent.children.all()
+            subject_ids = SubjectEnrollment.objects.filter(
+                student__in=students, is_active=True
+            ).values_list('subject_id', flat=True)
+            queryset = queryset.filter(subject_id__in=subject_ids)
         elif user_role == 'teacher':
             staff = request.user.staffprofile
             subjects = staff.subjects.all()
             queryset = queryset.filter(subject__in=subjects)
-        
-        if not queryset.exists():
-            # Fallback sample data - FIXED: Use data= and full sample
-            sample_data = [
-                {
-                    "id": "assign_001",
-                    "title": "Mathematics Problem Set 5",
-                    "subject": "Mathematics",
-                    "class": "Form 3A",
-                    "dueDate": "2024-01-18",
-                    "submissions": 12,
-                    "totalStudents": 25,
-                    "studentName": None,
-                    "isSubmitted": None,
-                    "file": {
-                        "url": "https://example.com/files/math_problem_set_5.pdf",
-                        "fileName": "math_problem_set_5.pdf",
-                        "fileSize": 245678,
-                        "fileType": "application/pdf"
-                    }
-                },
-                {
-                    "id": "assign_002",
-                    "title": "English Essay: Climate Change",
-                    "subject": "English",
-                    "class": "Form 2B",
-                    "dueDate": "2024-01-20",
-                    "submissions": 8,
-                    "totalStudents": 30,
-                    "studentName": None,
-                    "isSubmitted": None,
-                    "file": {
-                        "url": "https://example.com/files/english_essay_guidelines.docx",
-                        "fileName": "english_essay_guidelines.docx",
-                        "fileSize": 189234,
-                        "fileType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    }
-                },
-                {
-                    "id": "assign_003",
-                    "title": "Chemistry Lab Report",
-                    "subject": "Chemistry",
-                    "class": "Form 4A",
-                    "dueDate": "2024-01-22",
-                    "submissions": 15,
-                    "totalStudents": 20,
-                    "studentName": None,
-                    "isSubmitted": None,
-                    "file": {
-                        "url": "https://example.com/files/chemistry_lab_template.pdf",
-                        "fileName": "chemistry_lab_template.pdf",
-                        "fileSize": 312456,
-                        "fileType": "application/pdf"
-                    }
-                },
-                {
-                    "id": "assign_004",
-                    "title": "History Research Paper",
-                    "subject": "History",
-                    "class": "Form 1C",
-                    "dueDate": "2024-01-13",
-                    "submissions": 18,
-                    "totalStudents": 22,
-                    "studentName": None,
-                    "isSubmitted": None,
-                    "file": {
-                        "url": "https://example.com/files/history_research_requirements.pdf",
-                        "fileName": "history_research_requirements.pdf",
-                        "fileSize": 156789,
-                        "fileType": "application/pdf"
-                    }
-                },
-                {
-                    "id": "assign_005",
-                    "title": "Biology Field Study",
-                    "subject": "Biology",
-                    "class": "Form 3A",
-                    "dueDate": "2024-01-25",
-                    "submissions": 10,
-                    "totalStudents": 25,
-                    "studentName": "John Doe",
-                    "isSubmitted": True,
-                    "file": {
-                        "url": "https://example.com/files/biology_field_study_instructions.pdf",
-                        "fileName": "biology_field_study_instructions.pdf",
-                        "fileSize": 278901,
-                        "fileType": "application/pdf"
-                    }
-                },
-                {
-                    "id": "assign_006",
-                    "title": "Geography Map Project",
-                    "subject": "Geography",
-                    "class": "Form 2B",
-                    "dueDate": "2024-01-19",
-                    "submissions": 5,
-                    "totalStudents": 30,
-                    "studentName": "Jane Smith",
-                    "isSubmitted": False,
-                    "file": {
-                        "url": "https://example.com/files/geography_map_project.pdf",
-                        "fileName": "geography_map_project.pdf",
-                        "fileSize": 423567,
-                        "fileType": "application/pdf"
-                    }
-                }
-            ]
-            serializer = AssignmentSerializer(data=sample_data, many=True)  # FIXED: data= implicit, but works
-            serializer.is_valid()
-            return Response(serializer.data)
         
         # Real data
         serializer = AssignmentSerializer(queryset, many=True, context={'request': request})
@@ -732,8 +628,7 @@ class AnnouncementsView(APIView):
         # Fetch only notifications for the logged-in user, ordered by sent_at (recent first)
         # Limit to 10 recent for performance; adjust or add pagination as needed
         announcements = Notification.objects.filter(
-            recipient=request.user,
-            school=request.user.school  # Assuming User has school; adjust if via profile
+            recipient=request.user
         ).order_by('-sent_at')[:10]
 
         serializer = AnnouncementSerializer(announcements, many=True)
@@ -787,20 +682,22 @@ class StudentStatsView(APIView):
             'lastAbsenceDate': last_absence_date
         }
         
-        # 2. Assignments Stats (unchanged; filters via enrollments below)
+        # 2. Assignments Stats
+        from school.models import SubjectEnrollment
+        subject_ids = SubjectEnrollment.objects.filter(
+            student=student, is_active=True
+        ).values_list('subject_id', flat=True)
         enrollments = Enrollment.objects.filter(
-            student=student,
-            status='active',
-            subject__grade=student.grade_level  # FIXED: Only current grade's subjects
-        )
+            student=student, status='active',
+            lesson__subject_id__in=subject_ids
+        ).select_related('lesson__subject')
         assignments = Assignment.objects.filter(
-            subject__in=[e.subject for e in enrollments],
+            subject_id__in=subject_ids,
             due_date__gte=term_start
         )
         total_assignments = assignments.count()
         submissions = Submission.objects.filter(
             enrollment__student=student,
-            enrollment__subject__grade=student.grade_level,  # FIXED: Current grade
             assignment__due_date__gte=term_start
         )
         completed = submissions.exclude(score__isnull=True).count()
@@ -845,15 +742,18 @@ class StudentStatsView(APIView):
         subject_grades = []
         total_grades = 0
         num_graded_subjects = 0
-        for enrollment in enrollments:  # Now filtered to current grade
-            subject_subs = submissions.filter(enrollment__subject=enrollment.subject)
+        for enrollment in enrollments:
+            subj = enrollment.lesson.subject if enrollment.lesson_id else None
+            if not subj:
+                continue
+            subject_subs = submissions.filter(enrollment__lesson__subject=subj)
             avg_grade = subject_subs.aggregate(avg=Avg('score'))['avg'] or 0
             has_grades = subject_subs.filter(score__isnull=False).exists()
             grade_status = 'graded' if has_grades else 'pending'
             grade_letter = self._compute_grade_letter(avg_grade) if has_grades else 'Pending'
-            teacher = enrollment.subject.teachers_subjects.first()
+            teacher = subj.teachers_subjects.first()
             subject_entry = {
-                'subject': enrollment.subject.name,
+                'subject': subj.name,
                 'grade': round(avg_grade, 1),
                 'gradeLetter': grade_letter,
                 'teacher': teacher.user.get_full_name() if teacher else 'TBD',
@@ -1026,9 +926,9 @@ class ParentChildrenView(APIView):
                 to_attr='recent_discipline_records'  # <-- expected by serializer
             ),
             Prefetch(
-                'enrollments',       # <-- correct related name
-                queryset=Enrollment.objects.select_related('subject', 'school', 'student'),
-                to_attr='current_enrollments'  # <-- expected by serializer
+                'enrollments',
+                queryset=Enrollment.objects.select_related('lesson__subject', 'school', 'student'),
+                to_attr='current_enrollments'
             )
         )
 

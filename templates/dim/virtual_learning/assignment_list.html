@@ -1,0 +1,61 @@
+{% extends "dim/base.html" %}
+{% block title %}Assignments{% endblock %}
+{% block page_title %}Assignments{% endblock %}
+{% block nav_asgn_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2 text-success"></i>Assignments</h5>
+  {% if profile.role != 'student' %}
+  <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Assignment
+  </a>
+  {% endif %}
+</div>
+
+{% if assignments %}
+<div class="table-card">
+  <table class="table table-hover align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Title</th><th>Program</th><th>Due Date</th><th>Marks</th><th>Status</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in assignments %}
+      <tr>
+        <td>
+          <div class="fw-semibold" style="font-size:.875rem;">{{ a.title }}</div>
+          {% if a.lesson %}<div class="text-muted" style="font-size:.78rem;">{{ a.lesson.title }}</div>{% endif %}
+        </td>
+        <td style="font-size:.83rem;">{{ a.program.name }}</td>
+        <td style="font-size:.83rem;">
+          {{ a.due_date|date:"M d, Y" }}
+          <div class="text-muted" style="font-size:.75rem;">{{ a.due_date|date:"H:i" }}</div>
+        </td>
+        <td style="font-size:.83rem;">{{ a.total_marks }}</td>
+        <td>
+          {% if a.is_published %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Active</span>
+          {% else %}
+          <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">View</a>
+          {% if profile.role == 'student' and a.is_published %}
+          <a href="{% url 'kiswate_digital_app:submit_assignment' a.pk %}" class="btn btn-sm btn-brand ms-1" style="font-size:.75rem;">Submit</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="module-card text-center py-5 text-muted">
+  <i class="bi bi-file-earmark-text" style="font-size:2.5rem;"></i>
+  <p class="mt-3 mb-0">No assignments found.</p>
+</div>
+{% endif %}
+{% endblock %}

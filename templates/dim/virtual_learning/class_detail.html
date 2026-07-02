@@ -1,0 +1,203 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ vc.title }}{% endblock %}
+{% block page_title %}Class Detail{% endblock %}
+{% block nav_classes_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-camera-video me-2 text-success"></i>{{ vc.title }}</h5>
+    <span class="text-muted" style="font-size:.83rem;">{{ vc.program.name }}</span>
+  </div>
+  <div class="d-flex gap-2">
+    {% if profile.role == 'student' and vc.is_upcoming and not vc.is_cancelled %}
+    <a href="{% url 'kiswate_digital_app:join_class' vc.pk %}" target="_blank"
+       class="btn btn-brand btn-sm">
+      <i class="bi bi-camera-video me-1"></i>
+      {% if my_attendance %}Rejoin{% else %}Join Class{% endif %}
+    </a>
+    {% endif %}
+    {% if profile.role == 'teacher' %}
+    <a href="{{ vc.meeting_link }}" target="_blank" class="btn btn-brand btn-sm">
+      <i class="bi bi-broadcast me-1"></i>Start Class
+    </a>
+    <a href="{% url 'kiswate_digital_app:virtual_class_edit' vc.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-pencil"></i>
+    </a>
+    {% endif %}
+    <a href="{% url 'kiswate_digital_app:virtual_class_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Class Info -->
+  <div class="col-lg-7">
+    <div class="module-card mb-4">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge rounded-pill
+          {% if vc.platform == 'google_meet' %}pill-gmeet
+          {% elif vc.platform == 'ms_teams' %}pill-teams
+          {% else %}pill-zoom{% endif %}">
+          <i class="bi {{ vc.platform_icon }} me-1"></i>{{ vc.get_platform_display }}
+        </span>
+        {% if vc.is_cancelled %}
+        <span class="badge bg-danger-subtle text-danger rounded-pill">Cancelled</span>
+        {% elif vc.is_upcoming %}
+        <span class="badge bg-success-subtle text-success rounded-pill">Upcoming</span>
+        {% else %}
+        <span class="badge bg-secondary-subtle text-secondary rounded-pill">Past</span>
+        {% endif %}
+      </div>
+
+      <dl class="row g-0 mb-0" style="font-size:.875rem;">
+        <dt class="col-sm-4 text-muted fw-normal">Scheduled</dt>
+        <dd class="col-sm-8 fw-semibold">{{ vc.scheduled_at|date:"l, M d Y · H:i" }}</dd>
+        <dt class="col-sm-4 text-muted fw-normal">Duration</dt>
+        <dd class="col-sm-8">{{ vc.duration_minutes }} minutes</dd>
+        <dt class="col-sm-4 text-muted fw-normal">Teacher</dt>
+        <dd class="col-sm-8">{{ vc.teacher.full_name }}</dd>
+        {% if vc.meeting_id %}
+        <dt class="col-sm-4 text-muted fw-normal">Meeting ID</dt>
+        <dd class="col-sm-8"><code>{{ vc.meeting_id }}</code></dd>
+        {% endif %}
+        {% if vc.passcode %}
+        <dt class="col-sm-4 text-muted fw-normal">Passcode</dt>
+        <dd class="col-sm-8"><code>{{ vc.passcode }}</code></dd>
+        {% endif %}
+        {% if vc.notes %}
+        <dt class="col-sm-4 text-muted fw-normal">Notes</dt>
+        <dd class="col-sm-8">{{ vc.notes }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+
+    <!-- Recording -->
+    {% if vc.recording_link %}
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-2"><i class="bi bi-play-circle me-1 text-danger"></i>Recording</h6>
+      <a href="{{ vc.recording_link }}" target="_blank" class="btn btn-sm btn-outline-danger">
+        <i class="bi bi-play me-1"></i>Watch Recording
+      </a>
+    </div>
+    {% elif profile.role == 'teacher' and not vc.is_upcoming %}
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-2 text-muted"><i class="bi bi-play-circle me-1"></i>Recording</h6>
+      <a href="{% url 'kiswate_digital_app:upload_recording' vc.pk %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-upload me-1"></i>Upload Recording Link
+      </a>
+    </div>
+    {% endif %}
+
+    <!-- Teacher Actions -->
+    {% if profile.role == 'teacher' %}
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3">Teacher Actions</h6>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'kiswate_digital_app:mark_attendance' vc.pk %}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-person-check me-1"></i>Mark Attendance
+        </a>
+        <form method="post" action="{% url 'kiswate_digital_app:send_class_reminder' vc.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-warning">
+            <i class="bi bi-bell me-1"></i>Send Reminder
+          </button>
+        </form>
+        {% if not vc.is_cancelled %}
+        <form method="post" action="{% url 'kiswate_digital_app:virtual_class_cancel' vc.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger"
+                  onclick="return confirm('Cancel this class?')">
+            <i class="bi bi-x-circle me-1"></i>Cancel Class
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: Attendance -->
+  <div class="col-lg-5">
+    <!-- My attendance status (student) -->
+    {% if profile.role == 'student' %}
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-person-check me-1 text-success"></i>Your Attendance</h6>
+      {% if my_attendance %}
+      <div class="d-flex align-items-center gap-3">
+        <div class="stat-icon bg-success-subtle text-success">
+          <i class="bi bi-check2-circle"></i>
+        </div>
+        <div>
+          <div class="fw-semibold text-success">Attended</div>
+          <div class="text-muted" style="font-size:.8rem;">
+            Joined at {{ my_attendance.joined_at|date:"H:i, M d" }}
+            {% if my_attendance.marked_by_teacher %}· <em>Teacher confirmed</em>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:.85rem;">
+        <i class="bi bi-info-circle me-1"></i>
+        Your attendance will be recorded automatically when you click <strong>Join Class</strong>.
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Attendance Summary -->
+    <div class="module-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-people me-1 text-primary"></i>Attendance Summary</h6>
+        <span class="badge bg-primary-subtle text-primary rounded-pill">
+          {{ attendance_summary.rate_pct }}%
+        </span>
+      </div>
+
+      <!-- How attendance works callout -->
+      <div class="alert alert-light border rounded-3 py-2 px-3 mb-3" style="font-size:.78rem;">
+        <i class="bi bi-info-circle me-1 text-primary"></i>
+        <strong>How it works:</strong> Attendance is recorded when students click
+        <em>Join Class</em>, or when a teacher manually marks it via <em>Mark Attendance</em>.
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-4 text-center">
+          <div class="fw-bold fs-5 text-dark">{{ attendance_summary.enrolled_count }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Enrolled</div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="fw-bold fs-5 text-success">{{ attendance_summary.present_count }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Present</div>
+        </div>
+        <div class="col-4 text-center">
+          <div class="fw-bold fs-5 text-danger">{{ attendance_summary.absent_count }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Absent</div>
+        </div>
+      </div>
+
+      <div class="rate-bar mb-3">
+        <div class="rate-fill" style="width:{{ attendance_summary.rate_pct }}%;"></div>
+      </div>
+
+      <!-- Present students list -->
+      {% if attendance_records %}
+      <div style="max-height:220px; overflow-y:auto;">
+        {% for rec in attendance_records %}
+        <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="font-size:.82rem;">
+          <i class="bi bi-check-circle-fill text-success"></i>
+          <span>{{ rec.student.full_name }}</span>
+          <span class="text-muted ms-auto">{{ rec.joined_at|date:"H:i" }}
+            {% if rec.marked_by_teacher %}<i class="bi bi-pencil ms-1" title="Marked by teacher"></i>{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:.82rem;">No attendance recorded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

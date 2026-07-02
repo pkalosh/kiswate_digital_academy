@@ -1,0 +1,63 @@
+{% extends "dim/base.html" %}
+{% block title %}Lessons{% endblock %}
+{% block page_title %}Lessons{% endblock %}
+{% block nav_lessons_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-book me-2 text-success"></i>Lessons</h5>
+  {% if request.user.is_staff or profile.role in "teacher,school_admin,super_admin" %}
+  <a href="{% url 'kiswate_digital_app:lesson_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Lesson
+  </a>
+  {% endif %}
+</div>
+
+{% if lessons %}
+<div class="row g-3">
+  {% for lesson in lessons %}
+  <div class="col-md-6 col-xl-4" data-aos="fade-up">
+    <div class="module-card h-100">
+      <div class="d-flex align-items-start justify-content-between mb-2">
+        <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size:.72rem;">
+          {{ lesson.program.name }}
+        </span>
+        {% if lesson.is_published %}
+        <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
+        {% else %}
+        <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
+        {% endif %}
+      </div>
+      <h6 class="fw-semibold mb-1">{{ lesson.title }}</h6>
+      {% if lesson.topic %}
+      <div class="text-muted mb-2" style="font-size:.8rem;"><i class="bi bi-tag me-1"></i>{{ lesson.topic }}</div>
+      {% endif %}
+      {% if lesson.description %}
+      <p class="text-muted mb-3" style="font-size:.83rem;">{{ lesson.description|truncatewords:15 }}</p>
+      {% endif %}
+      <div class="d-flex gap-2 mt-auto">
+        {% if lesson.notes_file %}
+        <a href="{{ lesson.notes_file.url }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>Notes
+        </a>
+        {% endif %}
+        {% if lesson.video_url %}
+        <a href="{{ lesson.video_url }}" class="btn btn-sm btn-outline-danger" target="_blank">
+          <i class="bi bi-play-circle me-1"></i>Video
+        </a>
+        {% endif %}
+        <a href="{% url 'kiswate_digital_app:lesson_detail' lesson.pk %}" class="btn btn-sm btn-brand ms-auto">
+          Open <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="module-card text-center py-5 text-muted">
+  <i class="bi bi-book" style="font-size:2.5rem;"></i>
+  <p class="mt-3 mb-0">No lessons found.</p>
+</div>
+{% endif %}
+{% endblock %}

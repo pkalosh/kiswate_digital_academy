@@ -1,0 +1,139 @@
+{% extends 'school/base.html' %}
+{% load static %}
+
+{% block title %}Activate Subjects from Catalog{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'school:school-subjects' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Subjects
+    </a>
+    <div>
+      <h5 class="fw-bold mb-0">Activate Subjects from Catalog</h5>
+      <small class="text-muted">Select subjects {{ school.name }} will offer, then click Activate.</small>
+    </div>
+  </div>
+
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+
+  {% if already_active %}
+  <div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-header bg-light py-2">
+      <small class="fw-semibold text-muted">Already active for {{ school.name }}</small>
+    </div>
+    <div class="card-body py-2">
+      <div class="d-flex flex-wrap gap-2">
+        {% for subj in already_active %}
+          <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-2">
+            <i class="bi bi-check-circle me-1"></i>{{ subj.name }}
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-4 col-lg-3">
+        <label class="form-label small fw-semibold">Start Date <span class="text-danger">*</span></label>
+        {{ form.start_date }}
+        {% if form.start_date.errors %}
+          <div class="text-danger small">{{ form.start_date.errors }}</div>
+        {% endif %}
+        <small class="text-muted">Used as the start date for all activated subjects.</small>
+      </div>
+    </div>
+
+    {% if catalog_groups %}
+      {% for curriculum, entries in catalog_groups.items %}
+      <div class="card border-0 shadow-sm rounded-3 mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between py-2">
+          <span class="fw-semibold">{{ curriculum }}</span>
+          <button type="button" class="btn btn-xs btn-outline-secondary select-all-btn"
+                  data-group="group-{{ forloop.counter }}">
+            Select all
+          </button>
+        </div>
+        <div class="card-body py-3">
+          <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-2" id="group-{{ forloop.counter }}">
+            {% for entry in entries %}
+            <div class="col">
+              <label class="d-flex align-items-start gap-2 p-2 rounded border catalog-card cursor-pointer"
+                     style="cursor:pointer">
+                <input class="form-check-input mt-1 flex-shrink-0"
+                       type="checkbox"
+                       name="catalog_ids"
+                       value="{{ entry.pk }}">
+                <div>
+                  <div class="fw-semibold small">{{ entry.name }}</div>
+                  <div class="text-muted" style="font-size:.72rem">
+                    <code>{{ entry.code }}</code>
+                    &bull; {{ entry.sessions_per_week_default }} sessions/week
+                    {% if entry.is_core %}<span class="badge bg-primary ms-1" style="font-size:.65rem">Core</span>{% endif %}
+                    {% if entry.is_elective %}<span class="badge bg-info text-dark ms-1" style="font-size:.65rem">Elective</span>{% endif %}
+                  </div>
+                  {% if entry.description %}
+                  <div class="text-muted mt-1" style="font-size:.7rem">{{ entry.description|truncatewords:10 }}</div>
+                  {% endif %}
+                </div>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if form.catalog_ids.errors %}
+      <div class="alert alert-danger py-2">{{ form.catalog_ids.errors }}</div>
+      {% endif %}
+
+      <div class="d-flex gap-2 mt-2">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check2-circle me-1"></i> Activate Selected Subjects
+        </button>
+        <a href="{% url 'school:school-subjects' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+
+    {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-inbox display-4 d-block mb-2 opacity-50"></i>
+        No subjects are available in the platform catalog yet.<br>
+        Contact your Kiswate administrator to add subjects.
+      </div>
+    {% endif %}
+
+  </form>
+</div>
+
+<style>
+.catalog-card { transition: background .15s; }
+.catalog-card:hover { background: #f8f9fa; }
+.catalog-card:has(input:checked) { background: #e8f5e9; border-color: #4caf50 !important; }
+.btn-xs { padding:.2rem .45rem; font-size:.75rem; }
+</style>
+
+<script>
+document.querySelectorAll('.select-all-btn').forEach(btn => {
+  let allSelected = false;
+  btn.addEventListener('click', function () {
+    const group = document.getElementById(this.dataset.group);
+    const boxes = group.querySelectorAll('input[type=checkbox]');
+    allSelected = !allSelected;
+    boxes.forEach(cb => cb.checked = allSelected);
+    this.textContent = allSelected ? 'Deselect all' : 'Select all';
+  });
+});
+</script>
+
+{% endblock %}

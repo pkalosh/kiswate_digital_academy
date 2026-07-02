@@ -1,0 +1,68 @@
+{% extends "dim/base.html" %}
+{% block title %}Assessments{% endblock %}
+{% block page_title %}Assessments{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-clipboard-check me-2 text-success"></i>Assessments</h5>
+  {% if not profile.role == 'student' %}
+  <a href="{% url 'kiswate_digital_app:assessment_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Assessment
+  </a>
+  {% endif %}
+</div>
+
+{% if assessments %}
+<div class="table-card">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Title</th><th>Type</th><th>Program</th><th>Window</th>
+        <th>Marks</th><th>Status</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in assessments %}
+      <tr>
+        <td class="fw-semibold" style="font-size:.875rem;">{{ a.title }}</td>
+        <td>
+          <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size:.72rem;">
+            {{ a.get_assessment_type_display }}
+          </span>
+        </td>
+        <td style="font-size:.83rem;">{{ a.program.name }}</td>
+        <td style="font-size:.8rem;">
+          {% if a.start_time %}{{ a.start_time|date:"M d H:i" }}{% else %}Open{% endif %}
+          {% if a.end_time %} – {{ a.end_time|date:"M d H:i" }}{% endif %}
+        </td>
+        <td style="font-size:.83rem;">{{ a.total_marks }}</td>
+        <td>
+          {% if a.results_published %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Results Out</span>
+          {% elif a.is_published %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
+          {% else %}
+          <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{% url 'kiswate_digital_app:assessment_detail' a.pk %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">View</a>
+            {% if profile.role == 'student' and a.is_published %}
+            <a href="{% url 'kiswate_digital_app:take_assessment' a.pk %}" class="btn btn-sm btn-brand" style="font-size:.75rem;">Take</a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="module-card text-center py-5 text-muted">
+  <i class="bi bi-clipboard" style="font-size:2.5rem;"></i>
+  <p class="mt-3 mb-0">No assessments found.</p>
+</div>
+{% endif %}
+{% endblock %}

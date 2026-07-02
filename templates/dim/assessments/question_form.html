@@ -1,0 +1,101 @@
+{% extends "dim/base.html" %}
+{% block title %}{% if question %}Edit{% else %}Add{% endif %} Question{% endblock %}
+{% block page_title %}{% if question %}Edit{% else %}Add{% endif %} Question{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">{% if question %}Edit{% else %}Add{% endif %} Question</h5>
+    <span class="text-muted" style="font-size:.83rem;">{{ assessment.title }}</span>
+  </div>
+  <a href="{% url 'kiswate_digital_app:assessment_questions' assessment.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+
+        <!-- Question -->
+        <h6 class="fw-semibold mb-3">Question</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-12">
+            <label class="form-label">Question Text <span class="text-danger">*</span></label>
+            {{ form.text }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Type</label>
+            {{ form.question_type }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Marks</label>
+            {{ form.marks }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Order / Position</label>
+            {{ form.order }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Explanation <small class="text-muted">(shown after submission)</small></label>
+            {{ form.explanation }}
+          </div>
+        </div>
+
+        <!-- Choices (MCQ/True-False) -->
+        <h6 class="fw-semibold mb-2">Answer Choices <small class="text-muted">(for MCQ / True-False)</small></h6>
+        <div class="alert alert-light border mb-3" style="font-size:.8rem;">
+          <i class="bi bi-info-circle me-1 text-primary"></i>
+          Tick <strong>Correct</strong> on the right answer(s). Leave blank for short-answer / essay questions.
+        </div>
+
+        {{ formset.management_form }}
+        <div class="table-responsive mb-4">
+          <table class="table table-sm align-middle border rounded" style="font-size:.875rem;">
+            <thead class="table-light">
+              <tr>
+                <th style="width:60%;">Choice Text</th>
+                <th class="text-center">Correct?</th>
+                <th class="text-center">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for choice_form in formset %}
+              <tr>
+                {{ choice_form.id }}
+                <td>{{ choice_form.text }}</td>
+                <td class="text-center">{{ choice_form.is_correct }}</td>
+                <td class="text-center">{{ choice_form.DELETE }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if form.errors or formset.errors %}
+        <div class="alert alert-danger" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+          {% for f in formset %}
+            {% for field, errors in f.errors.items %}
+              {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+            {% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-2">
+          <button type="submit" class="btn btn-brand">
+            <i class="bi bi-check-lg me-1"></i>Save Question
+          </button>
+          <a href="{% url 'kiswate_digital_app:assessment_questions' assessment.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

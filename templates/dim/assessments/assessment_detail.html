@@ -1,0 +1,141 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ assessment.title }}{% endblock %}
+{% block page_title %}Assessment Detail{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">{{ assessment.title }}</h5>
+    <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size:.75rem;">
+      {{ assessment.get_assessment_type_display }}
+    </span>
+  </div>
+  <div class="d-flex gap-2">
+    {% if profile.role == 'student' and assessment.is_published and not my_attempt %}
+    <a href="{% url 'kiswate_digital_app:take_assessment' assessment.pk %}" class="btn btn-brand btn-sm">
+      <i class="bi bi-play me-1"></i>Take Assessment
+    </a>
+    {% elif profile.role == 'student' and my_attempt %}
+    <a href="{% url 'kiswate_digital_app:assessment_result' my_attempt.pk %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-graph-up me-1"></i>View Result
+    </a>
+    {% endif %}
+    {% if profile.role != 'student' %}
+    <a href="{% url 'kiswate_digital_app:assessment_questions' assessment.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-list-ol me-1"></i>Manage Questions
+    </a>
+    {% if not assessment.results_published %}
+    <form method="post" action="{% url 'kiswate_digital_app:publish_results' assessment.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-megaphone me-1"></i>Publish Results
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+    <a href="{% url 'kiswate_digital_app:assessment_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <!-- Overview -->
+    <div class="module-card mb-4">
+      <div class="row g-3 text-center">
+        <div class="col-3">
+          <div class="fw-bold fs-5">{{ assessment.total_marks }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Total Marks</div>
+        </div>
+        <div class="col-3">
+          <div class="fw-bold fs-5">{{ assessment.pass_mark }}%</div>
+          <div class="text-muted" style="font-size:.75rem;">Pass Mark</div>
+        </div>
+        <div class="col-3">
+          <div class="fw-bold fs-5">{{ assessment.duration_minutes }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Minutes</div>
+        </div>
+        <div class="col-3">
+          <div class="fw-bold fs-5">{{ questions.count }}</div>
+          <div class="text-muted" style="font-size:.75rem;">Questions</div>
+        </div>
+      </div>
+      {% if assessment.instructions %}
+      <hr class="my-3">
+      <div style="font-size:.875rem;">{{ assessment.instructions }}</div>
+      {% endif %}
+    </div>
+
+    {% if assessment.start_time or assessment.end_time %}
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-2"><i class="bi bi-clock me-1 text-warning"></i>Assessment Window</h6>
+      <div style="font-size:.875rem;">
+        {% if assessment.start_time %}Opens: <strong>{{ assessment.start_time|date:"M d, Y · H:i" }}</strong><br>{% endif %}
+        {% if assessment.end_time %}Closes: <strong>{{ assessment.end_time|date:"M d, Y · H:i" }}</strong>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Questions preview (non-student) -->
+    {% if profile.role != 'student' %}
+    <div class="module-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0">Questions ({{ questions.count }})</h6>
+        <a href="{% url 'kiswate_digital_app:assessment_questions' assessment.pk %}" class="btn btn-sm btn-outline-secondary">
+          Manage
+        </a>
+      </div>
+      {% for q in questions %}
+      <div class="border-bottom py-2" style="font-size:.83rem;">
+        <span class="text-muted me-2">#{{ q.order }}</span>
+        <span class="fw-semibold">{{ q.text|truncatewords:12 }}</span>
+        <span class="badge bg-light text-dark border ms-2" style="font-size:.7rem;">{{ q.get_question_type_display }}</span>
+        <span class="badge bg-secondary-subtle text-secondary ms-1" style="font-size:.7rem;">{{ q.marks }}mk</span>
+      </div>
+      {% empty %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">No questions added yet.</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Results (right column) -->
+  <div class="col-lg-5">
+    <div class="module-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-trophy me-1 text-warning"></i>Results</h6>
+        {% if assessment.results_published %}
+        <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
+        {% else %}
+        <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Not Published</span>
+        {% endif %}
+      </div>
+
+      {% if results %}
+      <div style="max-height:360px; overflow-y:auto;">
+        {% for attempt in results %}
+        <div class="d-flex align-items-center justify-content-between border-bottom py-2" style="font-size:.83rem;">
+          <div>
+            <div class="fw-semibold">{{ attempt.student.full_name }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ attempt.submitted_at|date:"M d, Y" }}</div>
+          </div>
+          <div class="text-end">
+            <div class="fw-bold {% if attempt.passed %}text-success{% else %}text-danger{% endif %}">
+              {{ attempt.percentage }}%
+            </div>
+            <div class="text-muted" style="font-size:.75rem;">{{ attempt.score }}/{{ assessment.total_marks }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">
+        {% if assessment.results_published %}No attempts yet.{% else %}Results will appear here once published.{% endif %}
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

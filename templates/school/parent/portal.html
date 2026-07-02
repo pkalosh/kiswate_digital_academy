@@ -1,0 +1,111 @@
+{% extends 'school/parent/base.html' %}
+{% block title %}Parent Portal{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-sm-4">
+    <div class="card k-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="rounded-circle bg-success bg-opacity-10 p-3"><i class="bi bi-people-fill text-success fs-4"></i></div>
+        <div>
+          <div class="fw-bold fs-5">{{ child_data|length }}</div>
+          <small class="text-muted">Children</small>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <a href="{% url 'school:parent-notifications' %}" class="text-decoration-none">
+      <div class="card k-card h-100 {% if unread_count %}border-warning{% endif %}">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-warning bg-opacity-10 p-3"><i class="bi bi-bell-fill text-warning fs-4"></i></div>
+          <div>
+            <div class="fw-bold fs-5">{{ unread_count }}</div>
+            <small class="text-muted">Unread Notifications</small>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-4">
+    <a href="{% url 'school:parent-complaints' %}" class="text-decoration-none">
+      <div class="card k-card h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-danger bg-opacity-10 p-3"><i class="bi bi-chat-square-text text-danger fs-4"></i></div>
+          <div>
+            <div class="fw-bold fs-5">{{ open_complaints }}</div>
+            <small class="text-muted">Open Complaints</small>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+{% for cd in child_data %}
+<div class="card k-card mb-4">
+  <div class="card-header d-flex align-items-center gap-2 py-2">
+    <i class="bi bi-person-circle fs-5 text-success"></i>
+    <strong>{{ cd.student.user.get_full_name }}</strong>
+    <span class="badge bg-secondary">{{ cd.student.grade_level.name }}</span>
+    {% if cd.student.stream %}<span class="badge bg-info text-dark">{{ cd.student.stream.name }}</span>{% endif %}
+    <div class="ms-auto d-flex gap-2">
+      <a href="{% url 'school:parent-attendance' %}?child={{ cd.student.pk }}" class="btn btn-xs btn-outline-success">Attendance</a>
+      <a href="{% url 'school:parent-assignments' %}?child={{ cd.student.pk }}" class="btn btn-xs btn-outline-primary">Assignments</a>
+      <a href="{% url 'school:parent-exam-results' %}?child={{ cd.student.pk }}" class="btn btn-xs btn-outline-secondary">Results</a>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="row g-0">
+      <div class="col-md-6 border-end">
+        <div class="p-3 pb-1"><small class="fw-semibold text-muted">RECENT ATTENDANCE</small></div>
+        <table class="table table-sm table-hover mb-0 k-tight">
+          <thead><tr><th>Date</th><th>Subject</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for att in cd.recent_attendance %}
+            <tr>
+              <td>{{ att.date }}</td>
+              <td>{{ att.enrollment.lesson.subject.name|default:"—" }}</td>
+              <td>
+                <span class="badge {% if att.status == 'P' %}bg-success{% elif att.status in 'UA,18,20' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                  {{ att.get_status_display }}
+                </span>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-muted text-center py-2">No records yet</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <div class="p-3 pb-1"><small class="fw-semibold text-muted">UPCOMING ASSIGNMENTS</small></div>
+        <table class="table table-sm table-hover mb-0 k-tight">
+          <thead><tr><th>Title</th><th>Subject</th><th>Due</th></tr></thead>
+          <tbody>
+            {% for asn in cd.pending_assignments %}
+            <tr>
+              <td>{{ asn.title|truncatechars:30 }}</td>
+              <td>{{ asn.subject.name }}</td>
+              <td class="{% if asn.due_date|date:'Y-m-d' <= today|date:'Y-m-d' %}text-danger fw-semibold{% endif %}">
+                {{ asn.due_date|date:"M d" }}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-muted text-center py-2">No upcoming assignments</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-people display-4 d-block mb-2 opacity-50"></i>
+  No children linked to your account yet.<br>
+  Contact the school to link your children.
+</div>
+{% endfor %}
+{% endblock %}

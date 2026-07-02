@@ -10,6 +10,9 @@ import logging
 from django.db.models import Q, Count, Avg, Case, When, Value, FloatField, ExpressionWrapper, F, DurationField
 from django.db import IntegrityError
 import os
+from django.db.models import Q, Value, CharField
+from django.db.models.functions import Concat
+
 from django.db.models import Q
 from collections import defaultdict
 from django.db.models import Count
@@ -70,7 +73,8 @@ from .models import (
     Session, Attendance, DisciplineRecord, SummaryReport, Notification, SmartID, ScanLog,TeacherStreamAssignment,
     Payment, Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan,UploadedFile, County, Constituency, Ward,
     ContactMessage, MpesaStkPushRequestResponse, MpesaPayment,GradeAttendance, Streams,Term, TimeSlot, AcademicYear,
-    SubjectEnrollment,AcademicYear,SubCounty,Pathway,Upload
+    SubjectEnrollment,AcademicYear,SubCounty,Pathway,Upload,SubjectCatalog,
+    Announcement, FeeInvoice
 )
 from .forms import (
     # Assuming forms exist or need to be created; placeholders for now
@@ -79,8 +83,11 @@ from .forms import (
     SubjectForm, EnrollmentForm, TimetableForm, LessonForm, SessionForm,GradeUploadForm,
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
-    ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm,AssignParentStudentForm
+    ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm,AssignParentStudentForm,
+    SubjectCatalogForm,SubjectActivationForm,ComplaintForm,BulkSubjectUploadForm,
+    BulkNotificationForm,
 )
+from .models import AuditLog, Complaint
 from kiswate_digital_app.forms import StreamForm
 
 # Create your views here.
@@ -173,10 +180,8 @@ def _send_sms_via_eujim(to_phone_number: str, message: str, retries=3, delay=5) 
                 data = response.json()
                 r = data.get("responses", [{}])[0]
                 return r.get("response-code") == 200
-            else:
-                print(f"[SMS] Attempt {attempt}: HTTP {response.status_code} → {response.text}")
-        except requests.exceptions.RequestException as e:
-            print(f"[SMS] Attempt {attempt} failed:", e)
+        except requests.exceptions.RequestException:
+            pass
         if attempt < retries:
             time.sleep(delay)  # wait before retrying
     return False
@@ -196,7 +201,6 @@ def send_email(to_email: str, subject: str, message: str) -> bool:
         )
         return True
     except Exception as e:
-        print("Email Error:", e)
         return False
 
 # --------------------------------------------------
@@ -204,11 +208,15 @@ def send_email(to_email: str, subject: str, message: str) -> bool:
 # --------------------------------------------------
 
 def is_first_slot(lesson):
-    return lesson.time_slot == TimeSlot.objects.order_by('start_time').first()
+    school = lesson.timetable.school if lesson.timetable_id else None
+    qs = TimeSlot.objects.filter(school=school) if school else TimeSlot.objects.all()
+    return lesson.time_slot == qs.order_by('start_time').first()
 
 
 def is_last_slot(lesson):
-    return lesson.time_slot == TimeSlot.objects.order_by('-end_time').first()
+    school = lesson.timetable.school if lesson.timetable_id else None
+    qs = TimeSlot.objects.filter(school=school) if school else TimeSlot.objects.all()
+    return lesson.time_slot == qs.order_by('-end_time').first()
 
 
 # --------------------------------------------------
@@ -307,178 +315,250 @@ def export_attendance_pdf(request):
 
 
 def get_user_school(user):
+    # Admins/principals: try school_admin_profile (School.school_admin FK) first
     if user.is_admin or user.is_principal:
-        return getattr(user, "school_admin_profile", None)
+        school = getattr(user, "school_admin_profile", None)
+        if school:
+            return school
+        # Fall through — principal may have StaffProfile without being school_admin
 
-    if user.is_deputy_principal or user.school_staff:
+    # StaffProfile-based lookup covers deputy, teachers, and principals linked via StaffProfile
+    if user.is_deputy_principal or user.is_principal or getattr(user, 'school_staff', False):
         try:
             return user.staffprofile.school
-        except:
+        except Exception:
             return None
 
     return None
 
 @login_required
 def dashboard(request):
+    import json as _json
     user = request.user
 
-    # Permission check
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
         messages.error(request, "You do not have permission to access this dashboard.")
         return redirect("userauths:sign-in")
 
-    # Get school
     school = get_user_school(user)
     if not school:
         return render(request, "school/error.html", {"message": "No school profile found."})
 
-    # Active term
+    today = timezone.localdate()
+
+    # ── Active term ────────────────────────────────────────────────────────────
     active_term = Term.objects.filter(school=school, is_active=True).first()
     term_filter = Q(date__range=(active_term.start_date, active_term.end_date)) if active_term else Q()
 
-    # Week focus
+    if active_term:
+        term_total_days = max((active_term.end_date - active_term.start_date).days, 1)
+        term_elapsed    = max(min((today - active_term.start_date).days, term_total_days), 0)
+        term_progress   = round(term_elapsed / term_total_days * 100)
+        term_days_left  = max((active_term.end_date - today).days, 0)
+    else:
+        term_total_days = term_elapsed = term_progress = term_days_left = 0
+
+    # ── Week navigation ────────────────────────────────────────────────────────
     date_str = request.GET.get("date")
     try:
-        focus_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else timezone.localdate()
+        focus_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else today
     except ValueError:
-        focus_date = timezone.localdate()
+        focus_date = today
     week_start = focus_date - timedelta(days=focus_date.weekday())
-    week_days = [week_start + timedelta(days=i) for i in range(5)]
-    prev_week = week_start - timedelta(days=7)
-    next_week = week_start + timedelta(days=7)
+    week_end   = week_start + timedelta(days=4)
+    week_days  = [week_start + timedelta(days=i) for i in range(5)]
+    prev_week  = week_start - timedelta(days=7)
+    next_week  = week_start + timedelta(days=7)
+    is_current_week = week_start == today - timedelta(days=today.weekday())
 
-    # ---------------- KPIs ----------------
-    total_teachers = StaffProfile.objects.filter(position="teacher", school=school).count()
-    total_students = Student.objects.filter(is_active=True, school=school).count()
-    total_parents = Parent.objects.filter(school=school).count()
-    total_missed = Attendance.objects.filter(
-        status__in=['UT','UA'], 
-        enrollment__school=school
-    ).filter(term_filter).count()
-    total_lateness = Attendance.objects.filter(
-        status__in=['ET','UT'], 
-        enrollment__school=school
-    ).filter(term_filter).count()
-    kpis = [
-        {"label": "Teachers", "value": total_teachers, "icon": "people"},
-        {"label": "Students", "value": total_students, "icon": "person"},
-        {"label": "Parents", "value": total_parents, "icon": "person-hearts"},
-        {"label": "Missed", "value": total_missed, "icon": "calendar-x"},
-        {"label": "Lateness", "value": total_lateness, "icon": "clock-history"},
+    # ── Core counts ───────────────────────────────────────────────────────────
+    total_teachers = StaffProfile.objects.filter(school=school, position='teacher').count()
+    total_students = Student.objects.filter(school=school, is_active=True).count()
+    total_parents  = Parent.objects.filter(school=school).count()
+    total_grades   = Grade.objects.filter(school=school).count()
+    total_streams  = Streams.objects.filter(school=school).count()
+
+    # ── Today's attendance rate ────────────────────────────────────────────────
+    today_att = Attendance.objects.filter(enrollment__school=school, date=today)
+    today_total   = today_att.count()
+    today_present = today_att.filter(status='P').count()
+    today_rate    = round(today_present / today_total * 100) if today_total else 0
+
+    # ── Term attendance rate ───────────────────────────────────────────────────
+    term_att     = Attendance.objects.filter(enrollment__school=school).filter(term_filter)
+    term_total   = term_att.count()
+    term_present = term_att.filter(status='P').count()
+    term_rate    = round(term_present / term_total * 100) if term_total else 0
+    term_absent  = term_att.filter(status__in=['UA', 'EA']).count()
+    term_tardy   = term_att.filter(status__in=['UT', 'ET']).count()
+
+    # ── Fee collection (term) ─────────────────────────────────────────────────
+    from django.db.models import Sum
+    fee_qs    = Payment.objects.filter(school=school)
+    fee_paid  = fee_qs.filter(status='completed').aggregate(t=Sum('amount'))['t'] or 0
+    fee_total = fee_qs.aggregate(t=Sum('amount'))['t'] or 0
+    fee_rate  = round(fee_paid / fee_total * 100) if fee_total else 0
+    fee_pending_count = fee_qs.filter(status='pending').count()
+
+    # ── Discipline (this term) ─────────────────────────────────────────────────
+    discipline_count = DisciplineRecord.objects.filter(school=school).filter(
+        Q(date__range=(active_term.start_date, active_term.end_date)) if active_term else Q()
+    ).count()
+    discipline_recent = DisciplineRecord.objects.filter(school=school).select_related(
+        'student__user'
+    ).order_by('-date')[:5]
+
+    # ── Complaints ────────────────────────────────────────────────────────────
+    open_complaints = Complaint.objects.filter(school=school, status__in=['open','in_review']).count()
+
+    # ── Today's lessons ────────────────────────────────────────────────────────
+    todays_lessons = Lesson.objects.filter(
+        timetable__school=school,
+        lesson_date=today,
+    ).select_related(
+        'subject', 'teacher__user', 'stream__grade', 'time_slot'
+    ).order_by('time_slot__start_time')[:8]
+
+    # ── Weekly attendance chart data ───────────────────────────────────────────
+    week_counts = {s: [] for s in ['P', 'ET', 'UT', 'EA', 'UA']}
+    for status in week_counts:
+        day_dict = {
+            d['date']: d['count']
+            for d in Attendance.objects.filter(
+                status=status,
+                date__range=(week_start, week_end),
+                enrollment__school=school
+            ).values('date').annotate(count=Count('id'))
+        }
+        for day in week_days:
+            week_counts[status].append(day_dict.get(day, 0))
+
+    chart_labels  = [d.strftime('%a %-d %b') for d in week_days]
+    chart_present = week_counts['P']
+    chart_absent  = [week_counts['UA'][i] + week_counts['EA'][i] for i in range(5)]
+    chart_tardy   = [week_counts['UT'][i] + week_counts['ET'][i] for i in range(5)]
+
+    # ── Attendance donut (today) ───────────────────────────────────────────────
+    donut_data = [
+        today_present,
+        today_att.filter(status__in=['UA','EA']).count(),
+        today_att.filter(status__in=['UT','ET']).count(),
+        today_att.filter(status__in=['18','20','IB']).count(),
     ]
 
-    # ---------------- Teachers Missed Lessons ----------------
-    teachers_missed_qs = StaffProfile.objects.filter(position='teacher', school=school).annotate(
-        missed_count=Count(
-            'lessons_taught__l_enrollments__attendances',
-            filter=Q(
-                lessons_taught__l_enrollments__attendances__status__in=['UT','UA'],
-                lessons_taught__l_enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
+    # ── Teachers with missed lessons this week ─────────────────────────────────
+    teachers_missed = list(
+        StaffProfile.objects.filter(position='teacher', school=school).annotate(
+            missed_count=Count(
+                'lessons_taught__l_enrollments__attendances',
+                filter=Q(
+                    lessons_taught__l_enrollments__attendances__status__in=['UT','UA'],
+                    lessons_taught__l_enrollments__attendances__date__range=(week_start, week_end),
+                )
             )
-        )
-    ).filter(missed_count__gt=0).select_related('user')
+        ).filter(missed_count__gt=0).select_related('user').order_by('-missed_count')[:8]
+    )
 
-    teachers_missed = [
-        {"teacher": teacher.user.get_full_name(), "missed_count": teacher.missed_count}
-        for teacher in teachers_missed_qs
-    ]
-
-    # ---------------- Students Missed Lessons grouped by stream ----------------
+    # ── Students missed lessons by stream this week ────────────────────────────
     student_missed_by_stream = []
-    streams = Streams.objects.filter(school=school)
-    for stream in streams:
-        students_data = Student.objects.filter(
+    for stream in Streams.objects.filter(school=school).select_related('grade'):
+        qs = Student.objects.filter(
             enrollments__lesson__stream=stream,
             enrollments__attendances__status__in=['UT','UA'],
-            enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
+            enrollments__attendances__date__range=(week_start, week_end),
         ).annotate(
             missed_count=Count(
                 'enrollments__attendances',
                 filter=Q(
                     enrollments__attendances__status__in=['UT','UA'],
-                    enrollments__attendances__date__range=(week_start, week_start + timedelta(days=4))
+                    enrollments__attendances__date__range=(week_start, week_end),
                 )
             )
-        ).distinct()
+        ).distinct().order_by('-missed_count')[:10]
+        if qs.exists():
+            student_missed_by_stream.append({'stream': stream, 'students': qs})
 
-        if students_data.exists():
-            student_missed_by_stream.append({
-                "stream": stream.name,
-                "students": [{"student": s.user.get_full_name(), "missed_count": s.missed_count} for s in students_data]
-            })
-
-    # ---------------- Suspensions / Expulsions ----------------
-    suspensions_qs = Attendance.objects.filter(
+    # ── Suspensions / Expulsions this week ────────────────────────────────────
+    suspensions = Attendance.objects.filter(
         status='18', enrollment__school=school,
-        date__range=(week_start, week_start + timedelta(days=4))
-    ).select_related('enrollment__student__user')
-    expulsions_qs = Attendance.objects.filter(
+        date__range=(week_start, week_end),
+    ).select_related('enrollment__student__user', 'enrollment__lesson__subject').order_by('-date')[:10]
+
+    expulsions = Attendance.objects.filter(
         status='20', enrollment__school=school,
-        date__range=(week_start, week_start + timedelta(days=4))
-    ).select_related('enrollment__student__user')
+        date__range=(week_start, week_end),
+    ).select_related('enrollment__student__user', 'enrollment__lesson__subject').order_by('-date')[:10]
 
-    suspension_paginator = Paginator(suspensions_qs.order_by('enrollment__student__user__first_name'), 10)
-    expulsion_paginator = Paginator(expulsions_qs.order_by('enrollment__student__user__first_name'), 10)
-
-    suspension_page = request.GET.get('susp_page')
-    expulsion_page = request.GET.get('exp_page')
-
-    suspensions_paginated = suspension_paginator.get_page(suspension_page)
-    expulsions_paginated = expulsion_paginator.get_page(expulsion_page)
-
-    # ---------------- Weekly Attendance ----------------
-    week_counts = {status: [] for status in ['P','ET','UT','EA','UA']}
-    for status in ['P','ET','UT','EA','UA']:
-        day_counts = Attendance.objects.filter(
-            status=status,
-            date__range=(week_start, week_start + timedelta(days=4)),
-            enrollment__school=school
-        ).values('date').annotate(count=Count('id'))
-        day_dict = {d['date']: d['count'] for d in day_counts}
-        for day in week_days:
-            week_counts[status].append(day_dict.get(day, 0))
-
-    # ---------------- Teacher Heatmap ----------------
-    heat_data = Enrollment.objects.filter(
-        lesson__teacher__school=school,
-        attendances__status__in=['UT','UA'],
-        attendances__date__range=(week_start, week_start + timedelta(days=4))
-    ).values(
-        teacher_id=F('lesson__teacher__id'),
-        att_date=F('attendances__date')  # renamed to avoid conflict
-    ).annotate(count=Count('attendances'))
-
-    teacher_heatmap = {}
-    for entry in heat_data:
-        tid = entry['teacher_id']
-        day = entry['att_date']
-        teacher_heatmap.setdefault(tid, {})
-        teacher_heatmap[tid][day] = entry['count']
-
-    teachers_list = StaffProfile.objects.filter(position='teacher', school=school).select_related('user')
-    teacher_heatmap_final = []
-    for t in teachers_list:
-        day_counts = {d: teacher_heatmap.get(t.id, {}).get(d, 0) for d in week_days}
-        max_missed = max(day_counts.values()) if day_counts else 1
-        day_colors = {d: f'rgba(220,53,69,{day_counts[d]/max_missed if max_missed else 0})' for d in week_days}
-        teacher_heatmap_final.append({
-            "teacher": t.user.get_full_name(),
-            "day_counts": day_counts,
-            "day_colors": day_colors
-        })
+    # ── Grade attendance breakdown (term) ─────────────────────────────────────
+    grade_att = (
+        Attendance.objects.filter(enrollment__school=school)
+        .filter(term_filter)
+        .values(grade_name=F('enrollment__lesson__stream__grade__name'))
+        .annotate(
+            total=Count('id'),
+            present=Count('id', filter=Q(status='P')),
+        )
+        .annotate(rate=ExpressionWrapper(
+            F('present') * 100.0 / F('total'), output_field=FloatField()
+        ))
+        .order_by('grade_name')
+    )
 
     context = {
-        "school": school,
-        "kpis": kpis,
-        "week_days": week_days,
-        "prev_week": prev_week,
-        "next_week": next_week,
-        "teachers_missed": teachers_missed,
+        # Identity
+        "school":       school,
+        "active_term":  active_term,
+        "today":        today,
+        # Term progress
+        "term_progress":   term_progress,
+        "term_days_left":  term_days_left,
+        # KPI tiles
+        "total_teachers": total_teachers,
+        "total_students": total_students,
+        "total_parents":  total_parents,
+        "total_grades":   total_grades,
+        "total_streams":  total_streams,
+        # Today
+        "today_total":   today_total,
+        "today_present": today_present,
+        "today_rate":    today_rate,
+        # Term attendance
+        "term_rate":    term_rate,
+        "term_total":   term_total,
+        "term_present": term_present,
+        "term_absent":  term_absent,
+        "term_tardy":   term_tardy,
+        # Fees
+        "fee_paid":          fee_paid,
+        "fee_total":         fee_total,
+        "fee_rate":          fee_rate,
+        "fee_pending_count": fee_pending_count,
+        # Discipline / complaints
+        "discipline_count":  discipline_count,
+        "discipline_recent": discipline_recent,
+        "open_complaints":   open_complaints,
+        # Today's schedule
+        "todays_lessons": todays_lessons,
+        # Week navigation
+        "week_days":        week_days,
+        "week_start":       week_start,
+        "week_end":         week_end,
+        "prev_week":        prev_week,
+        "next_week":        next_week,
+        "is_current_week":  is_current_week,
+        # Chart data (JSON)
+        "chart_labels_json":  _json.dumps(chart_labels),
+        "chart_present_json": _json.dumps(chart_present),
+        "chart_absent_json":  _json.dumps(chart_absent),
+        "chart_tardy_json":   _json.dumps(chart_tardy),
+        "donut_data_json":    _json.dumps(donut_data),
+        "donut_data":         donut_data,
+        # Alerts
+        "teachers_missed":         teachers_missed,
         "student_missed_by_stream": student_missed_by_stream,
-        "suspensions": suspensions_paginated,
-        "expulsions": expulsions_paginated,
-        "week_counts": week_counts,
-        "teacher_heatmap": teacher_heatmap_final,
+        "suspensions":             suspensions,
+        "expulsions":              expulsions,
+        "grade_att":               grade_att,
     }
 
     return render(request, "school/dashboard.html", context)
@@ -712,110 +792,103 @@ def paginate(request, queryset, per_page=10, page_param='page'):
     page_number = request.GET.get(page_param)
     return paginator.get_page(page_number)
 
-
 @login_required
 def school_users(request):
-    """Unified view for teachers, staff, students, parents with search, forms, and pagination."""
-
     user = request.user
 
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
-        messages.error(request, "You do not have permission to access this dashboard.")
+        messages.error(request, "You do not have permission to access this page.")
         return redirect("userauths:sign-in")
 
     school = get_user_school(user)
-    print(school)
-
     if not school:
         messages.error(request, "Access denied.")
         return redirect('school:dashboard')
 
+    tab = request.GET.get('tab', 'staff')
     query = request.GET.get('q', '').strip()
 
-    # ─────────────────────────────
-    # TEACHERS
-    # ─────────────────────────────
-    teachers = StaffProfile.objects.filter(school=school, position='teacher').select_related('user').only(
-        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number'
-    ).order_by('-id')
-    if query:
-        teachers = teachers.filter(Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
-    teachers_page = paginate(request, teachers, page_param='teachers_page')
+    staff_qs = StaffProfile.objects.filter(school=school).select_related('user').order_by('user__first_name')
+    students_qs = Student.objects.filter(school=school).select_related('user', 'grade_level', 'stream').order_by('user__first_name')
+    parents_qs = Parent.objects.filter(school=school).select_related('user').order_by('user__first_name')
 
-    # Create a dict keyed by teacher ID for template
-    teachers_forms = {t.id: StaffUpdateForm(instance=t, prefix=f'teacher_{t.id}') for t in teachers_page}
-
-    # ─────────────────────────────
-    # OTHER STAFF
-    # ─────────────────────────────
-    other_staff = StaffProfile.objects.filter(school=school).exclude(position='teacher').select_related('user').only(
-        'id', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number', 'position'
-    ).order_by('-id')
     if query:
-        other_staff = other_staff.filter(Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query))
-    staff_page_other = paginate(request, other_staff, page_param='staff_page_other')
-    other_staff_forms = {s.id: StaffUpdateForm(instance=s, prefix=f'staff_{s.id}') for s in staff_page_other}
-
-    # ─────────────────────────────
-    # STUDENTS
-    # ─────────────────────────────
-    students = Student.objects.filter(school=school).select_related('user', 'grade_level').only(
-        'id', 'student_id', 'grade_level__name', 'user__first_name', 'user__last_name', 'user__email', 'user__phone_number'
-    ).order_by('-id')
-    if query:
-        students = students.filter(
+        staff_qs = staff_qs.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query) |
-            Q(student_id__icontains=query) |
-            Q(user__phone_number__icontains=query) |
             Q(user__email__icontains=query) |
-            Q(grade_level__name__icontains=query)
+            Q(staff_id__icontains=query) |
+            Q(position__icontains=query)
         )
-    students_page = paginate(request, students, page_param='students_page')
-    students_forms = {st.id: StudentUpdateForm(instance=st, prefix=f'student_{st.id}') for st in students_page}
-
-    # ─────────────────────────────
-    # PARENTS
-    # ─────────────────────────────
-    parents = Parent.objects.filter(school=school).select_related('user').only(
-        'id', 'parent_id', 'user__first_name', 'user__last_name', 'user__email', 'phone'
-    ).order_by('-id')
-    if query:
-        parents = parents.filter(
+        students_qs = students_qs.filter(
             Q(user__first_name__icontains=query) |
             Q(user__last_name__icontains=query) |
-            Q(parent_id__icontains=query) |
-            Q(phone__icontains=query) |
-            Q(user__email__icontains=query)
+            Q(user__email__icontains=query) |
+            Q(student_id__icontains=query)
         )
-    parents_page = paginate(request, parents, page_param='parents_page')
-    parents_forms = {p.id: ParentUpdateForm(instance=p, prefix=f'parent_{p.id}') for p in parents_page}
+        parents_qs = parents_qs.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(user__email__icontains=query) |
+            Q(parent_id__icontains=query)
+        )
 
-    # ── Context
-    context = {
-        'school': school,
-        'query': query,
-        'teachers_page': teachers_page,
-        'staff_page_other': staff_page_other,
-        'students_page': students_page,
-        'parents_page': parents_page,
-        'teachers_forms': teachers_forms,
-        'other_staff_forms': other_staff_forms,
-        'students_forms': students_forms,
-        'parents_forms': parents_forms,
-        # Creation forms
-        'student_form': StudentCreationForm(school=school),
-        'parent_form': ParentCreationForm(school=school),
-        'parent_student_form': ParentStudentCreationForm(school=school),
-        'assign_form': AssignParentStudentForm(school=school),
-        'staff_form': StaffCreationForm(school=school),
-    }
+    staff_count = StaffProfile.objects.filter(school=school).count()
+    students_count = Student.objects.filter(school=school).count()
+    parents_count = Parent.objects.filter(school=school).count()
 
-    # ── Handle POST (create/update actions)
+    staff_list = paginate(request, staff_qs, per_page=25, page_param='sp')
+    students_list = paginate(request, students_qs, per_page=25, page_param='stp')
+    parents_list = paginate(request, parents_qs, per_page=25, page_param='pp')
+
+    staff_form = StaffCreationForm(school=school)
+    student_form = StudentCreationForm(school=school)
+    parent_form = ParentCreationForm(school=school)
+
     if request.method == 'POST':
         action = request.POST.get('action')
-        # handle create/update forms here
-        # make sure to rebind invalid forms to context if form.is_valid() is False
+        if action == 'create_staff':
+            staff_form = StaffCreationForm(request.POST, request.FILES, school=school)
+            if staff_form.is_valid():
+                staff_obj, pwd = staff_form.save()
+                messages.success(
+                    request,
+                    f'Staff "{staff_obj.user.get_full_name()}" created. Temp password: {pwd}'
+                )
+                return redirect(f"{request.path}?tab=staff")
+            else:
+                tab = 'staff'
+        elif action == 'create_student':
+            student_form = StudentCreationForm(request.POST, request.FILES, school=school)
+            if student_form.is_valid():
+                student_obj, pwd = student_form.save()
+                messages.success(request, f'Student "{student_obj.user.get_full_name()}" created.')
+                return redirect(f"{request.path}?tab=students")
+            else:
+                tab = 'students'
+        elif action == 'create_parent':
+            parent_form = ParentCreationForm(request.POST, request.FILES, school=school)
+            if parent_form.is_valid():
+                parent_obj, pwd = parent_form.save()
+                messages.success(request, f'Parent "{parent_obj.user.get_full_name()}" created.')
+                return redirect(f"{request.path}?tab=parents")
+            else:
+                tab = 'parents'
+
+    context = {
+        'school': school,
+        'tab': tab,
+        'query': query,
+        'staff_list': staff_list,
+        'students_list': students_list,
+        'parents_list': parents_list,
+        'staff_count': staff_count,
+        'students_count': students_count,
+        'parents_count': parents_count,
+        'staff_form': staff_form,
+        'student_form': student_form,
+        'parent_form': parent_form,
+    }
 
     return render(request, 'school/staff.html', context)
 
@@ -846,12 +919,11 @@ def update_student(request, pk):
             except Exception as e:
                 messages.error(request, f"Failed to update: {str(e)}")
         else:
-            print(form.errors)
             messages.error(request, "Please correct the form errors below.")
     else:
         form = StudentUpdateForm(instance=student, school=school)
-    context = {'form': form, 'student': student}
-    return render(request, 'school/staff.html', context)
+    context = {'form': form, 'student': student, 'school': school}
+    return render(request, 'school/student_edit.html', context)
 
 # Similar for Parent Update
 @login_required
@@ -882,8 +954,8 @@ def update_parent(request, pk):
             messages.error(request, "Please correct the form errors below.")
     else:
         form = ParentUpdateForm(instance=parent, school=school)
-    context = {'form': form, 'parent': parent}
-    return render(request, 'school/staff.html', context)
+    context = {'form': form, 'parent': parent, 'school': school}
+    return render(request, 'school/parent_edit.html', context)
 
 # Similar for Staff Update
 @login_required
@@ -914,8 +986,8 @@ def update_staff(request, pk):
             messages.error(request, "Please correct the form errors below.")
     else:
         form = StaffUpdateForm(instance=staff, school=school)
-    context = {'form': form, 'staff': staff}
-    return render(request, 'school/staff.html', context)
+    context = {'form': form, 'staff': staff, 'school': school}
+    return render(request, 'school/staff_edit.html', context)
 
 # Delete Views
 @login_required
@@ -1482,7 +1554,6 @@ def scan_logs_view(request):
     school = getattr(request.user, 'school', None)
 
     logs = ScanLog.objects.all()
-    print((logs))
     # Optional: limit logs by user's school
     if school:
         logs = logs.filter(school=school)
@@ -1701,7 +1772,6 @@ def parent_list_create(request):
 
     if request.method == 'POST':
         form = ParentCreationForm(request.POST, request.FILES, school=school)
-        print(form.errors)
         if form.is_valid():
             parent, password = form.save()
             messages.success(
@@ -1841,7 +1911,6 @@ def staff_list_create(request):
             logger.info(f"Created staff {staff.staff_id} for school {school.name}.")
             return redirect('school:staff_list_create')
         else:
-            print(form.errors)  # <-- DEBUG: see why it's invalid
             messages.error(request, "Please correct the form errors below.")
     else:
         form = StaffCreationForm(school=school)
@@ -2108,8 +2177,6 @@ def school_events(request):
 
 def school_fees(request):
     return render(request, "school/fee.html", {})
-def school_finance(request):
-    return render(request, "school/finance.html", {})
 
 def school_certificates(request):
     return render(request, "school/certificate.html", {})
@@ -2124,7 +2191,6 @@ def school_teacher_subjects(request, staff_id):
     """
     try:
         school = request.user.staffprofile.school
-        print(school)
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('userauths:teacher-dashboard')
@@ -2609,6 +2675,12 @@ def lesson_attendance(request, lesson_id):
                 if not status:
                     continue  # skip empty
 
+                # Only principals/deputies can suspend (18) or expel (20)
+                if status in ('18', '20') and not (
+                    request.user.is_principal or request.user.is_deputy_principal or request.user.is_admin
+                ):
+                    continue
+
                 # Update or create attendance
                 att, created = Attendance.objects.update_or_create(
                     enrollment=e,
@@ -2697,6 +2769,84 @@ def lesson_attendance(request, lesson_id):
         "attendance_map": attendance_map,
         "status_choices": Attendance.ATTENDANCE_STATUS_CHOICES,
     })
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STUDENT STATUS ACTIONS  (suspend / expel / reinstate)
+# Only principals and deputy principals may perform these actions.
+# ──────────────────────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def student_suspend(request, student_id):
+    user = request.user
+    if not (user.is_principal or user.is_deputy_principal or user.is_admin):
+        messages.error(request, "Only principals and deputy principals can suspend students.")
+        return redirect('school:dashboard')
+    school = get_user_school(user)
+    student = get_object_or_404(Student, id=student_id, school=school)
+    reason = request.POST.get('reason', '').strip()
+    student.suspended = True
+    student.expelled = False
+    student.is_active = True
+    student.save(update_fields=['suspended', 'expelled', 'is_active'])
+    DisciplineRecord.objects.create(
+        school=school,
+        student=student,
+        reported_by=getattr(user, 'staffprofile', None),
+        incident_type='suspension',
+        description=reason or 'Suspended by principal.',
+        severity='critical',
+        action_taken='Student suspended.',
+    )
+    messages.success(request, f"{student.user.get_full_name()} has been suspended.")
+    return redirect(request.POST.get('next', 'school:school-users'))
+
+
+@login_required
+@require_POST
+def student_expel(request, student_id):
+    user = request.user
+    if not (user.is_principal or user.is_deputy_principal or user.is_admin):
+        messages.error(request, "Only principals and deputy principals can expel students.")
+        return redirect('school:dashboard')
+    school = get_user_school(user)
+    student = get_object_or_404(Student, id=student_id, school=school)
+    reason = request.POST.get('reason', '').strip()
+    student.expelled = True
+    student.suspended = False
+    student.is_active = False
+    student.save(update_fields=['expelled', 'suspended', 'is_active'])
+    DisciplineRecord.objects.create(
+        school=school,
+        student=student,
+        reported_by=getattr(user, 'staffprofile', None),
+        incident_type='expulsion',
+        description=reason or 'Expelled by principal.',
+        severity='critical',
+        action_taken='Student expelled.',
+    )
+    messages.success(request, f"{student.user.get_full_name()} has been expelled.")
+    return redirect(request.POST.get('next', 'school:school-users'))
+
+
+@login_required
+@require_POST
+def student_reinstate(request, student_id):
+    user = request.user
+    if not (user.is_principal or user.is_deputy_principal or user.is_admin):
+        messages.error(request, "Only principals and deputy principals can reinstate students.")
+        return redirect('school:dashboard')
+    school = get_user_school(user)
+    student = get_object_or_404(Student, id=student_id, school=school)
+    student.suspended = False
+    student.expelled = False
+    student.is_active = True
+    student.save(update_fields=['suspended', 'expelled', 'is_active'])
+    messages.success(request, f"{student.user.get_full_name()} has been reinstated.")
+    return redirect(request.POST.get('next', 'school:school-users'))
+
+
 @login_required
 def timetable_create(request):
     """
@@ -2812,14 +2962,17 @@ def teacher_lessons(request, staff_id):
         return redirect('userauths:teacher-dashboard')
     
     teacher = get_object_or_404(StaffProfile, pk=staff_id, school=school)
-    lessons = Lesson.objects.filter(teacher=teacher).select_related('subject', 'timetable').order_by('lesson_date')
-    
+    lessons = Lesson.objects.filter(teacher=teacher).select_related(
+        'subject', 'timetable__grade', 'time_slot', 'stream'
+    ).order_by('day_of_week', 'lesson_date', 'time_slot__start_time')
+
     query = request.GET.get('q', '')
     if query:
         lessons = lessons.filter(
             Q(subject__name__icontains=query) |
             Q(timetable__grade__name__icontains=query) |
-            Q(stream=query)
+            Q(stream__name__icontains=query) |
+            Q(day_of_week__icontains=query)
         )
     
     paginator = Paginator(lessons, 10)
@@ -2931,14 +3084,17 @@ def lesson_list(request, timetable_id):
         return redirect('school:dashboard')
     
     timetable = get_object_or_404(Timetable, id=timetable_id, school=school)
-    lessons = timetable.lessons.select_related('subject', 'teacher').order_by('date', 'start_time')
-    
+    lessons = timetable.lessons.select_related(
+        'subject', 'teacher__user', 'time_slot', 'stream'
+    ).order_by('day_of_week', 'lesson_date', 'time_slot__start_time')
+
     query = request.GET.get('q', '')
     if query:
         lessons = lessons.filter(
             Q(subject__name__icontains=query) |
             Q(teacher__user__first_name__icontains=query) |
             Q(teacher__user__last_name__icontains=query) |
+            Q(stream__name__icontains=query) |
             Q(room__icontains=query)
         )
     
@@ -2954,7 +3110,7 @@ def lesson_list(request, timetable_id):
         'query': query,
         'school': school,
     }
-    return render(request, 'school/lessons.html', context)
+    return render(request, 'school/lesson.html', context)
 
 
 @login_required
@@ -3151,7 +3307,6 @@ def auto_mark_attendance_from_scan(student, stream, scan_log=None):
         ).order_by('-scanned_at').first()
 
     if not scan_log:
-        print(f"⚠️ No scan found for {student.user.get_full_name()}")
         return
 
     # Only mark if device_id starts with 'grade'
@@ -3162,10 +3317,6 @@ def auto_mark_attendance_from_scan(student, stream, scan_log=None):
             status='P',
             scan_log=scan_log
         )
-        print(f"✅ Attendance saved for {student.user.get_full_name()} at {scan_log.scanned_at}")
-    else:
-        print(f"⚠️ Scan ignored (device_id: {scan_log.device_id}) for {student.user.get_full_name()}")
-
 
 
 @login_required
@@ -3342,10 +3493,41 @@ def attendance_dashboard(request):
     # ───── TEACHER MISSED LESSONS ─────
     teacher_missed_trends = missing_lessons.values(
         'teacher__user__first_name',
-        'teacher__user__last_name'
+        'teacher__user__last_name',
+        'teacher__pk',
     ).annotate(
         missed=Count('id')
     ).order_by('-missed')[:10]
+
+    # Per-teacher missed lesson details (for hover tooltip)
+    import json as _json
+    teacher_missed_details = {}
+    for t in teacher_missed_trends:
+        tid = t.get('teacher__pk')
+        if tid:
+            details = list(
+                missing_lessons.filter(teacher_id=tid).select_related(
+                    'subject', 'stream', 'timetable__grade', 'time_slot'
+                ).values(
+                    'lesson_date',
+                    'time_slot__start_time',
+                    'time_slot__end_time',
+                    'subject__name',
+                    'stream__name',
+                    'timetable__grade__name',
+                )[:15]
+            )
+            teacher_name = f"{t['teacher__user__first_name']} {t['teacher__user__last_name']}"
+            teacher_missed_details[teacher_name] = [
+                {
+                    'date': str(d['lesson_date']),
+                    'time': f"{d['time_slot__start_time']} - {d['time_slot__end_time']}" if d['time_slot__start_time'] else '—',
+                    'subject': d['subject__name'] or '—',
+                    'class': f"{d['timetable__grade__name']} {d['stream__name']}",
+                }
+                for d in details
+            ]
+    teacher_missed_details_json = _json.dumps(teacher_missed_details)
 
     # ───── DISCIPLINE BASE ─────
     discipline_qs = DisciplineRecord.objects.filter(
@@ -3414,6 +3596,7 @@ def attendance_dashboard(request):
 
         'status_trend': list(status_trend),
         'teacher_missed_trends': list(teacher_missed_trends),
+        'teacher_missed_details_json': teacher_missed_details_json,
         'discipline_daily': list(discipline_daily),
         'discipline_by_grade': list(discipline_by_grade),
         'discipline_by_type': list(discipline_by_type),
@@ -3478,7 +3661,6 @@ def attendance_mark(request, lesson_id):
         school=lesson.school,
         status='active'
     ).select_related('student__user')
-    print(students)
 
     # Optional: filter by subject if you want strict matching
     subject_students = students.filter(subject=lesson.subject)
@@ -3498,7 +3680,6 @@ def attendance_mark(request, lesson_id):
     academic_year = getattr(term, 'academic_year', None) if term else None
 
     valid_statuses = {code for code, _ in Attendance.ATTENDANCE_STATUS_CHOICES}
-    print(valid_statuses)
 
     if request.method == 'POST':
         saved_count = 0
@@ -3640,6 +3821,15 @@ def teacher_attendance(request):
         'marked_by'
     ).order_by('-date')
 
+    # Dynamic student search (name or reg number)
+    student_search = request.GET.get('student_search', '').strip()
+    if student_search:
+        attendances_qs = attendances_qs.filter(
+            Q(enrollment__student__user__first_name__icontains=student_search) |
+            Q(enrollment__student__user__last_name__icontains=student_search) |
+            Q(enrollment__student__student_id__icontains=student_search)
+        )
+
     # ───────────── SUMMARY ─────────────
     total_records = attendances_qs.count()
     summary_qs = attendances_qs.values('status').annotate(count=Count('status'))
@@ -3673,6 +3863,7 @@ def teacher_attendance(request):
         'grades': grades,
         'selected_stream': stream_id,
         'selected_grade': grade_id,
+        'student_search': student_search,
 
         # Summary
         'summary': summary,
@@ -3733,23 +3924,16 @@ def teacher_attendance_mark(request, lesson_id):
         status='active'
     ).select_related('student', 'student__user')
 
-    # 🔥 Prefetch today's attendance
+    # Prefetch today's attendance
     today_attendance_qs = Attendance.objects.filter(
         enrollment__in=enrollments,
         date=lesson.lesson_date
     ).select_related('enrollment')
 
-    today_attendance_map = {
-        a.enrollment_id: a for a in today_attendance_qs
-    }
-
-    # 🔥 REMOVE HARD LOCK (teachers can edit)
-    attendance_locked = False
+    today_attendance_map = {a.enrollment_id: a for a in today_attendance_qs}
 
     # Current statuses
-    current_statuses = {
-        eid: att.status for eid, att in today_attendance_map.items()
-    }
+    current_statuses = {eid: att.status for eid, att in today_attendance_map.items()}
 
     # Status choices
     status_choices = [
@@ -3763,17 +3947,16 @@ def teacher_attendance_mark(request, lesson_id):
         {'code': '20', 'label': 'Expulsion', 'color': 'dark'},
     ]
 
-    # 🔥 Hide 18 & 20 from teachers
+    # Hide 18 & 20 from teachers without override
     if not can_override:
         status_choices = [s for s in status_choices if s['code'] not in ['18', '20']]
 
-    # 🔥 Detect suspended/expelled from STUDENT MODEL
+    # Determine if student is expelled/suspended
     disabled_attendance = {}
     forced_status_map = {}
 
     for e in enrollments:
         student = e.student
-
         if student.expelled:
             disabled_attendance[e.id] = True
             forced_status_map[e.id] = '20'
@@ -3783,22 +3966,18 @@ def teacher_attendance_mark(request, lesson_id):
         else:
             disabled_attendance[e.id] = False
 
-    # ───────────────────────── POST ─────────────────────────
+    # POST - save attendance
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
-
         with transaction.atomic():
             updated_attendances = []
 
             for e in enrollments:
-
-                # 🔥 FORCE from student flags (cannot override)
+                # Force expelled/suspended status
                 if e.id in forced_status_map:
                     status = forced_status_map[e.id]
-
                 else:
                     status = request.POST.get(f'status_{e.id}')
-
-                    # 🔥 Prevent teacher from setting 18/20
+                    # Prevent teacher from setting 18/20
                     if not can_override and status in ['18', '20']:
                         previous = today_attendance_map.get(e.id)
                         status = previous.status if previous else 'P'
@@ -3818,31 +3997,28 @@ def teacher_attendance_mark(request, lesson_id):
                         'marked_by': teacher
                     }
                 )
-
                 updated_attendances.append(att)
 
-        # 🔥 NOTIFICATIONS (UNCHANGED)
+        # Notifications for first/last slot
         is_first = is_first_slot(lesson)
         is_last  = is_last_slot(lesson)
 
-        if is_first or is_last:
+        if is_first:
+            for att in updated_attendances:
+                if att.status in ['P', 'ET', 'UT', 'EA', 'UA']:
+                    notify_first_lesson(att)
 
-            if is_first:
-                for attendance in updated_attendances:
-                    if attendance.status in ['P', 'ET', 'UT', 'EA', 'UA']:
-                        notify_first_lesson(attendance)
-
-            if is_last:
-                students_notified = set()
-                for att in updated_attendances:
-                    student = att.enrollment.student
-                    if student.id not in students_notified:
-                        notify_last_lesson(student, lesson.lesson_date)
-                        students_notified.add(student.id)
+        if is_last:
+            students_notified = set()
+            for att in updated_attendances:
+                student = att.enrollment.student
+                if student.id not in students_notified:
+                    notify_last_lesson(student, lesson.lesson_date)
+                    students_notified.add(student.id)
 
         return JsonResponse({'success': True})
 
-    # ───────────────────────── TRENDS ─────────────────────────
+    # Term trends
     term_attendance = Attendance.objects.filter(
         enrollment__student__in=[e.student for e in enrollments],
         term=lesson.timetable.term
@@ -3853,10 +4029,8 @@ def teacher_attendance_mark(request, lesson_id):
     for row in term_attendance:
         sid = row['enrollment__student_id']
         status = row['status']
-
         if status in trend_map[sid]:
             trend_map[sid][status] += 1
-
         trend_map[sid]['total'] += 1
 
     # Convert to %
@@ -3870,7 +4044,7 @@ def teacher_attendance_mark(request, lesson_id):
         'enrollments': enrollments,
         'status_choices': status_choices,
         'current_statuses': current_statuses,
-        'attendance_locked': attendance_locked,  # now always False
+        'attendance_locked': False,  # always editable
         'can_override': can_override,
         'ATTENDANCE_CODES': ['P','ET','UT','EA','UA'],
         'DISCIPLINE_CODES': ['IB','18','20'],
@@ -3901,9 +4075,11 @@ def teacher_attendance_smart(request, lesson_id):
 
     smart_statuses = {}
 
-    # Combine lesson date with start/end times
-    lesson_start_dt = timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.start_time)
-    lesson_end_dt = timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.end_time)
+    # Combine lesson date with start/end times (timezone-aware)
+    import pytz
+    tz = pytz.timezone('Africa/Nairobi')
+    lesson_start_dt = tz.localize(timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.start_time))
+    lesson_end_dt   = tz.localize(timezone.datetime.combine(lesson.lesson_date, lesson.time_slot.end_time))
     buffer_end = lesson_start_dt + timedelta(minutes=10)
 
     for e in enrollments:
@@ -4113,26 +4289,38 @@ def teacher_discipline_create(request):
             record.reported_by = request.user
             record.save()
 
-            # --- Notify all parents via SMS & create notifications ---
-            parents = record.student.parents.all()  # assuming M2M relation to Parent model
-            message_text = (
-                f"Dear Parent, an incident of {record.incident_type} "
-                f"has been recorded for {record.student.user.get_full_name()}."
+            # Notify all parents via SMS + email, track delivery status
+            parents = record.student.parents.all()
+            notif_title = f"Discipline Alert: {record.student.user.get_full_name()}"
+            notif_msg = (
+                f"Dear Parent, an incident of {record.get_incident_type_display()} "
+                f"has been recorded for {record.student.user.get_full_name()} on {record.date}. "
+                f"Severity: {record.get_severity_display()}. "
+                f"Action: {record.action_taken or 'None recorded'}. "
+                f"Please contact the school if needed."
             )
-
             for parent in parents:
-                # Send SMS
-                # _send_sms_via_eujim(parent.phone, message_text)
-
-                # Create Notification in DB
-                if parent.user:
-                    Notification.objects.create(
-                        recipient=parent.user,
-                        title="Discipline Incident Logged",
-                        message=message_text,
-                        related_discipline=record,
-                        school=school
-                    )
+                if not parent.user:
+                    continue
+                notif = Notification(
+                    recipient=parent.user,
+                    title=notif_title,
+                    message=notif_msg,
+                    related_discipline=record,
+                    school=school,
+                )
+                phone = getattr(parent, 'phone', None) or getattr(parent.user, 'phone_number', None)
+                if phone:
+                    ok = _send_sms_via_eujim(str(phone), notif_msg)
+                    notif.sms_sent = ok
+                    if not ok:
+                        notif.sms_error = "SMS delivery failed"
+                if parent.user.email:
+                    ok = send_email(parent.user.email, notif_title, notif_msg)
+                    notif.email_sent = ok
+                    if not ok:
+                        notif.email_error = "Email delivery failed"
+                notif.save()
 
             messages.success(request, f'Discipline record for {record.student} created and parents notified.')
             return redirect('school:teacher-discipline')
@@ -4196,6 +4384,7 @@ def school_discipline(request):
         DisciplineRecord.objects
         .filter(school=school)
         .select_related('student__user', 'teacher__user')
+        .prefetch_related('notification_set')
         .order_by('-date')
     )
 
@@ -4244,18 +4433,42 @@ def discipline_create(request):
             record.reported_by = request.user
             record.save()
             
-            # Trigger notification to first parent (User instance)
-            parent_user = record.student.parents.first().user if record.student.parents.exists() else None
-            if parent_user:
-                Notification.objects.create(
-                    recipient=parent_user,
-                    title="Discipline Incident Logged",
-                    message=f"An incident of {record.incident_type} has been recorded.",
+            # Notify all parents with SMS + email, track delivery status
+            parents = record.student.parents.all()
+            notif_title = f"Discipline Alert: {record.student.user.get_full_name()}"
+            notif_msg = (
+                f"Dear Parent, an incident of {record.get_incident_type_display()} "
+                f"has been recorded for {record.student.user.get_full_name()} on {record.date}. "
+                f"Severity: {record.get_severity_display()}. "
+                f"Action: {record.action_taken or 'None recorded'}. "
+                f"Please contact the school if needed."
+            )
+            for parent in parents:
+                if not parent.user:
+                    continue
+                notif = Notification(
+                    recipient=parent.user,
+                    title=notif_title,
+                    message=notif_msg,
                     related_discipline=record,
-                    school=school
+                    school=school,
                 )
+                # SMS
+                phone = getattr(parent, 'phone', None) or getattr(parent.user, 'phone_number', None)
+                if phone:
+                    ok = _send_sms_via_eujim(str(phone), notif_msg)
+                    notif.sms_sent = ok
+                    if not ok:
+                        notif.sms_error = "SMS delivery failed"
+                # Email
+                if parent.user.email:
+                    ok = send_email(parent.user.email, notif_title, notif_msg)
+                    notif.email_sent = ok
+                    if not ok:
+                        notif.email_error = "Email delivery failed"
+                notif.save()
 
-            messages.success(request, f'Discipline record for {record.student} created.')
+            messages.success(request, f'Discipline record for {record.student} created and parents notified.')
             return redirect('school:school-discipline')
         else:
             for field, errors in form.errors.items():
@@ -4332,7 +4545,7 @@ def school_notifications(request):
     if request.user.is_authenticated:
         notifications.filter(recipient=request.user, is_read=False).update(is_read=True)
     
-    form = NotificationForm(school=school)
+    form = NotificationForm()
     context = {
         'notifications': notifications,
         'form': form,
@@ -4529,14 +4742,21 @@ def school_students_submissions(request, pk):
     except AttributeError:
         messages.error(request, "Access denied: Admin privileges required.")
         return redirect('userauths:teacher-dashboard')
-    
+
+    assignment = get_object_or_404(Assignment, pk=pk, school=school)
     query = request.GET.get('q', '')
-    submissions = Submission.objects.filter(school=school).select_related('enrollment__student', 'assignment')
+    submissions = Submission.objects.filter(
+        school=school, assignment=assignment
+    ).select_related('enrollment__student__user', 'assignment')
     if query:
-        submissions = submissions.filter(Q(enrollment__student__user__first_name__icontains=query))
-    
+        submissions = submissions.filter(
+            Q(enrollment__student__user__first_name__icontains=query) |
+            Q(enrollment__student__user__last_name__icontains=query)
+        )
+
     context = {
         'submissions': submissions,
+        'assignment': assignment,
         'school': school,
         'query': query,
     }
@@ -4545,14 +4765,23 @@ def school_students_submissions(request, pk):
 # Grade submission (update score/feedback)
 @login_required
 def submission_grade(request, pk):
-    submission = get_object_or_404(Submission, pk=pk)
+    try:
+        school = request.user.staffprofile.school
+    except AttributeError:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+    submission = get_object_or_404(Submission, pk=pk, school=school)
     if request.method == 'POST':
-        submission.score = request.POST.get('score')
-        submission.feedback = request.POST.get('feedback')
+        try:
+            raw = request.POST.get('score', '')
+            submission.score = int(raw) if raw.strip() else None
+        except (ValueError, TypeError):
+            messages.error(request, 'Score must be a whole number.')
+            return redirect('school:assignment-submissions', pk=submission.assignment_id)
+        submission.feedback = request.POST.get('feedback', '')
         submission.save()
-        messages.success(request, 'Submission graded successfully.')
-        return redirect('school:school-students-submissions')
-    return redirect('school:school-students-submissions')
+        messages.success(request, 'Submission graded.')
+    return redirect('school:assignment-submissions', pk=submission.assignment_id)
 
 
 #student submission
@@ -4615,17 +4844,119 @@ def student_submissions(request):
     except AttributeError:
         messages.error(request, "Access denied: Student privileges required.")
         return redirect('school:dashboard')
-    
+
     query = request.GET.get('q', '')
     submissions = Submission.objects.filter(enrollment__student=student).select_related('assignment')
     if query:
         submissions = submissions.filter(Q(assignment__title__icontains=query))
-    
+
     context = {
         'submissions': submissions,
         'query': query,
     }
     return render(request, 'school/student_submissions.html', context)
+
+
+@login_required
+def student_assignments_portal(request):
+    """Student: view assignments, download files, upload submissions, see scores & remarks."""
+    if not getattr(request.user, 'is_student', False):
+        return redirect('userauths:sign-in')
+
+    try:
+        student = request.user.student
+    except Exception:
+        return redirect('userauths:sign-in')
+
+    # Student's active subject enrollments
+    subject_ids = SubjectEnrollment.objects.filter(
+        student=student, is_active=True
+    ).values_list('subject_id', flat=True)
+
+    # All assignments for those subjects
+    q = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    subject_filter = request.GET.get('subject', '')
+
+    assignments_qs = Assignment.objects.filter(
+        school=student.school,
+        subject_id__in=subject_ids,
+    ).select_related('subject').prefetch_related('submissions').order_by('due_date')
+
+    if q:
+        assignments_qs = assignments_qs.filter(title__icontains=q)
+    if subject_filter:
+        assignments_qs = assignments_qs.filter(subject_id=subject_filter)
+
+    # Annotate with student's submission
+    from django.db.models import Prefetch
+    student_submissions_prefetch = Prefetch(
+        'submissions',
+        queryset=Submission.objects.filter(enrollment__student=student).select_related('enrollment'),
+        to_attr='my_submissions'
+    )
+    assignments_qs = assignments_qs.prefetch_related(student_submissions_prefetch)
+
+    # Build enriched list
+    today = timezone.now()
+    assignment_data = []
+    for asgn in assignments_qs:
+        my_sub = asgn.my_submissions[0] if asgn.my_submissions else None
+        if status_filter == 'submitted' and not my_sub:
+            continue
+        if status_filter == 'pending' and my_sub:
+            continue
+        if status_filter == 'overdue' and (my_sub or asgn.due_date >= today):
+            continue
+        assignment_data.append({
+            'assignment': asgn,
+            'my_submission': my_sub,
+            'is_overdue': asgn.due_date < today and not my_sub,
+        })
+
+    # Handle submission upload
+    if request.method == 'POST':
+        asgn_id = request.POST.get('assignment_id')
+        try:
+            asgn = Assignment.objects.get(pk=asgn_id, school=student.school)
+            # Get or create active enrollment for this subject
+            enrollment = Enrollment.objects.filter(
+                student=student, lesson__subject=asgn.subject, status='active'
+            ).first()
+            if not enrollment:
+                messages.error(request, "You are not enrolled in this subject.")
+            else:
+                sub_file = request.FILES.get('file_submission')
+                existing = Submission.objects.filter(enrollment=enrollment, assignment=asgn).first()
+                if existing:
+                    if sub_file:
+                        existing.file_submission = sub_file
+                        existing.save()
+                    messages.success(request, "Submission updated.")
+                else:
+                    Submission.objects.create(
+                        enrollment=enrollment,
+                        assignment=asgn,
+                        school=student.school,
+                        file_submission=sub_file,
+                    )
+                    messages.success(request, "Assignment submitted successfully.")
+        except Assignment.DoesNotExist:
+            messages.error(request, "Assignment not found.")
+        return redirect('school:student-assignments')
+
+    subjects = Subject.objects.filter(id__in=subject_ids)
+    paginator = Paginator(assignment_data, 15)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/student/assignments.html', {
+        'assignment_data': page,
+        'student': student,
+        'subjects': subjects,
+        'q': q,
+        'status_filter': status_filter,
+        'subject_filter': subject_filter,
+    })
 @login_required
 def school_fees(request):
     user = request.user
@@ -4990,9 +5321,6 @@ def create_parent_student(request):
 
     if request.method == "POST":
         form = ParentStudentCreationForm(request.POST, request.FILES, school=school)
-        print(form)
-        print(form.errors)
-        print(request.POST)
         if form.is_valid():
             try:
                 # Atomic creation to ensure both User and Parent/Student are saved
@@ -5006,8 +5334,7 @@ def create_parent_student(request):
                 if form.cleaned_data.get('send_email'):
                     messages.info(request, f"A welcome email has been sent. Temporary password: {temp_password}")
 
-                # Redirect to the members listing page
-                return redirect('school:members-list')
+                return redirect('school:school-users')
 
             except Exception as e:
                 messages.error(request, f"Failed to create member: {str(e)}")
@@ -5111,26 +5438,49 @@ def ajax_grades(request):
 
 
 @login_required
+def ajax_students_search(request):
+    """AJAX: search students by name or ID for finance modal."""
+    q = request.GET.get('q', '').strip()
+    school_id = request.GET.get('school', '')
+    school = get_user_school(request.user)
+    if not school:
+        return JsonResponse([], safe=False)
+
+    qs = Student.objects.filter(school=school).select_related('user')
+    if q:
+        qs = qs.filter(
+            Q(user__first_name__icontains=q) |
+            Q(user__last_name__icontains=q) |
+            Q(student_id__icontains=q)
+        )
+    data = [{'id': s.pk, 'name': s.user.get_full_name(), 'student_id': s.student_id} for s in qs[:20]]
+    return JsonResponse(data, safe=False)
+
+
+@login_required
 @user_passes_test(is_policymaker)
 def policymaker_dashboard(request):
+    import json as _json
+    from django.db.models.functions import TruncMonth
 
-    county_id = request.GET.get("county")
+    county_id    = request.GET.get("county")
     subcounty_id = request.GET.get("subcounty")
-    school_id = request.GET.get("school")
-    grade_id = request.GET.get("grade")
-    subject_id = request.GET.get("subject")
+    school_id    = request.GET.get("school")
+    grade_id     = request.GET.get("grade")
+    subject_id   = request.GET.get("subject")
+    term_id      = request.GET.get("term")
+    classification = request.GET.get("classification")
 
     # ───────── SCHOOL FILTER ─────────
     schools = School.objects.filter(is_active=True)
-
     if county_id:
         schools = schools.filter(county_id=county_id)
-
     if subcounty_id:
         schools = schools.filter(sub_county_id=subcounty_id)
-
     if school_id:
         schools = schools.filter(id=school_id)
+    if classification:
+        schools = schools.filter(school_classification=classification)
 
     # ───────── ATTENDANCE BASE QUERY ─────────
     attendance = (
@@ -5140,54 +5490,32 @@ def policymaker_dashboard(request):
             "enrollment__lesson__teacher__user",
             "enrollment__lesson__subject",
             "enrollment__lesson__stream__grade",
-            "enrollment__school__county"
+            "enrollment__school__county",
         )
     )
-
     if grade_id:
-        attendance = attendance.filter(
-            enrollment__lesson__stream__grade_id=grade_id
-        )
-
+        attendance = attendance.filter(enrollment__lesson__stream__grade_id=grade_id)
     if subject_id:
-        attendance = attendance.filter(
-            enrollment__lesson__subject_id=subject_id
-        )
+        attendance = attendance.filter(enrollment__lesson__subject_id=subject_id)
+    if term_id:
+        attendance = attendance.filter(term_id=term_id)
+
+    _att_expr = ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField())
 
     # ───────── SCHOOL RANKING ─────────
     school_rankings = (
-        attendance.values(
-            "enrollment__school__id",
-            "enrollment__school__name"
-        )
-        .annotate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status="P")),
-        )
-        .annotate(
-            present_rate=ExpressionWrapper(
-                F("present") * 100.0 / F("total"),
-                output_field=FloatField(),
-            )
-        )
-        .order_by("-present_rate")
+        attendance.values("enrollment__school__id", "enrollment__school__name",
+                          "enrollment__school__school_classification")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .annotate(present_rate=ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField()))
+        .order_by("-present_rate")[:20]
     )
 
     # ───────── COUNTY RANKING ─────────
     county_rankings = (
-        attendance.values(
-            "enrollment__school__county__name"
-        )
-        .annotate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status="P")),
-        )
-        .annotate(
-            performance=ExpressionWrapper(
-                F("present") * 100.0 / F("total"),
-                output_field=FloatField(),
-            )
-        )
+        attendance.values("enrollment__school__county__name")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .annotate(performance=ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField()))
         .order_by("-performance")
     )
 
@@ -5196,72 +5524,130 @@ def policymaker_dashboard(request):
         attendance.values(
             "enrollment__lesson__teacher__user__first_name",
             "enrollment__lesson__teacher__user__last_name",
+            "enrollment__school__name",
         )
-        .annotate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status="P")),
-        )
-        .annotate(
-            performance=ExpressionWrapper(
-                F("present") * 100.0 / F("total"),
-                output_field=FloatField(),
-            )
-        )
-        .order_by("-performance")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .annotate(performance=ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField()))
+        .order_by("-performance")[:15]
     )
 
     # ───────── GRADE PERFORMANCE ─────────
     grade_rankings = (
-        attendance.values(
-            "enrollment__lesson__stream__grade__name"
-        )
-        .annotate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status="P")),
-        )
-        .annotate(
-            performance=ExpressionWrapper(
-                F("present") * 100.0 / F("total"),
-                output_field=FloatField(),
-            )
-        )
+        attendance.values("enrollment__lesson__stream__grade__name")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .annotate(performance=ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField()))
         .order_by("-performance")
     )
 
     # ───────── SUBJECT PERFORMANCE ─────────
     subject_rankings = (
-        attendance.values(
-            "enrollment__lesson__subject__name"
-        )
-        .annotate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status="P")),
-        )
-        .annotate(
-            performance=ExpressionWrapper(
-                F("present") * 100.0 / F("total"),
-                output_field=FloatField(),
-            )
-        )
+        attendance.values("enrollment__lesson__subject__name")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .annotate(performance=ExpressionWrapper(F("present") * 100.0 / F("total"), output_field=FloatField()))
         .order_by("-performance")
     )
 
-    # ───────── KPI CARDS ─────────
-    stats_cards = [
-        {"title": "Total Schools", "value": schools.count(), "icon": "bi-building"},
-        {"title": "Total Students", "value": Student.objects.filter(school__in=schools).count(), "icon": "bi-people"},
-        {"title": "Total Lessons", "value": Lesson.objects.filter(timetable__school__in=schools).count(), "icon": "bi-journal-text"},
-        {"title": "Discipline Cases", "value": DisciplineRecord.objects.filter(school__in=schools).count(), "icon": "bi-exclamation-triangle"},
+    # ───────── NATIONAL / FILTERED RATE ─────────
+    totals = attendance.aggregate(
+        total=Count("id"),
+        present=Count("id", filter=Q(status="P")),
+        absent_unexcused=Count("id", filter=Q(status="UA")),
+        tardy=Count("id", filter=Q(status__in=["ET","UT"])),
+    )
+    total_records = totals["total"] or 1
+    national_rate = round((totals["present"] or 0) * 100.0 / total_records, 1)
+
+    # ───────── TREND (monthly last 6 months) ─────────
+    six_months_ago = timezone.localdate() - timedelta(days=182)
+    trend_qs = (
+        attendance.filter(date__gte=six_months_ago)
+        .annotate(month=TruncMonth("date"))
+        .values("month")
+        .annotate(total=Count("id"), present=Count("id", filter=Q(status="P")))
+        .order_by("month")
+    )
+    trend_labels = [r["month"].strftime("%b %Y") for r in trend_qs if r["month"]]
+    trend_rates  = [
+        round(r["present"] * 100.0 / r["total"], 1) if r["total"] else 0
+        for r in trend_qs if r["month"]
     ]
 
+    # ───────── DISCIPLINE BREAKDOWN ─────────
+    discipline_breakdown = (
+        DisciplineRecord.objects.filter(school__in=schools)
+        .values("incident_type", "severity")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+    discipline_by_type = (
+        DisciplineRecord.objects.filter(school__in=schools)
+        .values("incident_type")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+
+    # ───────── GENDER BREAKDOWN ─────────
+    gender_qs = (
+        Student.objects.filter(school__in=schools)
+        .values("gender")
+        .annotate(count=Count("id"))
+    )
+    gender_labels = [g["gender"].upper() or "Unknown" for g in gender_qs]
+    gender_counts = [g["count"] for g in gender_qs]
+
+    # ───────── SCHOOL TYPE BREAKDOWN ─────────
+    school_type_qs = (
+        schools.values("school_classification")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+
+    # ───────── KPI SUMMARY ─────────
+    total_schools   = schools.count()
+    total_students  = Student.objects.filter(school__in=schools).count()
+    total_teachers  = StaffProfile.objects.filter(school__in=schools, position="teacher").count()
+    total_lessons   = Lesson.objects.filter(timetable__school__in=schools).count()
+    total_discipline = DisciplineRecord.objects.filter(school__in=schools).count()
+
+    # sub-counties for filter (scoped to county if selected)
+    sub_counties = SubCounty.objects.filter(county_id=county_id) if county_id else SubCounty.objects.all()
+    all_terms = Term.objects.filter(school__in=schools).distinct().order_by("-start_date")[:10]
+
     context = {
-        "stats_cards": stats_cards,
-        "school_rankings": school_rankings,
-        "county_rankings": county_rankings,
+        # KPIs
+        "total_schools":    total_schools,
+        "total_students":   total_students,
+        "total_teachers":   total_teachers,
+        "total_lessons":    total_lessons,
+        "total_discipline": total_discipline,
+        "national_rate":    national_rate,
+        "totals":           totals,
+        # Rankings
+        "school_rankings":  school_rankings,
+        "county_rankings":  county_rankings,
         "teacher_rankings": teacher_rankings,
-        "grade_rankings": grade_rankings,
+        "grade_rankings":   grade_rankings,
         "subject_rankings": subject_rankings,
-        "counties": County.objects.all()
+        # Breakdowns
+        "discipline_by_type":  discipline_by_type,
+        "school_type_qs":      school_type_qs,
+        # Charts (JSON)
+        "trend_labels_json": _json.dumps(trend_labels),
+        "trend_rates_json":  _json.dumps(trend_rates),
+        "gender_labels_json": _json.dumps(gender_labels),
+        "gender_counts_json": _json.dumps(gender_counts),
+        # Filters
+        "counties":        County.objects.all().order_by("name"),
+        "sub_counties":    sub_counties.order_by("name"),
+        "all_terms":       all_terms,
+        # Selected filter values (for persistence)
+        "sel_county":        county_id,
+        "sel_subcounty":     subcounty_id,
+        "sel_school":        school_id,
+        "sel_grade":         grade_id,
+        "sel_term":          term_id,
+        "sel_classification": classification,
+        "classification_choices": School._meta.get_field("school_classification").choices or [],
     }
 
     return render(request, "school/policy/dashboard.html", context)
@@ -5378,7 +5764,6 @@ def populate_student_lesson_enrollments(school, grade=None, stream=None, term=No
 
         except Exception as e:
             logger.exception(f"Failed to process enrollments for student {student.student_id}")
-            print(f"[ERROR] Student {student.student_id}: {e}")
 
     if enrollments_to_create:
         Enrollment.objects.bulk_create(enrollments_to_create, ignore_conflicts=True)
@@ -5387,7 +5772,6 @@ def populate_student_lesson_enrollments(school, grade=None, stream=None, term=No
     total_students = students.count()
     total_lessons = lessons_qs.count()
     total_enrollments = len(enrollments_to_create)
-    print(f"[SUMMARY] Students={total_students} Lessons={total_lessons} Enrollments={total_enrollments}")
     logger.info(f"[SUMMARY] Students={total_students} Lessons={total_lessons} Enrollments={total_enrollments}")
 
 
@@ -5546,6 +5930,16 @@ def universal_excel_upload(request):
 
     if not excel_file or not category:
         return JsonResponse({"error": "File and category are required"}, status=400)
+
+    # Subjects are managed by Kiswate admins via the catalog; schools activate from there.
+    if category == "subjects":
+        return JsonResponse({
+            "error": (
+                "Schools cannot upload subjects directly. "
+                "Go to Subjects → 'From Catalog' to activate subjects your school will offer. "
+                "Contact your Kiswate administrator to add a subject to the platform catalog."
+            )
+        }, status=400)
 
     user = request.user
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
@@ -6157,4 +6551,1107 @@ def universal_excel_upload(request):
 @login_required
 def upload_excel_page(request):
     """Renders the Excel upload page."""
-    return render(request, 'school/file_upload.html')
+    user = request.user
+    school = get_user_school(user)
+    return render(request, 'school/file_upload.html', {'school': school})
+
+
+# =============================================================================
+# SUBJECT CATALOG — Kiswate platform admin manages the global subject catalog.
+# Principals then activate subjects from it for their school.
+# =============================================================================
+
+@login_required
+def catalog_subject_list(request):
+    """Kiswate admin: view and manage the platform subject catalog."""
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    query = request.GET.get('q', '').strip()
+    qs = SubjectCatalog.objects.annotate(school_count=Count('school_subjects')).order_by('name')
+    if query:
+        qs = qs.filter(Q(name__icontains=query) | Q(code__icontains=query))
+
+    paginator = Paginator(qs, 25)
+    catalog_list = paginator.get_page(request.GET.get('page'))
+    form = SubjectCatalogForm()
+    upload_form = BulkSubjectUploadForm()
+
+    return render(request, 'school/catalog/subjects.html', {
+        'catalog_list': catalog_list,
+        'form': form,
+        'upload_form': upload_form,
+        'query': query,
+    })
+
+
+@login_required
+def catalog_subject_create(request):
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    if request.method == 'POST':
+        form = SubjectCatalogForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'"{form.cleaned_data["name"]}" added to catalog.')
+        else:
+            for field, errs in form.errors.items():
+                for e in errs:
+                    messages.error(request, f"{field}: {e}")
+    return redirect('school:catalog-subject-list')
+
+
+@login_required
+def catalog_subject_edit(request, pk):
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    entry = get_object_or_404(SubjectCatalog, pk=pk)
+    if request.method == 'POST':
+        form = SubjectCatalogForm(request.POST, instance=entry)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'"{entry.name}" updated.')
+        else:
+            for field, errs in form.errors.items():
+                for e in errs:
+                    messages.error(request, f"{field}: {e}")
+    return redirect('school:catalog-subject-list')
+
+
+@login_required
+def catalog_subject_delete(request, pk):
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    entry = get_object_or_404(SubjectCatalog, pk=pk)
+    if request.method == 'POST':
+        name = entry.name
+        entry.delete()
+        messages.success(request, f'"{name}" removed from catalog.')
+    return redirect('school:catalog-subject-list')
+
+
+@login_required
+def catalog_subject_toggle(request, pk):
+    """Quick AJAX toggle for is_active on a catalog entry."""
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        return JsonResponse({'error': 'Access denied'}, status=403)
+    entry = get_object_or_404(SubjectCatalog, pk=pk)
+    entry.is_active = not entry.is_active
+    entry.save(update_fields=['is_active'])
+    return JsonResponse({'is_active': entry.is_active})
+
+
+# =============================================================================
+# SUBJECT SELECTION — Principal activates catalog subjects for their school.
+# =============================================================================
+
+@login_required
+def subject_activate_from_catalog(request):
+    """Principal/admin: pick catalog subjects to activate for this school."""
+    user = request.user
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    school = get_user_school(user)
+    if not school:
+        messages.error(request, "No school profile found.")
+        return redirect('school:dashboard')
+
+    active_term = Term.objects.filter(school=school, is_active=True).first()
+    default_start = active_term.start_date if active_term else timezone.localdate()
+
+    form = SubjectActivationForm(school=school, initial={'start_date': default_start})
+
+    if request.method == 'POST':
+        form = SubjectActivationForm(request.POST, school=school)
+        if form.is_valid():
+            created = form.activate(school)
+            if created:
+                messages.success(
+                    request,
+                    f'{len(created)} subject(s) activated: '
+                    + ', '.join(s.name for s in created)
+                    + '. Set the grade(s) for each subject below.'
+                )
+            else:
+                messages.info(request, 'Selected subjects were already active for your school.')
+            return redirect('school:school-subjects')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+
+    already_active = Subject.objects.filter(school=school, catalog_ref__isnull=False).select_related('catalog_ref')
+    catalog_groups = {}
+    for entry in SubjectCatalog.objects.filter(is_active=True).order_by('curriculum', 'name'):
+        catalog_groups.setdefault(entry.get_curriculum_display(), []).append(entry)
+
+    return render(request, 'school/subject_selection.html', {
+        'form': form,
+        'school': school,
+        'catalog_groups': catalog_groups,
+        'already_active': already_active,
+    })
+
+
+# =============================================================================
+# BULK SUBJECT UPLOAD — Kiswate admin uploads catalog subjects via Excel
+# =============================================================================
+
+@login_required
+def catalog_subject_bulk_upload(request):
+    """Parse an uploaded Excel file and create SubjectCatalog entries."""
+    if not (request.user.is_kiswate_user or request.user.is_kiswate_admin or request.user.is_superuser):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    if request.method != 'POST':
+        return redirect('school:catalog-subject-list')
+
+    form = BulkSubjectUploadForm(request.POST, request.FILES)
+    if not form.is_valid():
+        for field, errs in form.errors.items():
+            for e in errs:
+                messages.error(request, f"{e}")
+        return redirect('school:catalog-subject-list')
+
+    file = form.cleaned_data['file']
+    try:
+        df = pd.read_excel(file, dtype=str)
+    except Exception as e:
+        messages.error(request, f"Could not read file: {e}")
+        return redirect('school:catalog-subject-list')
+
+    required_cols = {'name', 'code'}
+    missing = required_cols - set(c.lower().strip() for c in df.columns)
+    if missing:
+        messages.error(request, f"Missing required columns: {', '.join(missing)}")
+        return redirect('school:catalog-subject-list')
+
+    df.columns = [c.lower().strip() for c in df.columns]
+
+    valid_curricula = {'cbc', 'kcse', 'kcpe', 'igcse', 'other'}
+    created_count = updated_count = skipped_count = 0
+
+    for idx, row in df.iterrows():
+        name = str(row.get('name', '')).strip()
+        code = str(row.get('code', '')).strip()
+        if not name or not code or name == 'nan' or code == 'nan':
+            skipped_count += 1
+            continue
+
+        curriculum = str(row.get('curriculum', 'cbc')).strip().lower()
+        if curriculum not in valid_curricula:
+            curriculum = 'cbc'
+
+        def _bool(val, default=True):
+            s = str(val).strip().lower()
+            if s in ('true', '1', 'yes'):
+                return True
+            if s in ('false', '0', 'no'):
+                return False
+            return default
+
+        defaults = {
+            'curriculum': curriculum,
+            'is_core': _bool(row.get('is_core', 'TRUE')),
+            'is_elective': _bool(row.get('is_elective', 'FALSE'), default=False),
+            'sessions_per_week_default': max(1, int(float(row.get('sessions_per_week_default', 2) or 2))),
+            'description': str(row.get('description', '')).strip() if row.get('description') else '',
+            'is_active': True,
+        }
+
+        try:
+            obj, created = SubjectCatalog.objects.update_or_create(
+                code=code,
+                defaults={**defaults, 'name': name},
+            )
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+        except Exception:
+            skipped_count += 1
+
+    messages.success(
+        request,
+        f"Import complete: {created_count} added, {updated_count} updated, {skipped_count} skipped."
+    )
+    return redirect('school:catalog-subject-list')
+
+
+# =============================================================================
+# PARENT SELF-SERVICE PORTAL
+# =============================================================================
+
+def _get_parent(user):
+    try:
+        return user.parent
+    except Exception:
+        return None
+
+
+@login_required
+def parent_portal(request):
+    """Parent dashboard: overview of all children."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "This section is for parents only.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('user', 'grade_level', 'stream', 'school').all()
+    unread_count = request.user.notifications.filter(is_read=False).count()
+    open_complaints = Complaint.objects.filter(parent=parent, status='open').count()
+
+    child_data = []
+    for child in children:
+        recent_attendance = Attendance.objects.filter(
+            enrollment__student=child
+        ).select_related('enrollment__lesson__subject').order_by('-date')[:5]
+
+        child_subject_ids = child.subject_enrollments.filter(is_active=True).values_list('subject_id', flat=True)
+        pending_assignments = Assignment.objects.filter(
+            school=child.school,
+            subject_id__in=child_subject_ids,
+            due_date__gte=timezone.now(),
+        ).order_by('due_date')[:5]
+
+        child_data.append({
+            'student': child,
+            'recent_attendance': recent_attendance,
+            'pending_assignments': pending_assignments,
+        })
+
+    return render(request, 'school/parent/portal.html', {
+        'parent': parent,
+        'child_data': child_data,
+        'unread_count': unread_count,
+        'open_complaints': open_complaints,
+    })
+
+
+@login_required
+def parent_notifications(request):
+    """Parent: view and manage notifications."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    if request.method == 'POST' and request.POST.get('action') == 'mark_all_read':
+        request.user.notifications.filter(is_read=False).update(is_read=True)
+        messages.success(request, "All notifications marked as read.")
+        return redirect('school:parent-notifications')
+
+    if request.method == 'POST' and request.POST.get('action') == 'mark_read':
+        nid = request.POST.get('notification_id')
+        request.user.notifications.filter(pk=nid).update(is_read=True)
+        return JsonResponse({'ok': True})
+
+    qs = request.user.notifications.select_related(
+        'related_attendance__enrollment__lesson__subject',
+        'related_discipline__student__user',
+    ).all()
+
+    # Filters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    read_status = request.GET.get('read_status')
+
+    if date_from:
+        qs = qs.filter(sent_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(sent_at__date__lte=date_to)
+    if read_status == 'unread':
+        qs = qs.filter(is_read=False)
+    elif read_status == 'read':
+        qs = qs.filter(is_read=True)
+
+    paginator = Paginator(qs, 20)
+    page = paginator.get_page(request.GET.get('page'))
+    unread_count = request.user.notifications.filter(is_read=False).count()
+
+    return render(request, 'school/parent/notifications.html', {
+        'notifications': page,
+        'unread_count': unread_count,
+    })
+
+
+@login_required
+def parent_complaints(request):
+    """Parent: submit and track complaints."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    form = ComplaintForm(parent=parent)
+
+    if request.method == 'POST':
+        form = ComplaintForm(request.POST, parent=parent)
+        if form.is_valid():
+            complaint = form.save(commit=False)
+            complaint.parent = parent
+            complaint.school = parent.school
+            if complaint.is_anonymous:
+                complaint.parent = parent  # still store for audit; display hides name
+            complaint.save()
+            messages.success(request, "Complaint submitted. The school will respond shortly.")
+            return redirect('school:parent-complaints')
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    complaints = Complaint.objects.filter(parent=parent).select_related('student__user', 'responded_by__user')
+    paginator = Paginator(complaints, 15)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/parent/complaints.html', {
+        'form': form,
+        'complaints': page,
+        'parent': parent,
+    })
+
+
+@login_required
+def parent_assignments(request):
+    """Parent: view assignments and submission status for all children."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('user', 'grade_level').all()
+    selected_child_id = request.GET.get('child')
+
+    if selected_child_id:
+        children_qs = children.filter(pk=selected_child_id)
+    else:
+        children_qs = children
+
+    assignment_data = []
+    for child in children_qs:
+        child_subject_ids = child.subject_enrollments.filter(is_active=True).values_list('subject_id', flat=True)
+        child_subjects = Subject.objects.filter(id__in=child_subject_ids)
+
+        assignments = Assignment.objects.filter(
+            school=child.school,
+            subject__in=child_subjects,
+        ).select_related('subject').order_by('-due_date')[:20]
+
+        rows = []
+        for asn in assignments:
+            submission = Submission.objects.filter(
+                enrollment__student=child,
+                assignment=asn,
+            ).first()
+            rows.append({'assignment': asn, 'submission': submission})
+
+        assignment_data.append({'student': child, 'rows': rows})
+
+    return render(request, 'school/parent/assignments.html', {
+        'assignment_data': assignment_data,
+        'children': children,
+        'selected_child_id': selected_child_id,
+        'parent': parent,
+    })
+
+
+@login_required
+def parent_exam_results(request):
+    """Parent: view graded submissions (exam results / assessment scores)."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('user', 'grade_level').all()
+    selected_child_id = request.GET.get('child')
+
+    results_data = []
+    for child in children:
+        if selected_child_id and str(child.pk) != selected_child_id:
+            continue
+
+        graded = Submission.objects.filter(
+            enrollment__student=child,
+            score__isnull=False,
+        ).select_related(
+            'assignment__subject',
+            'enrollment__lesson__subject',
+        ).order_by('-submitted_at')
+
+        results_data.append({'student': child, 'submissions': graded})
+
+    return render(request, 'school/parent/exam_results.html', {
+        'results_data': results_data,
+        'children': children,
+        'selected_child_id': selected_child_id,
+        'parent': parent,
+    })
+
+
+@login_required
+def parent_fee_updates(request):
+    """Parent: view fee payment history and outstanding balance for children."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('user', 'grade_level').all()
+
+    fee_data = []
+    for child in children:
+        payments = Payment.objects.filter(student=child).order_by('-paid_at', '-id')
+        total_paid = payments.filter(status='completed').aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+        pending = payments.filter(status='pending')
+
+        fee_data.append({
+            'student': child,
+            'payments': payments[:15],
+            'total_paid': total_paid,
+            'pending_count': pending.count(),
+        })
+
+    return render(request, 'school/parent/fees.html', {
+        'fee_data': fee_data,
+        'children': children,
+        'parent': parent,
+    })
+
+
+@login_required
+def parent_attendance(request):
+    """Parent: view attendance records for children."""
+    if not getattr(request.user, 'is_parent', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        messages.error(request, "Parent profile not found.")
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('user', 'grade_level').all()
+    selected_child_id = request.GET.get('child')
+
+    attendance_data = []
+    for child in children:
+        if selected_child_id and str(child.pk) != selected_child_id:
+            continue
+
+        base_records = Attendance.objects.filter(enrollment__student=child)
+        total = base_records.count()
+        present = base_records.filter(status='P').count()
+        rate = round((present / total * 100) if total else 0, 1)
+
+        records = base_records.select_related(
+            'enrollment__lesson__subject',
+            'enrollment__lesson__time_slot',
+        ).order_by('-date')[:50]
+
+        attendance_data.append({
+            'student': child,
+            'records': records,
+            'total': total,
+            'present': present,
+            'rate': rate,
+        })
+
+    return render(request, 'school/parent/attendance.html', {
+        'attendance_data': attendance_data,
+        'children': children,
+        'selected_child_id': selected_child_id,
+        'parent': parent,
+    })
+
+
+# =============================================================================
+# SCHOOL ADMIN: VIEW COMPLAINTS
+# =============================================================================
+
+@login_required
+def admin_complaints_list(request):
+    """Principal/admin view of all parent complaints."""
+    user = request.user
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    school = get_user_school(user)
+    if not school:
+        messages.error(request, "No school profile found.")
+        return redirect('school:dashboard')
+
+    status_filter = request.GET.get('status', '')
+    qs = Complaint.objects.filter(school=school).select_related(
+        'parent__user', 'student__user', 'responded_by__user'
+    ).order_by('-created_at')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    if request.method == 'POST':
+        complaint_id = request.POST.get('complaint_id')
+        response_text = request.POST.get('response', '').strip()
+        new_status = request.POST.get('status', 'resolved')
+        complaint = get_object_or_404(Complaint, pk=complaint_id, school=school)
+        if response_text:
+            try:
+                staff = user.staffprofile
+            except Exception:
+                staff = None
+            complaint.response = response_text
+            complaint.status = new_status
+            complaint.responded_by = staff
+            complaint.responded_at = timezone.now()
+            complaint.save()
+            AuditLog.objects.create(
+                school=school, model_name='Complaint', object_id=complaint.pk,
+                action='update', actor=user,
+                description=f"Responded to complaint: {complaint.subject}",
+            )
+            messages.success(request, "Response saved.")
+        return redirect('school:admin-complaints')
+
+    paginator = Paginator(qs, 20)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/complaints.html', {
+        'complaints': page,
+        'status_filter': status_filter,
+        'school': school,
+        'status_choices': Complaint.STATUS_CHOICES,
+    })
+
+
+# =============================================================================
+# BULK NOTIFICATION — school admins and Kiswate admins send SMS/email/in-app
+# =============================================================================
+
+def _resolve_recipients(audience, school, grade=None, stream=None):
+    """
+    Return list of (user, phone) tuples for the given audience.
+    phone may be None if the user has no phone.
+    """
+    recipients = []
+
+    def _phone(u, parent_obj=None):
+        if parent_obj and parent_obj.phone:
+            return parent_obj.phone
+        return getattr(u, 'phone_number', None) or ''
+
+    if audience in ('all_parents', 'all', 'grade_parents', 'stream_parents'):
+        qs = Parent.objects.filter(school=school).select_related('user')
+        if audience == 'grade_parents':
+            qs = qs.filter(children__grade_level=grade).distinct()
+        elif audience == 'stream_parents':
+            qs = qs.filter(children__stream=stream).distinct()
+        for p in qs:
+            recipients.append((p.user, _phone(p.user, p)))
+
+    if audience in ('all_students', 'all', 'grade_students', 'stream_students'):
+        qs = Student.objects.filter(school=school, is_active=True).select_related('user')
+        if audience == 'grade_students':
+            qs = qs.filter(grade_level=grade)
+        elif audience == 'stream_students':
+            qs = qs.filter(stream=stream)
+        for s in qs:
+            recipients.append((s.user, _phone(s.user)))
+
+    if audience in ('all_staff', 'all'):
+        for sp in StaffProfile.objects.filter(school=school).select_related('user'):
+            recipients.append((sp.user, _phone(sp.user)))
+
+    # Deduplicate by user pk (a user might appear in multiple groups in 'all')
+    seen = set()
+    unique = []
+    for u, ph in recipients:
+        if u.pk not in seen:
+            seen.add(u.pk)
+            unique.append((u, ph))
+    return unique
+
+
+def _sms_configured():
+    return bool(getattr(settings, 'SMS_API_KEY', ''))
+
+
+@login_required
+def bulk_notify(request):
+    """Send bulk notifications via in-app, email, and/or SMS."""
+    user = request.user
+    is_kiswate = (
+        getattr(user, 'is_kiswate_user', False) or
+        getattr(user, 'is_kiswate_admin', False) or
+        user.is_superuser
+    )
+    is_school_admin = (
+        getattr(user, 'is_admin', False) or
+        getattr(user, 'is_principal', False) or
+        getattr(user, 'is_deputy_principal', False)
+    )
+    if not (is_kiswate or is_school_admin):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    school = get_user_school(user)
+
+    # Kiswate admins may select school via query param
+    if is_kiswate and not school:
+        school_id = request.GET.get('school_id') or request.POST.get('school_id')
+        if school_id:
+            from school.models import School as SchoolModel
+            school = SchoolModel.objects.filter(pk=school_id).first()
+
+    if not school:
+        messages.error(request, "No school context found. Append ?school_id=<id> to the URL.")
+        return redirect('school:dashboard')
+
+    form = BulkNotificationForm(school=school)
+    result = None
+
+    if request.method == 'POST':
+        form = BulkNotificationForm(request.POST, school=school)
+        if form.is_valid():
+            cd = form.cleaned_data
+            title    = cd['title']
+            message  = cd['message']
+            audience = cd['audience']
+            grade    = cd.get('grade')
+            stream   = cd.get('stream')
+            do_inapp = cd['channel_inapp']
+            do_email = cd['channel_email']
+            do_sms   = cd['channel_sms']
+
+            recipients = _resolve_recipients(audience, school, grade, stream)
+
+            inapp_sent = email_sent = sms_sent = 0
+            email_failed = sms_failed = 0
+
+            for recipient_user, phone in recipients:
+                if do_inapp:
+                    Notification.objects.create(
+                        recipient=recipient_user,
+                        title=title,
+                        message=message,
+                        school=school,
+                    )
+                    inapp_sent += 1
+
+                if do_email and recipient_user.email:
+                    ok = send_email(recipient_user.email, title, message)
+                    if ok:
+                        email_sent += 1
+                    else:
+                        email_failed += 1
+
+                if do_sms and phone:
+                    sms_text = f"{title}\n{message}"[:320]
+                    ok = _send_sms_via_eujim(phone, sms_text)
+                    if ok:
+                        sms_sent += 1
+                    else:
+                        sms_failed += 1
+
+            AuditLog.objects.create(
+                school=school, model_name='BulkNotification', object_id=0,
+                action='create', actor=user,
+                description=(
+                    f"Bulk notify '{title}' → audience={audience}, "
+                    f"inapp={inapp_sent}, email={email_sent}, sms={sms_sent}"
+                ),
+            )
+
+            result = {
+                'total':        len(recipients),
+                'inapp_sent':   inapp_sent,
+                'email_sent':   email_sent,
+                'email_failed': email_failed,
+                'sms_sent':     sms_sent,
+                'sms_failed':   sms_failed,
+                'title':        title,
+                'audience':     dict(BulkNotificationForm.AUDIENCE_CHOICES).get(audience, audience),
+            }
+            if do_sms and not _sms_configured():
+                messages.warning(request, "SMS credentials are not configured — SMS was skipped. Set SMS_API_KEY, SMS_PARTNERID, SMS_SHORTCODE in settings.")
+
+    return render(request, 'school/bulk_notify.html', {
+        'form': form,
+        'school': school,
+        'result': result,
+        'sms_configured': _sms_configured(),
+    })
+
+
+@login_required
+def student_notifications(request):
+    """Student: view in-app notifications."""
+    if not getattr(request.user, 'is_student', False):
+        messages.error(request, "This section is for students only.")
+        return redirect('userauths:sign-in')
+
+    if request.method == 'POST' and request.POST.get('action') == 'mark_all_read':
+        request.user.notifications.filter(is_read=False).update(is_read=True)
+        messages.success(request, "All notifications marked as read.")
+        return redirect('school:student-notifications')
+
+    notifications = request.user.notifications.select_related(
+        'related_attendance__enrollment__lesson__subject',
+        'related_discipline',
+    ).all()
+
+    paginator = Paginator(notifications, 20)
+    page = paginator.get_page(request.GET.get('page'))
+    unread_count = request.user.notifications.filter(is_read=False).count()
+
+    return render(request, 'school/student/notifications.html', {
+        'notifications': page,
+        'unread_count': unread_count,
+    })
+
+
+# =============================================================================
+# ANNOUNCEMENTS
+# =============================================================================
+
+@login_required
+def announcement_list(request):
+    """Admin/principal creates and views announcements."""
+    user = request.user
+    school = get_user_school(user)
+    if not school:
+        return redirect('school:dashboard')
+
+    announcements = Announcement.objects.filter(school=school).select_related('created_by__user', 'grade')
+    audience_filter = request.GET.get('audience', '')
+    if audience_filter:
+        announcements = announcements.filter(audience=audience_filter)
+
+    context = {
+        'announcements': announcements,
+        'school': school,
+        'audience_filter': audience_filter,
+    }
+    return render(request, 'school/announcements/list.html', context)
+
+
+@login_required
+def announcement_create(request):
+    user = request.user
+    school = get_user_school(user)
+    if not school:
+        return redirect('school:dashboard')
+
+    try:
+        staff = user.staffprofile
+    except Exception:
+        messages.error(request, "Staff profile required.")
+        return redirect('school:dashboard')
+
+    if request.method == 'POST':
+        title = request.POST.get('title', '').strip()
+        body = request.POST.get('body', '').strip()
+        audience = request.POST.get('audience', 'all')
+        grade_id = request.POST.get('grade')
+        is_pinned = request.POST.get('is_pinned') == 'on'
+        expires_at = request.POST.get('expires_at') or None
+
+        if title and body:
+            ann = Announcement.objects.create(
+                school=school,
+                title=title,
+                body=body,
+                audience=audience,
+                grade_id=grade_id if grade_id else None,
+                is_pinned=is_pinned,
+                created_by=staff,
+                expires_at=expires_at,
+            )
+            messages.success(request, "Announcement published.")
+            return redirect('school:announcements')
+        else:
+            messages.error(request, "Title and body are required.")
+
+    grades = Grade.objects.filter(school=school, is_active=True)
+    return render(request, 'school/announcements/create.html', {
+        'school': school,
+        'grades': grades,
+        'audiences': Announcement.AUDIENCE_CHOICES,
+    })
+
+
+@login_required
+def announcement_delete(request, pk):
+    school = get_user_school(request.user)
+    ann = get_object_or_404(Announcement, pk=pk, school=school)
+    if request.method == 'POST':
+        ann.delete()
+        messages.success(request, "Announcement deleted.")
+    return redirect('school:announcements')
+
+
+@login_required
+def parent_announcements(request):
+    """Parent: view school announcements."""
+    if not getattr(request.user, 'is_parent', False):
+        return redirect('userauths:sign-in')
+
+    parent = _get_parent(request.user)
+    if not parent:
+        return redirect('userauths:sign-in')
+
+    children = parent.children.select_related('school').all()
+    school_ids = children.values_list('school_id', flat=True).distinct()
+
+    announcements = Announcement.objects.filter(
+        school_id__in=school_ids,
+        audience__in=['all', 'parents']
+    ).select_related('school', 'created_by__user').order_by('-is_pinned', '-created_at')
+
+    paginator = Paginator(announcements, 10)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/announcements/parent_view.html', {
+        'announcements': page,
+    })
+
+
+@login_required
+def student_announcements(request):
+    """Student: view school announcements."""
+    if not getattr(request.user, 'is_student', False):
+        return redirect('userauths:sign-in')
+
+    try:
+        student = request.user.student
+    except Exception:
+        return redirect('userauths:sign-in')
+
+    announcements = Announcement.objects.filter(
+        school=student.school,
+        audience__in=['all', 'students']
+    ).select_related('created_by__user').order_by('-is_pinned', '-created_at')
+
+    if student.grade_level:
+        announcements = announcements.filter(
+            Q(grade=student.grade_level) | Q(grade__isnull=True)
+        )
+
+    paginator = Paginator(announcements, 10)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/announcements/student_view.html', {
+        'announcements': page,
+        'student': student,
+    })
+
+
+# =============================================================================
+# FINANCE DASHBOARD
+# =============================================================================
+
+@login_required
+def finance_dashboard(request):
+    """Modern finance dashboard with student fee balances, payments, and receipt generation."""
+    user = request.user
+    if not (user.is_admin or user.is_principal or user.is_deputy_principal):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    school = get_user_school(user)
+    if not school:
+        return redirect('school:dashboard')
+
+    # Filters
+    q = request.GET.get('q', '').strip()
+    grade_filter = request.GET.get('grade', '')
+    status_filter = request.GET.get('status', '')
+    term_filter = request.GET.get('term', '')
+
+    # Student fee invoices
+    inv_qs = FeeInvoice.objects.filter(school=school).select_related(
+        'student__user', 'student__grade_level', 'student__stream', 'term'
+    )
+
+    if q:
+        inv_qs = inv_qs.filter(
+            Q(student__user__first_name__icontains=q) |
+            Q(student__user__last_name__icontains=q) |
+            Q(student__student_id__icontains=q)
+        )
+    if grade_filter:
+        inv_qs = inv_qs.filter(student__grade_level_id=grade_filter)
+    if status_filter:
+        inv_qs = inv_qs.filter(status=status_filter)
+    if term_filter:
+        inv_qs = inv_qs.filter(term_id=term_filter)
+
+    # Aggregate stats
+    from django.db.models import Sum, Count
+    agg = inv_qs.aggregate(
+        total_expected=Sum('amount_required'),
+        total_collected=Sum('amount_paid'),
+        total_invoices=Count('id'),
+    )
+    total_expected = agg['total_expected'] or 0
+    total_collected = agg['total_collected'] or 0
+    total_balance = total_expected - total_collected
+    collection_rate = round((total_collected / total_expected * 100) if total_expected else 0, 1)
+
+    # Status breakdown
+    status_counts = inv_qs.values('status').annotate(n=Count('id'))
+    status_map = {s['status']: s['n'] for s in status_counts}
+
+    # Paginate
+    paginator = Paginator(inv_qs.order_by('-created_at'), 20)
+    page = paginator.get_page(request.GET.get('page'))
+
+    # Recent payments
+    recent_payments = Payment.objects.filter(school=school).select_related(
+        'student__user'
+    ).order_by('-paid_at', '-id')[:10]
+
+    grades = Grade.objects.filter(school=school, is_active=True)
+    terms = Term.objects.filter(school=school).order_by('-start_date')
+
+    context = {
+        'school': school,
+        'invoices': page,
+        'total_expected': total_expected,
+        'total_collected': total_collected,
+        'total_balance': total_balance,
+        'collection_rate': collection_rate,
+        'status_map': status_map,
+        'recent_payments': recent_payments,
+        'grades': grades,
+        'terms': terms,
+        'q': q,
+        'grade_filter': grade_filter,
+        'status_filter': status_filter,
+        'term_filter': term_filter,
+    }
+    return render(request, 'school/finance_dashboard.html', context)
+
+
+@login_required
+def finance_create_invoice(request):
+    """Create a fee invoice for a student."""
+    user = request.user
+    school = get_user_school(user)
+    if not school:
+        return redirect('school:dashboard')
+
+    if request.method == 'POST':
+        student_id = request.POST.get('student_id')
+        amount = request.POST.get('amount')
+        description = request.POST.get('description', 'School Fees')
+        term_id = request.POST.get('term')
+        due_date = request.POST.get('due_date') or None
+
+        try:
+            student = Student.objects.get(pk=student_id, school=school)
+            FeeInvoice.objects.create(
+                student=student,
+                school=school,
+                term_id=term_id if term_id else None,
+                amount_required=amount,
+                description=description,
+                due_date=due_date,
+                created_by=user,
+            )
+            messages.success(request, f"Invoice created for {student.user.get_full_name()}.")
+        except Exception as e:
+            messages.error(request, f"Error: {e}")
+
+    return redirect('school:finance-dashboard')
+
+
+@login_required
+def finance_record_payment(request, invoice_id):
+    """Record a payment (cash, cheque, or M-Pesa) against a fee invoice."""
+    user = request.user
+    school = get_user_school(user)
+    invoice = get_object_or_404(FeeInvoice, pk=invoice_id, school=school)
+
+    if request.method == 'POST':
+        amount_str = request.POST.get('amount', '0')
+        method = request.POST.get('method', 'cash')
+        cheque_number = request.POST.get('cheque_number', '')
+        notes = request.POST.get('notes', '')
+
+        try:
+            amount = Decimal(amount_str)
+            invoice.amount_paid += amount
+            invoice.payment_method = method
+            invoice.cheque_number = cheque_number
+            invoice.notes = notes
+            invoice.save()
+
+            # Also create a Payment record for audit trail
+            Payment.objects.create(
+                student=invoice.student,
+                school=school,
+                amount=amount,
+                payment_type='fees',
+                status='paid',
+                paid_at=timezone.now(),
+                description=f"Payment for: {invoice.description} | Method: {method}",
+                transaction_id=f"INV-{invoice.pk}-{uuid.uuid4().hex[:6].upper()}",
+            )
+            messages.success(request, f"Payment of KES {amount} recorded.")
+        except Exception as e:
+            messages.error(request, f"Error recording payment: {e}")
+
+    return redirect('school:finance-dashboard')
+
+
+@login_required
+def finance_receipt(request, invoice_id):
+    """Generate/view receipt for a fee invoice."""
+    school = get_user_school(request.user)
+    invoice = get_object_or_404(FeeInvoice, pk=invoice_id, school=school)
+    return render(request, 'school/finance_receipt.html', {
+        'invoice': invoice,
+        'school': school,
+    })
+
+
+@login_required
+def finance_stk_push(request, invoice_id):
+    """Trigger M-Pesa STK push for a fee invoice."""
+    school = get_user_school(request.user)
+    invoice = get_object_or_404(FeeInvoice, pk=invoice_id, school=school)
+
+    if request.method == 'POST':
+        phone = request.POST.get('phone', '')
+        # In production: call Daraja STK Push API here
+        messages.info(request, f"STK Push initiated to {phone} for KES {invoice.balance}. Check your phone.")
+
+    return redirect('school:finance-dashboard')

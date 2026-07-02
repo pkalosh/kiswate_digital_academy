@@ -6,7 +6,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from school.models import (
     Timetable,TeacherStreamAssignment,Streams, Term, Lesson, Session, Enrollment, Subject,
-    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment, Notification,ContactMessage
+    StaffProfile, Student, Parent,Attendance,DisciplineRecord,TimeSlot,Assignment, Notification,ContactMessage,
+    Payment, FeeInvoice, Announcement, Complaint
 )
 from django.utils import timezone
 from collections import defaultdict
@@ -234,90 +235,109 @@ def generate_timetable_grid(student, timetable):
 
     return grid
 
-from django.utils.timezone import now, timedelta
+from django.utils.timezone import now
+from datetime import timedelta
 from django.db.models import Avg
+from django.core.paginator import Paginator as _Paginator
 
 @login_required
 def parent_dashboard(request):
     parent = getattr(request.user, "parent", None)
     if not parent:
-        return render(request, "school/parent/dashboard.html", {"schools": {}, "today": now().date()})
+        messages.warning(request, "Parent profile not found. Please contact school admin.")
+        return render(request, "school/parent/dashboard.html", {
+            "child_data": [], "today": now().date(), "total_balance": 0,
+            "unread_count": 0, "open_complaints": 0,
+        })
 
     today = now().date()
-    next_7_days = [today + timedelta(days=i) for i in range(7)]
 
-    # Get current active term per school
-    active_terms = {t.school_id: t for t in Term.objects.filter(is_active=True)}
+    # All children linked to this parent via Student.parents M2M
+    children = Student.objects.filter(parents=parent).select_related(
+        'user', 'grade_level', 'stream', 'school'
+    )
 
-    # Get all students for this parent
-    students = Student.objects.filter(parents=parent)
+    unread_count = request.user.notifications.filter(is_read=False).count()
+    open_complaints = Complaint.objects.filter(parent=parent, status='open').count()
 
-    schools = defaultdict(list)  # {school: [student_data, ...]}
+    child_data = []
+    total_balance = 0
 
-    for student in students:
-        # Get active enrollments for current term
-        student_enrollments = Enrollment.objects.filter(
-            student=student,
-            status="active",
-            school__in=active_terms.keys()
-        ).select_related("school", "lesson")
+    for student in children:
+        school = student.school
+        active_term = Term.objects.filter(school=school, is_active=True).first()
 
-        if not student_enrollments.exists():
-            continue
+        # Attendance stats (all time for the school, not limited to active term)
+        att_qs = Attendance.objects.filter(enrollment__student=student, enrollment__school=school)
+        total_att = att_qs.count()
+        present_att = att_qs.filter(status='P').count()
+        att_rate = round((present_att / total_att * 100) if total_att else 0, 1)
 
-        # Group enrollments by school
-        enrollments_by_school = defaultdict(list)
-        for enr in student_enrollments:
-            enrollments_by_school[enr.school].append(enr)
+        # Discipline
+        discipline_count = DisciplineRecord.objects.filter(student=student, school=school).count()
 
-        for school, enrollments in enrollments_by_school.items():
-            term = active_terms.get(school.id)
-            
-            # Stats
-            total_lessons = len(enrollments)
-            
-            # Attendance: count Present (P)
-            attendance_qs = Attendance.objects.filter(
-                enrollment__in=enrollments,
-                date__lte=today,
-                date__gte=term.start_date if term else today - timedelta(days=30)
-            )
-            attended = attendance_qs.filter(status="P").count()
+        # Fee balance from FeeInvoice
+        fee_invoices = FeeInvoice.objects.filter(student=student, school=school)
+        student_balance = sum(inv.balance for inv in fee_invoices)
+        total_balance += student_balance
 
-            # Discipline count
-            discipline_count = DisciplineRecord.objects.filter(
-                student=student,
-                school=school
-            ).count()
+        # Recent payments
+        recent_payments = Payment.objects.filter(student=student, school=school).order_by('-paid_at', '-id')[:5]
 
-            # Upcoming lessons next 7 days
-            upcoming_lessons = Lesson.objects.filter(
-                l_enrollments__in=enrollments,
-                lesson_date__range=[today, today + timedelta(days=6)],
-                is_canceled=False
-            ).select_related("subject", "teacher", "time_slot", "timetable").order_by("lesson_date", "time_slot__start_time")
+        # Upcoming lessons
+        upcoming_lessons = Lesson.objects.filter(
+            l_enrollments__student=student,
+            lesson_date__range=[today, today + timedelta(days=6)],
+            is_canceled=False
+        ).select_related("subject", "teacher__user", "time_slot").order_by(
+            "lesson_date", "time_slot__start_time"
+        )[:8]
 
-            # Notifications per school
-            notifications = Notification.objects.filter(
-                recipient=request.user,
-                school=school
-            ).order_by("-sent_at")[:10]
+        # Status
+        if student.expelled:
+            status_label = 'expelled'
+            status_color = 'danger'
+        elif student.suspended:
+            status_label = 'suspended'
+            status_color = 'warning'
+        elif student_balance > 0:
+            status_label = 'fee balance'
+            status_color = 'warning'
+        elif student.is_active:
+            status_label = 'active'
+            status_color = 'success'
+        else:
+            status_label = 'inactive'
+            status_color = 'secondary'
 
-            # Build student data
-            student_data = {
-                "student": student,
-                "total_lessons": total_lessons,
-                "attended": attended,
-                "discipline_count": discipline_count,
-                "upcoming_lessons": upcoming_lessons,
-                "notifications": notifications,
-            }
+        # Announcements for this school
+        announcements = Announcement.objects.filter(
+            school=school, audience__in=['all', 'parents']
+        ).order_by('-is_pinned', '-created_at')[:3]
 
-            schools[school].append(student_data)
+        child_data.append({
+            "student": student,
+            "school": school,
+            "active_term": active_term,
+            "total_att": total_att,
+            "present_att": present_att,
+            "att_rate": att_rate,
+            "discipline_count": discipline_count,
+            "fee_balance": student_balance,
+            "recent_payments": recent_payments,
+            "upcoming_lessons": upcoming_lessons,
+            "status_label": status_label,
+            "status_color": status_color,
+            "announcements": announcements,
+        })
 
     context = {
-        "schools": dict(schools),
+        "child_data": child_data,
         "today": today,
+        "total_balance": total_balance,
+        "unread_count": unread_count,
+        "open_complaints": open_complaints,
+        "parent": parent,
     }
 
     return render(request, "school/parent/dashboard.html", context)
@@ -479,6 +499,21 @@ def student_dashboard(request):
         },
     ]
 
+    # Fee balance
+    from school.models import FeeInvoice
+    fee_invoices = FeeInvoice.objects.filter(student=student, school=student.school)
+    fee_balance = sum(inv.balance for inv in fee_invoices)
+
+    # Complaints
+    student_complaints = Complaint.objects.filter(student=student).order_by('-created_at')[:5]
+
+    # Announcements
+    from school.models import Announcement as AnnModel
+    announcements = AnnModel.objects.filter(
+        school=student.school,
+        audience__in=['all', 'students']
+    ).order_by('-is_pinned', '-created_at')[:3]
+
     context = {
         "student": student,
         "weekdays": WEEKDAYS,
@@ -490,6 +525,9 @@ def student_dashboard(request):
         "heatmap": heatmap,
         "today_weekday": today_weekday,
         "grade": student.stream.grade if hasattr(student.stream, 'grade') else None,
+        "fee_balance": fee_balance,
+        "student_complaints": student_complaints,
+        "announcements": announcements,
     }
 
     return render(request, "school/student/dashboard.html", context)

@@ -1,0 +1,82 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ action }} Assessment{% endblock %}
+{% block page_title %}{{ action }} Assessment{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-clipboard-plus me-2"></i>{{ action }} Assessment</h5>
+  <a href="{% url 'kiswate_digital_app:assessment_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label">Program <span class="text-danger">*</span></label>
+            {{ form.program }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Type <span class="text-danger">*</span></label>
+            {{ form.assessment_type }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Assessment Title <span class="text-danger">*</span></label>
+            {{ form.title }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Instructions</label>
+            {{ form.instructions }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Total Marks</label>
+            {{ form.total_marks }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Pass Mark (%)</label>
+            {{ form.pass_mark }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Duration (minutes)</label>
+            {{ form.duration_minutes }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Start Time <small class="text-muted">(optional)</small></label>
+            {{ form.start_time }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">End Time <small class="text-muted">(optional)</small></label>
+            {{ form.end_time }}
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_published }}
+              <label class="form-check-label fw-semibold">Publish to students</label>
+            </div>
+          </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger mt-3" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand">
+            <i class="bi bi-check-lg me-1"></i>{{ action }} & Add Questions
+          </button>
+          <a href="{% url 'kiswate_digital_app:assessment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

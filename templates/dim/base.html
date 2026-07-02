@@ -1,0 +1,351 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Kiswate Learning Platform{% endblock %}</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --brand-green: #0b7a2a;
+      --brand-green-light: #0ea83a;
+      --brand-dark: #111;
+      --brand-sidebar-bg: #111;
+      --brand-link: #d9d9d9;
+      --brand-sub: #bfbfbf;
+      --badge-pending: #f59e0b;
+      --badge-approved: #10b981;
+      --badge-rejected: #ef4444;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 260px; background: var(--brand-sidebar-bg); color: #fff;
+      position: fixed; top: 0; left: 0; bottom: 0;
+      overflow-y: auto; z-index: 1050;
+      transform: translateX(0); transition: transform .3s ease;
+      scrollbar-width: thin; scrollbar-color: #333 #111;
+    }
+    .sidebar-logo {
+      padding: 1.1rem 1rem .9rem; background: #000;
+      border-bottom: 1px solid #222; display: flex; align-items: center; gap: .6rem;
+    }
+    .sidebar-logo .logo-icon {
+      width: 34px; height: 34px; background: var(--brand-green);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .sidebar-logo .logo-text { font-weight: 700; font-size: .95rem; color: #fff; line-height: 1.2; }
+    .sidebar-logo .logo-sub { font-size: .7rem; color: #888; }
+
+    .side-link, .side-link.has-sub {
+      display: flex; align-items: center; gap: .6rem;
+      padding: .68rem 1rem; color: var(--brand-link); text-decoration: none;
+      background: none; border: none; width: 100%; text-align: left;
+      cursor: pointer; font-size: .875rem; transition: background .15s;
+    }
+    .side-link:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .side-link.active { background: var(--brand-green); color: #fff; }
+
+    .menu-section-label {
+      font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+      color: #555; padding: 1rem 1rem .3rem; text-transform: uppercase;
+    }
+
+    .sub-menu {
+      list-style: none; padding-left: 1.5rem; margin: 0;
+      max-height: 0; overflow: hidden; transition: max-height .25s ease-in-out;
+    }
+    .sub-menu.show { max-height: 600px; }
+    .sub-menu li a {
+      display: flex; align-items: center; gap: .45rem; padding: .38rem 0;
+      color: var(--brand-sub); text-decoration: none; font-size: .83rem;
+    }
+    .sub-menu li a:hover { color: #fff; }
+
+    @media (max-width: 992px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+    }
+
+    /* ── Main ── */
+    .main { flex-grow: 1; margin-left: 260px; transition: margin-left .3s ease; }
+    @media (max-width: 992px) { .main { margin-left: 0; } }
+
+    /* ── Header ── */
+    .header {
+      background: #fff; border-bottom: 1px solid #eee;
+      padding: .75rem 1.25rem; position: sticky; top: 0; z-index: 1030;
+    }
+
+    /* ── Content ── */
+    .content { padding: 1.5rem; background: #f8f9fa; min-height: calc(100vh - 57px); }
+
+    /* ── Cards ── */
+    .module-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e5e7eb;
+      padding: 1.25rem; transition: box-shadow .2s;
+    }
+    .module-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+
+    .stat-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e5e7eb;
+      padding: 1.25rem 1.5rem;
+    }
+    .stat-card .stat-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    }
+    .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-card .stat-label { font-size: .78rem; color: #6b7280; margin-top: .15rem; }
+
+    /* ── Badges ── */
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #d1fae5; color: #065f46; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .badge-teacher { background: #dbeafe; color: #1e40af; }
+    .badge-student { background: #f3e8ff; color: #6b21a8; }
+
+    /* ── Platform pills ── */
+    .pill-gmeet { background: #e8f5e9; color: #1b5e20; }
+    .pill-teams { background: #e3f2fd; color: #0d47a1; }
+    .pill-zoom { background: #e8eaf6; color: #283593; }
+
+    /* ── Page header ── */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .page-header h5 { margin: 0; font-weight: 700; }
+
+    /* ── Table ── */
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+    .table-card .table { margin: 0; }
+    .table-card .table th { background: #f9fafb; font-size: .78rem; font-weight: 600; color: #374151; }
+
+    /* ── Form layout ── */
+    .form-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.75rem; }
+    .form-label { font-weight: 600; font-size: .85rem; color: #374151; }
+
+    /* ── Btn green ── */
+    .btn-brand { background: var(--brand-green); color: #fff; border: none; }
+    .btn-brand:hover { background: var(--brand-green-light); color: #fff; }
+
+    /* ── Attendance rate bar ── */
+    .rate-bar { height: 6px; border-radius: 3px; background: #e5e7eb; }
+    .rate-fill { height: 100%; border-radius: 3px; background: var(--brand-green); }
+
+    /* ── Scrim ── */
+    .scrim { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1040; }
+    .scrim.show { display:block; }
+
+    /* ── Toast ── */
+    .toast-container { z-index: 9999; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="bi bi-mortarboard-fill text-white"></i></div>
+      <div>
+        <div class="logo-text">Kiswate Digital</div>
+        <div class="logo-sub">Learning Platform</div>
+      </div>
+    </div>
+
+    <nav class="menu">
+      <div class="menu-section-label">Main</div>
+      <a class="side-link {% block nav_dashboard %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+
+      <div class="menu-section-label">Learning</div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-classes">
+          <i class="bi bi-camera-video"></i> Virtual Classes
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_classes_open %}{% endblock %}" id="nav-classes">
+          <li><a href="{% url 'kiswate_digital_app:virtual_class_list' %}"><i class="bi bi-list-ul"></i> All Classes</a></li>
+          <li><a href="{% url 'kiswate_digital_app:virtual_class_create' %}"><i class="bi bi-plus-circle"></i> Schedule Class</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-lessons">
+          <i class="bi bi-book"></i> Lessons
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_lessons_open %}{% endblock %}" id="nav-lessons">
+          <li><a href="{% url 'kiswate_digital_app:lesson_list' %}"><i class="bi bi-list-ul"></i> All Lessons</a></li>
+          <li><a href="{% url 'kiswate_digital_app:lesson_create' %}"><i class="bi bi-plus-circle"></i> New Lesson</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-assignments">
+          <i class="bi bi-file-earmark-text"></i> Assignments
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_asgn_open %}{% endblock %}" id="nav-assignments">
+          <li><a href="{% url 'kiswate_digital_app:assignment_list' %}"><i class="bi bi-list-ul"></i> All Assignments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:assignment_create' %}"><i class="bi bi-plus-circle"></i> New Assignment</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-assessments">
+          <i class="bi bi-clipboard-check"></i> Assessments
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_assess_open %}{% endblock %}" id="nav-assessments">
+          <li><a href="{% url 'kiswate_digital_app:assessment_list' %}"><i class="bi bi-list-ul"></i> All Assessments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:assessment_create' %}"><i class="bi bi-plus-circle"></i> New Assessment</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-section-label">People</div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-users">
+          <i class="bi bi-people"></i> Users
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_users_open %}{% endblock %}" id="nav-users">
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All Users</a></li>
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=student"><i class="bi bi-mortarboard"></i> Students</a></li>
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=teacher"><i class="bi bi-person-badge"></i> Teachers</a></li>
+          <li><a href="{% url 'kiswate_digital_app:enrollment_list' %}"><i class="bi bi-journal-plus"></i> Enrollments</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-section-label">Comms & Reports</div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-notifs">
+          <i class="bi bi-bell"></i> Notifications
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_notif_open %}{% endblock %}" id="nav-notifs">
+          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-clock-history"></i> Log</a></li>
+          <li><a href="{% url 'kiswate_digital_app:send_bulk_notification' %}"><i class="bi bi-send"></i> Send Bulk</a></li>
+          <li><a href="{% url 'kiswate_digital_app:notification_template_list' %}"><i class="bi bi-file-text"></i> Templates</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-reports">
+          <i class="bi bi-bar-chart-line"></i> Reports
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_reports_open %}{% endblock %}" id="nav-reports">
+          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-grid"></i> Overview</a></li>
+          <li><a href="{% url 'kiswate_digital_app:student_performance_report' %}"><i class="bi bi-graph-up"></i> Performance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:attendance_report' %}"><i class="bi bi-person-check"></i> Attendance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:teacher_activity_report' %}"><i class="bi bi-activity"></i> Teacher Activity</a></li>
+          <li><a href="{% url 'kiswate_digital_app:school_utilization_report' %}"><i class="bi bi-building"></i> School Utilization</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-section-label">Account</div>
+      <a class="side-link" href="{% url 'userauths:sign-out' %}">
+        <i class="bi bi-box-arrow-left"></i> Sign Out
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="header d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
+          <i class="bi bi-list"></i>
+        </button>
+        <span class="fw-semibold text-dark" style="font-size:.9rem;">{% block page_title %}Dashboard{% endblock %}</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-light text-dark border rounded-pill px-2 py-1" style="font-size:.75rem;">
+          <i class="bi bi-calendar3 me-1"></i>{{ current_date|date:"M d, Y" }}
+        </span>
+        {% if request.user.is_authenticated %}
+        <span class="badge bg-dark rounded-pill px-2 py-1" style="font-size:.75rem;">
+          <i class="bi bi-person me-1"></i>{{ request.user.get_full_name|default:request.user.username }}
+        </span>
+        {% endif %}
+        <a href="{% url 'kiswate_digital_app:notification_list' %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-bell"></i>
+        </a>
+      </div>
+    </header>
+
+    <!-- Django Messages -->
+    {% if messages %}
+    <div class="px-3 pt-2">
+      {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show d-flex align-items-center gap-2" style="border-radius:10px;">
+        <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'warning' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %}"></i>
+        {{ message }}
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <section class="content">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+<script>
+AOS.init({ duration: 500, once: true, easing: 'ease-out' });
+
+const sidebar = document.getElementById('sidebar');
+const scrim = document.getElementById('scrim');
+const toggle = document.getElementById('toggleSidebar');
+
+if (toggle) {
+  toggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    scrim.classList.toggle('show');
+  });
+}
+scrim.addEventListener('click', () => {
+  sidebar.classList.remove('open');
+  scrim.classList.remove('show');
+});
+
+document.querySelectorAll('.side-link.has-sub').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = document.getElementById(btn.dataset.target);
+    const icon = btn.querySelector('.bi-chevron-down');
+    const isOpen = target.classList.toggle('show');
+    icon.style.transform = isOpen ? 'rotate(180deg)' : '';
+  });
+});
+
+// Auto-open sub-menu if a child is active
+document.querySelectorAll('.sub-menu').forEach(menu => {
+  if (menu.querySelector('a.active')) menu.classList.add('show');
+});
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

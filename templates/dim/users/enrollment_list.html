@@ -1,0 +1,51 @@
+{% extends "dim/base.html" %}
+{% block title %}Enrollments{% endblock %}
+{% block page_title %}Enrollments{% endblock %}
+{% block nav_users_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-journal-check me-2 text-success"></i>Enrollments</h5>
+  <a href="{% url 'kiswate_digital_app:enroll_student' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Enroll Student
+  </a>
+</div>
+
+<div class="table-card">
+  <table class="table table-hover align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Student</th>
+        <th>Program</th>
+        <th>Subject</th>
+        <th>School</th>
+        <th>Enrolled On</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for enr in enrollments %}
+      <tr style="font-size:.875rem;">
+        <td>
+          <div class="fw-semibold">{{ enr.student.full_name }}</div>
+          <div class="text-muted" style="font-size:.78rem;">{{ enr.student.user.email }}</div>
+        </td>
+        <td>{{ enr.program.name }}</td>
+        <td>{{ enr.program.subject.name }}</td>
+        <td>{{ enr.program.school.name }}</td>
+        <td>{{ enr.enrolled_at|date:"M d, Y" }}</td>
+        <td>
+          {% if enr.is_active %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Active</span>
+          {% else %}
+          <span class="badge badge-rejected rounded-pill" style="font-size:.7rem;">Inactive</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="text-center text-muted py-4">No enrollments yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

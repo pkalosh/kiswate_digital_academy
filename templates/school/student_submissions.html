@@ -1,0 +1,90 @@
+{% extends 'school/base.html' %}
+{% block title %}My Submissions{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3" style="max-width:900px">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h5 class="fw-bold mb-0">My Submissions</h5>
+      <small class="text-muted">All assignments you have submitted</small>
+    </div>
+    <a href="{% url 'school:assignment-create' %}" class="btn btn-sm btn-success d-none">
+      <i class="bi bi-plus me-1"></i> Submit
+    </a>
+  </div>
+
+  <!-- Search -->
+  <form method="get" class="mb-3">
+    <div class="input-group input-group-sm" style="max-width:360px">
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search assignment…">
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+      {% if query %}<a href="?" class="btn btn-outline-danger"><i class="bi bi-x"></i></a>{% endif %}
+    </div>
+  </form>
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="card border-0 shadow-sm rounded-3">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size:.85rem">
+        <thead class="table-light">
+          <tr>
+            <th>Assignment</th>
+            <th>Subject</th>
+            <th>Due Date</th>
+            <th>Submitted</th>
+            <th>Grade</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sub in submissions %}
+          <tr>
+            <td class="fw-semibold">{{ sub.assignment.title }}</td>
+            <td>{{ sub.assignment.subject.name|default:"—" }}</td>
+            <td>{{ sub.assignment.due_date|date:"M d, Y"|default:"—" }}</td>
+            <td>
+              {% if sub.submitted_at %}
+                <span class="badge bg-success">{{ sub.submitted_at|date:"M d, Y" }}</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if sub.grade is not None %}
+                <span class="badge bg-primary">{{ sub.grade }}/{{ sub.assignment.total_marks|default:"100" }}</span>
+              {% else %}
+                <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'school:submission-edit' sub.pk %}" class="btn btn-xs btn-outline-secondary btn-sm">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'school:submission-delete' sub.pk %}" class="d-inline"
+                    onsubmit="return confirm('Delete this submission?')">
+                {% csrf_token %}
+                <button class="btn btn-xs btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-inbox display-5 d-block mb-2 opacity-40"></i>
+              No submissions yet{% if query %} matching "{{ query }}"{% endif %}.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

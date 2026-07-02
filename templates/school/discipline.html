@@ -64,6 +64,7 @@
               <th>Severity</th>
               <th>Action Taken</th>
               <th>Date</th>
+              <th>Parent Notified</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -77,6 +78,43 @@
               <td data-label="Severity">{{ record.severity }}</td>
               <td data-label="Action Taken">{{ record.action_taken|default:"-" }}</td>
               <td data-label="Date">{{ record.date }}</td>
+              <td data-label="Parent Notified">
+                {% with notifs=record.notification_set.all %}
+                {% if notifs %}
+                  {% for n in notifs %}
+                  <div class="d-flex gap-1 flex-wrap mb-1">
+                    {% if n.sms_sent is not None %}
+                      {% if n.sms_sent %}
+                        <span class="badge" style="background:#e6f7ec;color:#0b7a2a;font-size:.68rem;" title="SMS delivered">
+                          <i class="bi bi-chat-dots"></i> SMS ✓
+                        </span>
+                      {% else %}
+                        <span class="badge" style="background:#fde8ec;color:#bb0a21;font-size:.68rem;" title="{{ n.sms_error }}">
+                          <i class="bi bi-chat-dots-fill"></i> SMS ✗
+                        </span>
+                      {% endif %}
+                    {% endif %}
+                    {% if n.email_sent is not None %}
+                      {% if n.email_sent %}
+                        <span class="badge" style="background:#e6f7ec;color:#0b7a2a;font-size:.68rem;" title="Email delivered">
+                          <i class="bi bi-envelope-check"></i> Email ✓
+                        </span>
+                      {% else %}
+                        <span class="badge" style="background:#fde8ec;color:#bb0a21;font-size:.68rem;" title="{{ n.email_error }}">
+                          <i class="bi bi-envelope-x"></i> Email ✗
+                        </span>
+                      {% endif %}
+                    {% endif %}
+                    {% if n.sms_sent is None and n.email_sent is None %}
+                      <span class="badge bg-secondary" style="font-size:.68rem;">In-app only</span>
+                    {% endif %}
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+                {% endwith %}
+              </td>
               <td data-label="Actions" class="d-flex flex-wrap gap-1 justify-content-end">
                 <button class="btn btn-sm btn-outline-primary"
                         data-bs-toggle="modal"
@@ -104,7 +142,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="8" class="text-center text-muted py-4">No discipline records found.</td>
+              <td colspan="9" class="text-center text-muted py-4">No discipline records found.</td>
             </tr>
             {% endfor %}
           </tbody>

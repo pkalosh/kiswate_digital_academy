@@ -1,0 +1,70 @@
+{% extends 'Dashboard/base.html' %}
+{% load static %}
+{% block title %}Support / Contact Messages{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+<div class="mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-headset me-2 text-info"></i>Support — Contact Messages</h4>
+  <small class="text-muted">Demo requests and contact messages from schools</small>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>School</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th>County</th>
+          <th>Status</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for msg in contact_messages %}
+        <tr>
+          <td class="fw-semibold">{{ msg.first_name }} {{ msg.last_name }}</td>
+          <td>{{ msg.school_name|default:"—" }}</td>
+          <td>{{ msg.contact_phone|default:"—" }}</td>
+          <td class="small text-muted">{{ msg.email|default:"—" }}</td>
+          <td>{{ msg.county|default:"—" }}</td>
+          <td>
+            {% if msg.lead_status == 'new' %}<span class="badge bg-danger">New</span>
+            {% elif msg.lead_status == 'contacted' %}<span class="badge bg-info">Contacted</span>
+            {% elif msg.lead_status == 'converted' %}<span class="badge bg-success">Converted</span>
+            {% else %}<span class="badge bg-secondary">{{ msg.lead_status }}</span>{% endif %}
+          </td>
+          <td class="small text-muted">{{ msg.created_at|date:"d M Y" }}</td>
+          <td>
+            <a href="{% url 'kiswate_digital_app:mark_verified' msg.lead_id %}" class="btn btn-xs btn-outline-info py-0 px-2" style="font-size:.75rem;">Verify</a>
+            <a href="{% url 'kiswate_digital_app:convert_to_school' msg.lead_id %}" class="btn btn-xs btn-outline-success py-0 px-2 ms-1" style="font-size:.75rem;">Convert</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No messages found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if contact_messages.has_other_pages %}
+  <div class="card-footer bg-white">
+    <nav><ul class="pagination pagination-sm justify-content-center mb-0">
+      {% if contact_messages.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ contact_messages.previous_page_number }}">&laquo;</a></li>{% endif %}
+      {% for n in contact_messages.paginator.page_range %}
+        {% if contact_messages.number == n %}<li class="page-item active"><span class="page-link">{{ n }}</span></li>
+        {% elif n > contact_messages.number|add:-3 and n < contact_messages.number|add:3 %}<li class="page-item"><a class="page-link" href="?page={{ n }}">{{ n }}</a></li>{% endif %}
+      {% endfor %}
+      {% if contact_messages.has_next %}<li class="page-item"><a class="page-link" href="?page={{ contact_messages.next_page_number }}">&raquo;</a></li>{% endif %}
+    </ul></nav>
+  </div>
+  {% endif %}
+</div>
+
+</div>
+{% endblock %}

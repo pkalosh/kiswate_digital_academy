@@ -1,0 +1,81 @@
+{% extends "dim/base.html" %}
+{% block title %}Grade Submission{% endblock %}
+{% block page_title %}Grade Submission{% endblock %}
+{% block nav_asgn_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Grade Submission</h5>
+  <a href="{% url 'kiswate_digital_app:assignment_detail' submission.assignment.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row g-4 justify-content-center">
+  <div class="col-lg-7">
+    <!-- Student submission summary -->
+    <div class="module-card mb-4">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center"
+             style="width:44px;height:44px;font-size:1.1rem;flex-shrink:0;">
+          <i class="bi bi-person text-primary"></i>
+        </div>
+        <div>
+          <div class="fw-semibold">{{ submission.student.full_name }}</div>
+          <div class="text-muted" style="font-size:.8rem;">
+            Submitted {{ submission.submitted_at|date:"M d, Y · H:i" }}
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-2">
+        <span class="fw-semibold" style="font-size:.85rem;">Assignment:</span>
+        <span class="text-muted" style="font-size:.85rem;"> {{ submission.assignment.title }} ({{ submission.assignment.total_marks }} marks)</span>
+      </div>
+
+      {% if submission.file %}
+      <a href="{{ submission.file.url }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-2">
+        <i class="bi bi-file-earmark-arrow-down me-1"></i>Download Submission File
+      </a>
+      {% endif %}
+
+      {% if submission.text_answer %}
+      <div class="border rounded p-3 mt-2 bg-light" style="font-size:.875rem; white-space:pre-wrap;">
+        {{ submission.text_answer }}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Grading form -->
+    <div class="form-card">
+      <h6 class="fw-semibold mb-3">Grading</h6>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">
+            Marks Awarded <span class="text-muted" style="font-size:.83rem;">/ {{ submission.assignment.total_marks }}</span>
+          </label>
+          {{ form.marks_obtained }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Feedback to Student</label>
+          {{ form.feedback }}
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand"><i class="bi bi-check-lg me-1"></i>Save Grade</button>
+          <a href="{% url 'kiswate_digital_app:assignment_detail' submission.assignment.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

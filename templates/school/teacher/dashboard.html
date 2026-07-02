@@ -3,113 +3,193 @@
 {% block title %}Teacher Dashboard{% endblock %}
 
 {% block content %}
-<div class="container-fluid my-4">
+<div class="container-fluid py-3">
 
-    <!-- Header & Stats -->
-    <div class="mb-4">
-        <h2>Welcome, {{ request.user.get_full_name }}</h2>
-        <p class="text-muted">School: {{ school.name }}</p>
+<style>
+.stat-card { border-radius:12px; border:none; transition:transform .15s,box-shadow .15s; box-shadow:0 2px 10px rgba(0,0,0,.07); }
+.stat-card:hover { transform:translateY(-3px); box-shadow:0 6px 20px rgba(0,0,0,.12); }
+.lesson-cell { border-radius:8px; padding:.5rem .7rem; margin-bottom:.3rem; font-size:.82rem; }
+.lesson-present { background:#e8f5e9; border-left:3px solid #28a745; }
+.lesson-live { background:#fff3cd; border-left:3px solid #ffc107; }
+.lesson-canceled { background:#fce4e4; border-left:3px solid #dc3545; }
+.trend-chart-wrap { min-height:220px; }
+</style>
 
-        <!-- Date Navigation -->
-        <form method="get" class="d-flex mb-3 align-items-center">
-            <button name="nav" value="prev" class="btn btn-outline-success me-2">&larr; Previous</button>
-            <input type="date" name="start_date" value="{{ start_date }}" class="form-control me-2" style="max-width:200px;">
-            <button type="submit" class="btn btn-success me-2">Go</button>
-            <button name="nav" value="next" class="btn btn-outline-success">Next &rarr;</button>
-        </form>
+<!-- Header -->
+<div class="row align-items-center mb-4 g-2">
+  <div class="col">
+    <h4 class="fw-bold mb-0">Welcome, {{ request.user.get_full_name }}</h4>
+    <small class="text-muted">{{ school.name }} &bull; Today: {{ today|date:"l, d M Y" }}</small>
+  </div>
+  <div class="col-auto">
+    <form method="get" class="d-flex align-items-center gap-2">
+      <button name="nav" value="prev" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></button>
+      <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm" style="max-width:150px;">
+      <button type="submit" class="btn btn-sm btn-success">Go</button>
+      <button name="nav" value="next" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></button>
+    </form>
+  </div>
+</div>
 
-        <!-- Stats Cards -->
-        <div class="row mt-3">
-            {% for stat in stats %}
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-sm text-center border-0">
-                    <div class="card-body">
-                        <i class="fas {{ stat.icon }} fa-2x text-{{ stat.color }}"></i>
-                        <h6 class="mt-2">{{ stat.title }}</h6>
-                        <p class="display-6 mb-0">{{ stat.value }}</p>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+<!-- KPI Stats -->
+<div class="row g-3 mb-4">
+  {% for stat in stats %}
+  <div class="col-6 col-md-3">
+    <div class="card stat-card text-center p-3 h-100">
+      <i class="bi
+        {% if 'Today' in stat.title %}bi-calendar-check
+        {% elif 'Week' in stat.title %}bi-calendar-week
+        {% elif 'Discipline' in stat.title %}bi-exclamation-triangle
+        {% else %}bi-clipboard-check{% endif %}
+        fs-2 text-success mb-1"></i>
+      <div class="small text-muted">{{ stat.title }}</div>
+      <div class="h4 fw-bold mb-0 text-success">{{ stat.value }}</div>
     </div>
+  </div>
+  {% endfor %}
+</div>
 
-    <!-- Weekly Timetable -->
-    <div class="mb-5">
-        <h4>Weekly Timetable</h4>
+<div class="row g-3 mb-4">
+  <!-- Timetable -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-calendar-week me-1 text-success"></i>Weekly Timetable</h6>
+      </div>
+      <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-bordered text-center align-middle sticky-top bg-white">
-                <thead class="table-light">
-                    <tr>
-                        <th>Time Slot</th>
-                        {% for day in week_days %}
-                        <th class="{% if day == today %}bg-success-subtle{% endif %}">{{ day|date:"D M d" }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in timetable_grid %}
-                    <tr>
-                        <td class="fw-bold">{{ row.slot.start_time }} - {{ row.slot.end_time }}</td>
-                        {% for day_info in row.lessons_by_day %}
-                        <td>
-                            {% for lesson in day_info.lessons %}
-                            <div class="card rounded-3 shadow-sm p-2 mb-2 
-                                {% if lesson.is_canceled %}bg-danger text-white
-                                {% elif lesson.live_now %}bg-success text-white
-                                {% else %}bg-success-subtle{% endif %}">
-                                <div class="fw-bold">{{ lesson.subject.name }}</div>
-                                <small>{{ lesson.timetable.grade.name }} - {{ lesson.stream.name }}</small>
-                                <div>Room: {{ lesson.room|default:"N/A" }}</div>
-                                {% if lesson.live_now %}
-                                    <span class="badge bg-warning text-dark">LIVE NOW</span>
-                                {% endif %}
-                                <div class="mt-1">
-                                    <a href="{% url 'school:teacher-attendance-mark' lesson.id %}" 
-                                       class="btn btn-sm btn-light {% if not lesson.can_mark_attendance %}disabled{% endif %}">
-                                        {% if lesson.is_canceled %}Canceled{% else %}Mark Attendance{% endif %}
-                                    </a>
-                                </div>
-                            </div>
-                            {% empty %}
-                            <div class="text-muted">-</div>
-                            {% endfor %}
-                        </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+          <table class="table table-bordered text-center align-middle mb-0" style="font-size:.82rem;">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:90px;">Time</th>
+                {% for day_info in timetable_grid.0.lessons_by_day %}
+                <th class="{% if day_info.day == today %}bg-success-subtle{% endif %}" style="min-width:110px;">
+                  {{ day_info.day|date:"D d" }}
+                </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in timetable_grid %}
+              <tr>
+                <td class="fw-semibold bg-light">
+                  {{ row.slot.start_time|time:"H:i" }}<br>
+                  <small class="text-muted">{{ row.slot.end_time|time:"H:i" }}</small>
+                </td>
+                {% for day_info in row.lessons_by_day %}
+                <td class="p-1 {% if day_info.day == today %}bg-success-subtle{% endif %}">
+                  {% for lesson in day_info.lessons %}
+                  <div class="lesson-cell {% if lesson.is_canceled %}lesson-canceled{% elif lesson.live_now %}lesson-live{% else %}lesson-present{% endif %}">
+                    <div class="fw-semibold">{{ lesson.subject.name }}</div>
+                    <small class="text-muted">{{ lesson.stream.name }} ({{ lesson.timetable.grade.name }})</small>
+                    {% if lesson.live_now %}
+                    <div><span class="badge bg-warning text-dark" style="font-size:.65rem;">LIVE</span></div>
+                    {% endif %}
+                    {% if not lesson.is_canceled %}
+                    <a href="{% url 'school:teacher-attendance-mark' lesson.id %}" class="btn btn-xs btn-outline-success mt-1" style="font-size:.7rem;padding:.15rem .4rem;">
+                      <i class="bi bi-check2-square me-1"></i>Mark
+                    </a>
+                    {% endif %}
+                  </div>
+                  {% empty %}
+                  <span class="text-muted small">—</span>
+                  {% endfor %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% empty %}
+              <tr><td colspan="8" class="text-muted text-center py-4">No lessons scheduled this week.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Attendance Analytics -->
-    <div class="mb-5">
-        <h4>Attendance Analytics (This Week)</h4>
-        <canvas id="attendanceChart" style="height:300px;"></canvas>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script>
-        const ctx = document.getElementById('attendanceChart').getContext('2d');
-        const data = {
-            labels: [{% for item in attendance_analytics %}'{{ item.grade_name }}-{{ item.stream_name }}',{% endfor %}],
-            datasets: [{
-                label: 'Attendance %',
-                data: [{% for item in attendance_analytics %}{{ item.attendance_rate|default:0 }},{% endfor %}],
-                backgroundColor: 'rgba(25, 135, 84, 0.7)', // green
-                borderColor: 'rgba(25, 135, 84, 1)',
-                borderWidth: 1
-            }]
-        };
-        new Chart(ctx, {
-            type: 'bar',
-            data: data,
-            options: {
-                scales: { y: { beginAtZero: true, max: 100 } },
-                plugins: { legend: { display: false } }
-            }
-        });
-        </script>
+  <!-- Attendance Analytics Sidebar -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-bar-chart-line me-1 text-success"></i>Class Attendance</h6>
+        <small class="text-muted">This week by class</small>
+      </div>
+      <div class="card-body">
+        {% for item in attendance_analytics %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span class="fw-semibold">{{ item.grade_name }} – {{ item.stream_name }}</span>
+            <span class="text-{% if item.attendance_rate >= 80 %}success{% elif item.attendance_rate >= 60 %}warning{% else %}danger{% endif %} fw-bold">
+              {{ item.attendance_rate|floatformat:0 }}%
+            </span>
+          </div>
+          <div class="progress" style="height:6px;">
+            <div class="progress-bar bg-{% if item.attendance_rate >= 80 %}success{% elif item.attendance_rate >= 60 %}warning{% else %}danger{% endif %}"
+              style="width:{{ item.attendance_rate|floatformat:0 }}%"></div>
+          </div>
+          <small class="text-muted">{{ item.attended }} / {{ item.total_students }} present</small>
+        </div>
+        {% empty %}
+        <div class="text-muted text-center py-4 small">No attendance data for this week.</div>
+        {% endfor %}
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- Attendance Chart -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-0 py-2 d-flex align-items-center justify-content-between">
+    <h6 class="fw-semibold mb-0"><i class="bi bi-graph-up me-1 text-success"></i>Attendance Trend (This Week)</h6>
+  </div>
+  <div class="card-body trend-chart-wrap">
+    <canvas id="attendanceChart"></canvas>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const ctx = document.getElementById('attendanceChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: [{% for item in attendance_analytics %}'{{ item.grade_name }}-{{ item.stream_name }}',{% endfor %}],
+    datasets: [
+      {
+        label: 'Present',
+        data: [{% for item in attendance_analytics %}{{ item.attended|default:0 }},{% endfor %}],
+        backgroundColor: 'rgba(25,135,84,.75)',
+        borderRadius: 4,
+      },
+      {
+        label: 'Total Students',
+        data: [{% for item in attendance_analytics %}{{ item.total_students|default:0 }},{% endfor %}],
+        backgroundColor: 'rgba(13,110,253,.25)',
+        borderRadius: 4,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const ds = ctx.dataset.label;
+            const val = ctx.raw;
+            return `${ds}: ${val}`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: { beginAtZero: true, ticks: { precision: 0 } }
+    }
+  }
+});
+</script>
 
 </div>
 {% endblock %}

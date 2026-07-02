@@ -1,0 +1,65 @@
+{% extends "dim/base.html" %}
+{% block title %}Add Guardian{% endblock %}
+{% block page_title %}Add Guardian{% endblock %}
+{% block nav_users_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-person-plus me-2"></i>Add Guardian</h5>
+  <a href="{% url 'kiswate_digital_app:user_detail' student.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="alert alert-light border mb-4" style="font-size:.83rem;">
+      <i class="bi bi-info-circle me-1 text-primary"></i>
+      Adding guardian for <strong>{{ student.full_name }}</strong>
+    </div>
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Guardian Name <span class="text-danger">*</span></label>
+            {{ form.name }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Relationship <span class="text-danger">*</span></label>
+            {{ form.relationship }}
+            <div class="form-text">e.g. Parent, Uncle, Aunt, Sibling</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone <span class="text-danger">*</span></label>
+            {{ form.phone }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email</label>
+            {{ form.email }}
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_primary }}
+              <label class="form-check-label">Primary Guardian <small class="text-muted">(main point of contact)</small></label>
+            </div>
+          </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger mt-3" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand"><i class="bi bi-check-lg me-1"></i>Save Guardian</button>
+          <a href="{% url 'kiswate_digital_app:user_detail' student.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,16 @@
 from django.contrib import admin
 from .models import *
-# Register your models here.
+
+
+@admin.register(SubjectCatalog)
+class SubjectCatalogAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'curriculum', 'is_core', 'is_elective', 'sessions_per_week_default', 'is_active')
+    list_filter = ('curriculum', 'is_core', 'is_elective', 'is_active')
+    search_fields = ('name', 'code')
+    list_editable = ('is_active',)
+    ordering = ('name',)
+
+
 admin.site.register(School)
 admin.site.register(Role)
 admin.site.register(Timetable)
@@ -46,3 +56,4 @@ admin.site.register(AttendanceAlert)
 admin.site.register(Pathway)
 admin.site.register(Upload)
 admin.site.register(SubjectEnrollment)
+admin.site.register(AuditLog)

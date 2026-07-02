@@ -1,0 +1,55 @@
+{% extends "dim/base.html" %}
+{% block title %}Submit — {{ assignment.title }}{% endblock %}
+{% block page_title %}Submit Assignment{% endblock %}
+{% block nav_asgn_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">Submit Assignment</h5>
+    <span class="text-muted" style="font-size:.83rem;">{{ assignment.title }}</span>
+  </div>
+  <a href="{% url 'kiswate_digital_app:assignment_detail' assignment.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="alert alert-light border mb-4" style="font-size:.83rem;">
+      <div class="fw-semibold mb-1">{{ assignment.title }}</div>
+      <div class="text-muted">Due: {{ assignment.due_date|date:"l, M d Y · H:i" }} &nbsp;·&nbsp; {{ assignment.total_marks }} marks</div>
+    </div>
+    <div class="form-card">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Upload File <small class="text-muted">(PDF, DOCX, images accepted)</small></label>
+          {{ form.file }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Written Answer</label>
+          {{ form.text_answer }}
+          <div class="form-text">Type your answer here if no file upload is needed.</div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand"
+                  onclick="return confirm('Submit this assignment? You cannot resubmit.')">
+            <i class="bi bi-send me-1"></i>Submit Assignment
+          </button>
+          <a href="{% url 'kiswate_digital_app:assignment_detail' assignment.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

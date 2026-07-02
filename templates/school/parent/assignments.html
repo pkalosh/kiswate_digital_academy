@@ -1,0 +1,75 @@
+{% extends 'school/parent/base.html' %}
+{% block title %}Assignments{% endblock %}
+{% block nav_assignments %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="fw-bold mb-0">Assignments</h5>
+  {% if children|length > 1 %}
+  <form method="get" class="d-flex gap-2">
+    <select name="child" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="">All Children</option>
+      {% for child in children %}
+      <option value="{{ child.pk }}" {% if selected_child_id == child.pk|stringformat:"s" %}selected{% endif %}>
+        {{ child.user.get_full_name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% for cd in assignment_data %}
+<div class="card k-card mb-4">
+  <div class="card-header py-2 d-flex align-items-center gap-2">
+    <i class="bi bi-person-circle text-success"></i>
+    <strong>{{ cd.student.user.get_full_name }}</strong>
+    <span class="badge bg-secondary">{{ cd.student.grade_level.name }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 k-tight">
+      <thead class="table-light">
+        <tr><th>Title</th><th>Subject</th><th>Type</th><th>Due Date</th><th>Max Score</th><th>Submitted</th><th>Score</th></tr>
+      </thead>
+      <tbody>
+        {% for row in cd.rows %}
+        <tr>
+          <td class="fw-semibold">{{ row.assignment.title|truncatechars:35 }}</td>
+          <td>{{ row.assignment.subject.name }}</td>
+          <td><span class="badge bg-secondary">{{ row.assignment.get_assignment_type_display }}</span></td>
+          <td class="{% if not row.submission and row.assignment.due_date|date:'Y-m-d' < '2026-07-02' %}text-danger{% endif %}">
+            {{ row.assignment.due_date|date:"M d, Y" }}
+          </td>
+          <td>{{ row.assignment.max_score }}</td>
+          <td>
+            {% if row.submission %}
+              <span class="badge bg-success"><i class="bi bi-check2"></i> Yes</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pending</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.submission and row.submission.score is not None %}
+              <strong>{{ row.submission.score }}/{{ row.assignment.max_score }}</strong>
+              {% if row.submission.feedback %}
+                <i class="bi bi-chat-left-text ms-1 text-muted" title="{{ row.submission.feedback }}"></i>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-3">No assignments found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-clipboard-x display-4 d-block mb-2 opacity-50"></i>
+  No assignments available.
+</div>
+{% endfor %}
+{% endblock %}

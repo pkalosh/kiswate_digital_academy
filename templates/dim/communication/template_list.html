@@ -1,0 +1,55 @@
+{% extends "dim/base.html" %}
+{% block title %}Notification Templates{% endblock %}
+{% block page_title %}Notification Templates{% endblock %}
+{% block nav_notif_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-file-text me-2 text-success"></i>Notification Templates</h5>
+  <a href="{% url 'kiswate_digital_app:notification_template_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Template
+  </a>
+</div>
+
+{% if templates %}
+<div class="row g-3">
+  {% for t in templates %}
+  <div class="col-md-6 col-xl-4" data-aos="fade-up">
+    <div class="module-card h-100">
+      <div class="d-flex align-items-start justify-content-between mb-2">
+        <span class="badge rounded-pill
+          {% if t.notification_type == 'sms' %}bg-warning-subtle text-warning
+          {% elif t.notification_type == 'email' %}bg-primary-subtle text-primary
+          {% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size:.72rem;">
+          {{ t.get_notification_type_display }}
+        </span>
+        {% if t.is_active %}
+        <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Active</span>
+        {% else %}
+        <span class="badge badge-rejected rounded-pill" style="font-size:.7rem;">Inactive</span>
+        {% endif %}
+      </div>
+      <h6 class="fw-semibold mb-2">{{ t.name }}</h6>
+      {% if t.subject %}
+      <div class="text-muted mb-1" style="font-size:.8rem;"><strong>Subject:</strong> {{ t.subject }}</div>
+      {% endif %}
+      <div class="text-muted" style="font-size:.8rem;">{{ t.body|truncatechars:80 }}</div>
+      <div class="mt-3">
+        <a href="{% url 'kiswate_digital_app:notification_template_edit' t.pk %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="module-card text-center py-5 text-muted">
+  <i class="bi bi-file-text" style="font-size:2.5rem;"></i>
+  <p class="mt-3 mb-2">No templates yet.</p>
+  <a href="{% url 'kiswate_digital_app:notification_template_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Create First Template
+  </a>
+</div>
+{% endif %}
+{% endblock %}

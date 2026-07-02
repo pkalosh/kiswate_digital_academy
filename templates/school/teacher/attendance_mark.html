@@ -62,7 +62,7 @@ Attendance | {{ lesson.subject.name }}
                                                     name="status_{{ e.id }}"
                                                     value="{{ s.code }}"
                                                     {% if current_statuses|get_item:e.id == s.code %}checked{% endif %}
-                                                    >
+                                                    {% if disabled_attendance|get_item:e.id %}disabled{% endif %}>
                                                 {{ s.code }}
                                             </label>
                                             {% endif %}

@@ -1,126 +1,286 @@
 {% extends 'school/base.html' %}
-{% block title %}Upload Excel | {{ school.name }}{% endblock %}
 {% load static %}
+{% block title %}Upload Excel | {{ school.name|default:"School" }}{% endblock %}
 
 {% block content %}
-<section class="content container-fluid py-4">
-  <div class="card shadow-sm border-0 rounded-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-upload me-2"></i> Upload Excel Files</h5>
-    </div>
-    <div class="card-body">
+<div class="container-fluid mt-3">
 
-      <form id="excelUploadForm" enctype="multipart/form-data" class="row g-3">
-        {% csrf_token %}
-        <div class="col-md-6">
-          <label for="category" class="form-label">Select Category</label>
-          <select class="form-select" name="category" id="category" required>
-            <option value="" disabled selected>Select category</option>
-            <option value="grades">Grades & Streams</option>
-            <option value="time_slots">Time Slots</option>
-            <option value="subjects">Subjects</option>
-            <option value="students">Students</option>
-            <option value="teachers">Teachers</option>
-            <option value="parents">Parents</option>
-            <option value="timetable">Timetable</option>
-
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label for="file" class="form-label">Select Excel File</label>
-          <input type="file" class="form-control" name="file" id="file" accept=".xls,.xlsx" required>
-        </div>
-
-        <div class="col-12">
-          <button type="submit" class="btn btn-primary">
-            <i class="bi bi-upload me-1"></i> Upload
-          </button>
-        </div>
-      </form>
-
-      <hr class="my-4">
-      <h6>Download Sample Excel Files</h6>
-      <div class="d-flex gap-2 flex-wrap mb-4">
-        <a href="{% static 'samples/students_upload_sample.xlsx' %}" class="btn btn-outline-primary btn-sm">Students Sample</a>
-        <a href="{% static 'samples/parents_upload_sample.xlsx' %}" class="btn btn-outline-secondary btn-sm">Parents Sample</a>
-        <a href="{% static 'samples/teachers_upload_sample.xlsx' %}" class="btn btn-outline-success btn-sm">Teachers Sample</a>
-        <a href="{% static 'samples/subjects_upload_sample.xlsx' %}" class="btn btn-outline-warning btn-sm">Subjects Sample</a>
-        <a href="{% static 'samples/timetable_upload_sample.xlsx' %}" class="btn btn-outline-info btn-sm">Timetable Sample</a>
-        <a href="{% static 'samples/grades_upload_sample.xlsx' %}" class="btn btn-outline-dark btn-sm">Grades Sample</a>
-        <a href="{% static 'samples/time_slots_upload_sample.xlsx' %}" class="btn btn-outline-secondary btn-sm">TimeSlots Sample</a>
-      </div>
-
-      <div id="previewContainer" class="mb-3"></div>
-      <div id="uploadResults" class="mt-3"></div>
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div>
+      <h5 class="fw-bold mb-0">Bulk Excel Upload</h5>
+      <small class="text-muted">Import teachers, students, parents, grades, timetable, and time slots in bulk.</small>
     </div>
   </div>
-</section>
+
+  <!-- Subjects notice -->
+  <div class="alert alert-info d-flex gap-2 align-items-start py-2 mb-4">
+    <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+    <div>
+      <strong>Subjects are managed through the catalog.</strong>
+      Subjects cannot be uploaded here. Use
+      <a href="{% url 'school:subject-activate-catalog' %}" class="alert-link">Subjects → From Catalog</a>
+      to activate the subjects your school will offer.
+      If a subject is missing from the catalog, contact your Kiswate administrator.
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Upload Form -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 rounded-3 h-100">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-upload me-2"></i>Upload File</span>
+        </div>
+        <div class="card-body">
+          <form id="excelUploadForm" enctype="multipart/form-data" class="row g-3">
+            {% csrf_token %}
+
+            <div class="col-md-6">
+              <label for="category" class="form-label small fw-semibold">Category <span class="text-danger">*</span></label>
+              <select class="form-select" name="category" id="category" required>
+                <option value="" disabled selected>— Select what to upload —</option>
+                <option value="grades">Grades &amp; Streams</option>
+                <option value="time_slots">Time Slots</option>
+                <option value="students">Students</option>
+                <option value="teachers">Teachers / Staff</option>
+                <option value="parents">Parents</option>
+                <option value="timetable">Timetable (Lessons)</option>
+              </select>
+              <div id="categoryHint" class="form-text mt-1"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="file" class="form-label small fw-semibold">Excel File (.xlsx) <span class="text-danger">*</span></label>
+              <input type="file" class="form-control" name="file" id="file" accept=".xls,.xlsx" required>
+            </div>
+
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-cloud-upload me-1"></i> Upload &amp; Import
+              </button>
+            </div>
+          </form>
+
+          <div id="previewContainer" class="mt-3"></div>
+          <div id="uploadResults" class="mt-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sample downloads + column guide -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 rounded-3 mb-3">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-file-earmark-arrow-down me-2"></i>Sample Files</span>
+        </div>
+        <div class="card-body pb-2">
+          <div class="d-flex flex-wrap gap-2">
+            <a href="{% static 'samples/students_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-person-lines-fill me-1"></i>Students
+            </a>
+            <a href="{% static 'samples/parents_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-people me-1"></i>Parents
+            </a>
+            <a href="{% static 'samples/teachers_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-success">
+              <i class="bi bi-person-badge me-1"></i>Teachers
+            </a>
+            <a href="{% static 'samples/timetable_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-info">
+              <i class="bi bi-calendar-week me-1"></i>Timetable
+            </a>
+            <a href="{% static 'samples/grades_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-dark">
+              <i class="bi bi-layers me-1"></i>Grades
+            </a>
+            <a href="{% static 'samples/time_slots_upload_sample.xlsx' %}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-clock me-1"></i>Time Slots
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Required columns per category -->
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-table me-2"></i>Required Columns</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="accordion accordion-flush" id="colGuide">
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-students">
+                  <strong>Students</strong>
+                </button>
+              </h2>
+              <div id="col-students" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>admin_no</code>, <code>first_name</code>, <code>last_name</code>,
+                  <code>gender</code> (M/F), <code>grade</code>, <code>stream</code>,
+                  <code>date_of_birth</code> <em>(opt)</em>, <code>pathway</code> <em>(opt)</em>,
+                  <code>subjects</code> <em>(comma-separated codes, opt)</em>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-parents">
+                  <strong>Parents</strong>
+                </button>
+              </h2>
+              <div id="col-parents" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>first_name</code>, <code>last_name</code>, <code>mobile</code>,
+                  <code>admin_no</code> <em>(child's admission number)</em>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-teachers">
+                  <strong>Teachers / Staff</strong>
+                </button>
+              </h2>
+              <div id="col-teachers" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>first_name</code>, <code>last_name</code>, <code>email</code>,
+                  <code>phone</code>, <code>staff_id</code>, <code>position</code>
+                  <em>(teacher/hod/deputy_principal etc)</em>, <code>gender</code> <em>(opt)</em>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-grades">
+                  <strong>Grades &amp; Streams</strong>
+                </button>
+              </h2>
+              <div id="col-grades" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>grade_name</code>, <code>grade_code</code>,
+                  <code>stream_name</code> <em>(opt — creates streams per grade)</em>,
+                  <code>capacity</code> <em>(opt)</em>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-timetable">
+                  <strong>Timetable</strong>
+                </button>
+              </h2>
+              <div id="col-timetable" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>grade</code>, <code>stream</code>, <code>subject_code</code>,
+                  <code>teacher_staff_id</code>, <code>day_of_week</code>,
+                  <code>start_time</code>, <code>end_time</code>, <code>room</code> <em>(opt)</em>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#col-timeslots">
+                  <strong>Time Slots</strong>
+                </button>
+              </h2>
+              <div id="col-timeslots" class="accordion-collapse collapse" data-bs-parent="#colGuide">
+                <div class="accordion-body py-2 small">
+                  <code>start_time</code> (HH:MM), <code>end_time</code> (HH:MM),
+                  <code>description</code> <em>(opt)</em>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("excelUploadForm");
-  const resultsDiv = document.getElementById("uploadResults");
-  const previewDiv = document.getElementById("previewContainer");
-  const fileInput = document.getElementById("file");
+const CATEGORY_HINTS = {
+  grades:     'Creates grades and streams. Streams are optional.',
+  time_slots: 'Defines the daily period schedule (e.g. 8:00–9:00 Period 1).',
+  students:   'Creates student accounts and enrols them in grades/streams.',
+  teachers:   'Creates staff accounts with assigned positions.',
+  parents:    'Creates parent accounts and links them to students via admin number.',
+  timetable:  'Creates lesson entries. Grades, streams, subjects, and teachers must exist first.',
+};
 
-  // Preview Excel
-  fileInput.addEventListener("change", async (e) => {
-    previewDiv.innerHTML = "";
-    const file = e.target.files[0];
-    if (!file) return;
+document.getElementById('category').addEventListener('change', function () {
+  document.getElementById('categoryHint').textContent = CATEGORY_HINTS[this.value] || '';
+});
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, {type: "array"});
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, {header:1});
-        if (!jsonData.length) return;
+const form        = document.getElementById('excelUploadForm');
+const resultsDiv  = document.getElementById('uploadResults');
+const previewDiv  = document.getElementById('previewContainer');
+const fileInput   = document.getElementById('file');
 
-        let table = '<h6>Excel Preview</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr>';
-        jsonData[0].forEach(col => table += `<th>${col}</th>`);
-        table += '</tr></thead><tbody>';
-        jsonData.slice(1, 10).forEach(row => table += '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>');
-        table += '</tbody></table></div>';
-        previewDiv.innerHTML = table;
-      } catch(err) {
-        previewDiv.innerHTML = `<div class="alert alert-warning">Preview failed: ${err}</div>`;
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  });
+// Excel preview (first 10 rows)
+fileInput.addEventListener('change', async (e) => {
+  previewDiv.innerHTML = '';
+  const file = e.target.files[0];
+  if (!file) return;
 
-  // Upload via fetch
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-    resultsDiv.innerHTML = '<div class="text-info">Uploading...</div>';
-
+  const reader = new FileReader();
+  reader.onload = (event) => {
     try {
-      const response = await fetch("{% url 'school:universal_excel_upload' %}", {
-        method: "POST",
-        body: formData,
-        headers: {"X-CSRFToken": formData.get("csrfmiddlewaretoken")}
-      });
-      const data = await response.json();
-      if (data.status === "success") {
-        resultsDiv.innerHTML = `
-          <div class="alert alert-success">
-            <strong>Category:</strong> ${data.category} <br>
-            <strong>Records Created:</strong> ${data.results.created} <br>
-            ${data.results.errors.length ? "<strong>Errors:</strong><ul>" + data.results.errors.map(e => "<li>Row " + e.row + ": " + e.error + "</li>").join('') + "</ul>" : ""}
-            ${data.results.warnings.length ? "<strong>Warnings:</strong><ul>" + data.results.warnings.map(w => "<li>Row " + w.row + ": " + w.message + "</li>").join('') + "</ul>" : ""}
-          </div>`;
-      } else {
-        resultsDiv.innerHTML = `<div class="alert alert-danger">Error: ${JSON.stringify(data.error || data.results.errors)}</div>`;
-      }
-    } catch(err) {
-      resultsDiv.innerHTML = `<div class="alert alert-danger">Upload failed: ${err}</div>`;
+      const wb   = XLSX.read(new Uint8Array(event.target.result), {type: 'array'});
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header: 1});
+      if (!rows.length) return;
+
+      let html = '<h6 class="small fw-semibold mt-2">Preview (first 10 rows)</h6>'
+               + '<div class="table-responsive"><table class="table table-sm table-bordered small"><thead><tr>';
+      rows[0].forEach(col => html += `<th>${col}</th>`);
+      html += '</tr></thead><tbody>';
+      rows.slice(1, 11).forEach(row =>
+        html += '<tr>' + row.map(c => `<td>${c ?? ''}</td>`).join('') + '</tr>'
+      );
+      html += '</tbody></table></div>';
+      previewDiv.innerHTML = html;
+    } catch (err) {
+      previewDiv.innerHTML = `<div class="alert alert-warning small">Preview failed: ${err}</div>`;
     }
-  });
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+// Submit via AJAX
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const formData = new FormData(form);
+  resultsDiv.innerHTML = '<div class="d-flex align-items-center gap-2 text-info"><div class="spinner-border spinner-border-sm"></div> Uploading…</div>';
+
+  try {
+    const resp = await fetch("{% url 'school:universal_excel_upload' %}", {
+      method: 'POST',
+      body:   formData,
+      headers: {'X-CSRFToken': formData.get('csrfmiddlewaretoken')},
+    });
+    const data = await resp.json();
+
+    if (data.status === 'success') {
+      const errs  = data.results.errors  || [];
+      const warns = data.results.warnings || [];
+      resultsDiv.innerHTML = `
+        <div class="alert alert-success">
+          <strong><i class="bi bi-check-circle me-1"></i>${data.results.created} record(s) imported</strong>
+          from <em>${data.category}</em>.
+          ${errs.length  ? `<hr class="my-2"><strong class="text-danger">Errors (${errs.length}):</strong><ul class="mb-0">`  + errs.map(e  => `<li>Row ${e.row}: ${e.error}</li>`).join('') + '</ul>' : ''}
+          ${warns.length ? `<hr class="my-2"><strong class="text-warning">Warnings (${warns.length}):</strong><ul class="mb-0">` + warns.map(w => `<li>Row ${w.row}: ${w.message}</li>`).join('') + '</ul>' : ''}
+        </div>`;
+    } else {
+      resultsDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-1"></i>${data.error || JSON.stringify(data)}</div>`;
+    }
+  } catch (err) {
+    resultsDiv.innerHTML = `<div class="alert alert-danger">Request failed: ${err}</div>`;
+  }
 });
 </script>
 {% endblock %}

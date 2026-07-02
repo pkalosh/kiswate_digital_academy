@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from school.models import (
     School, Grade, Streams, Role, Subject, StaffProfile, Parent, Student,
-    Enrollment, Term, TimeSlot, Timetable, Lesson, Attendance, DisciplineRecord,
+    Enrollment, Term, TimeSlot, Timetable, Lesson, Attendance, DisciplineRecord,SubjectEnrollment,
     Assignment, Submission, Payment, SmartID, ScanLog, GradeAttendance, ContactMessage, Notification
 )
 from datetime import date
@@ -454,11 +454,10 @@ class AttendanceCreateSerializer(serializers.ModelSerializer):
         for item_data in attendances_data:
             student_id = item_data.pop('student_id')
             student = Student.objects.get(id=student_id)
-            # Find enrollment for this student-subject
+            # Find enrollment for this student-lesson
             enrollment = Enrollment.objects.get(
                 student=student,
-                subject=lesson.subject,
-                school=lesson.subject.school  # Ensure school match
+                lesson=lesson,
             )
             # Create attendance
             attendance = Attendance.objects.create(
@@ -477,17 +476,45 @@ class AttendanceUpdateSerializer(AttendanceCreateSerializer):
     class Meta(AttendanceCreateSerializer.Meta):
         fields = ['date', 'status', 'remarks']  # No enrollment_id for update
 
+
+class SubjectMiniSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source='subject.id')
+    subject = serializers.CharField(source='subject.name')
+    is_elective = serializers.BooleanField()
+
+    class Meta:
+        model = SubjectEnrollment
+        fields = ['id', 'subject', 'is_elective']
+
+
 class StudentListSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     grade_level_name = serializers.CharField(source='grade_level.name', read_only=True)
-    stream_name = serializers.CharField(source='stream.name', default='', allow_blank=True, read_only=True)
+    stream_name = serializers.CharField(
+        source='stream.name',
+        default='',
+        allow_blank=True,
+        read_only=True
+    )
+    subjects = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
-        fields = ['id', 'full_name', 'grade_level_name', 'stream_name']
+        fields = [
+            'id',
+            'full_name',
+            'grade_level_name',
+            'stream_name',
+            'subjects'
+        ]
 
     def get_full_name(self, obj):
         return obj.user.get_full_name()
+
+    def get_subjects(self, obj):
+        # Uses prefetched data (no extra queries)
+        enrollments = obj.subject_enrollments.all()
+        return SubjectMiniSerializer(enrollments, many=True).data
 
 ATTENDANCE_STATUS_CHOICES = [
     ('P', 'Present'),
@@ -687,7 +714,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
         return obj.submissions.count()
     
     def get_totalStudents(self, obj):
-        return obj.subject.enrollments.filter(status='active').count()
+        return obj.subject.enrollments.filter(is_active=True).count()
     
     def get_className(self, obj):
         return obj.subject.grade.name
@@ -700,13 +727,16 @@ class AssignmentSerializer(serializers.ModelSerializer):
         return None
     
     def get_isSubmitted(self, obj):
-        # FIXED: Check if student has submission
         request = self.context.get('request')
         if request and get_user_role(request.user) == 'student':
-            enrollment = Enrollment.objects.filter(student=request.user.student, subject=obj.subject, status='active').first()
-            if enrollment:
-                submission = Submission.objects.filter(enrollment=enrollment, assignment=obj).exists()
-                return submission
+            from school.models import SubjectEnrollment
+            se = SubjectEnrollment.objects.filter(
+                student=request.user.student, subject=obj.subject, is_active=True
+            ).first()
+            if se:
+                return Submission.objects.filter(
+                    enrollment__student=request.user.student, assignment=obj
+                ).exists()
         return None
 class AnnouncementSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField()  # Assuming UUID primary key; adjust if it's IntegerField

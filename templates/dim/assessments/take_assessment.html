@@ -1,0 +1,100 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ assessment.title }}{% endblock %}
+{% block page_title %}Take Assessment{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block extra_css %}
+<style>
+  .q-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:1.25rem; margin-bottom:1rem; }
+  .q-card .q-text { font-weight:600; margin-bottom:.75rem; }
+  .q-option { border:1px solid #e5e7eb; border-radius:8px; padding:.6rem .9rem; margin-bottom:.5rem; cursor:pointer; transition:all .15s; }
+  .q-option:hover { border-color: var(--brand-green); background:#f0fdf4; }
+  .q-option input:checked + label, .q-option:has(input:checked) { border-color: var(--brand-green); background:#f0fdf4; }
+  .timer-badge { font-size:.85rem; font-weight:700; padding:.4rem .8rem; border-radius:8px; }
+  .timer-warning { background:#fef3c7; color:#92400e; }
+  .timer-danger { background:#fee2e2; color:#991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">{{ assessment.title }}</h5>
+    <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size:.75rem;">
+      {{ assessment.get_assessment_type_display }} · {{ assessment.total_marks }} marks
+    </span>
+  </div>
+  <div id="timer-display" class="timer-badge bg-success-subtle text-success">
+    <i class="bi bi-clock me-1"></i><span id="timer">{{ assessment.duration_minutes }}:00</span>
+  </div>
+</div>
+
+{% if assessment.instructions %}
+<div class="alert alert-light border mb-4" style="font-size:.875rem;">
+  <strong>Instructions:</strong> {{ assessment.instructions }}
+</div>
+{% endif %}
+
+<form method="post" id="assessment-form">
+  {% csrf_token %}
+  {% for question in questions %}
+  <div class="q-card" data-aos="fade-up">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <div class="q-text">{{ forloop.counter }}. {{ question.text }}</div>
+      <span class="badge bg-light text-dark border" style="font-size:.7rem; white-space:nowrap;">
+        {{ question.marks }} mark{{ question.marks|pluralize }}
+      </span>
+    </div>
+
+    {% if question.question_type == 'mcq' or question.question_type == 'true_false' %}
+    {% for choice in question.choices.all %}
+    <label class="q-option d-flex align-items-center gap-2 w-100">
+      <input type="radio" name="q_{{ question.pk }}" value="{{ choice.pk }}"
+             class="form-check-input m-0" style="flex-shrink:0;">
+      <span style="font-size:.875rem;">{{ choice.text }}</span>
+    </label>
+    {% endfor %}
+    {% else %}
+    <textarea name="q_{{ question.pk }}" class="form-control" rows="3"
+              placeholder="Your answer…" style="font-size:.875rem;"></textarea>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-brand"
+            onclick="return confirm('Submit this assessment? You cannot change answers after submission.')">
+      <i class="bi bi-send me-1"></i>Submit Assessment
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const totalSeconds = {{ assessment.duration_minutes }} * 60;
+  let remaining = totalSeconds;
+  const display = document.getElementById('timer');
+  const badge = document.getElementById('timer-display');
+
+  const tick = setInterval(() => {
+    remaining--;
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    display.textContent = m + ':' + String(s).padStart(2, '0');
+
+    if (remaining <= 300) {
+      badge.className = 'timer-badge timer-warning';
+    }
+    if (remaining <= 60) {
+      badge.className = 'timer-badge timer-danger';
+    }
+    if (remaining <= 0) {
+      clearInterval(tick);
+      document.getElementById('assessment-form').submit();
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "dim/base.html" %}
+{% block title %}My Performance{% endblock %}
+{% block page_title %}My Performance{% endblock %}
+{% block nav_reports_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-person-check me-2 text-success"></i>My Performance</h5>
+</div>
+
+<!-- Summary stat cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-clipboard-check"></i></div>
+      <div class="stat-value">{{ attempts.count }}</div>
+      <div class="stat-label">Assessments Completed</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-success-subtle text-success mb-2"><i class="bi bi-trophy"></i></div>
+      <div class="stat-value">
+        {% if attempts %}
+          {% with total=0 count=0 %}
+            {% for a in attempts %}{% if a.percentage %}{{ a.percentage|add:0 }}{% endif %}{% endfor %}
+          {% endwith %}
+          —
+        {% else %}—{% endif %}
+      </div>
+      <div class="stat-label">Avg Score</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-journal-check"></i></div>
+      <div class="stat-value">{{ attendance_by_program|length }}</div>
+      <div class="stat-label">Programs Enrolled</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-info-subtle text-info mb-2"><i class="bi bi-person-check"></i></div>
+      <div class="stat-value">
+        {% if attendance_by_program %}
+        {% with vals=attendance_by_program.values %}
+        {% for v in vals %}{{ v.rate }}{% if not forloop.last %}/{% endif %}{% endfor %}
+        {% endwith %}
+        {% else %}—{% endif %}
+      </div>
+      <div class="stat-label">Attendance Rate(s)</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Assessment results -->
+  <div class="col-lg-7">
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-clipboard-check me-1 text-primary"></i>Assessment Results</h6>
+      {% if attempts %}
+      {% for attempt in attempts %}
+      <div class="border-bottom py-3 d-flex align-items-center justify-content-between" style="font-size:.875rem;">
+        <div>
+          <div class="fw-semibold">{{ attempt.assessment.title }}</div>
+          <div class="text-muted" style="font-size:.78rem;">
+            {{ attempt.assessment.program.name }} ·
+            {{ attempt.submitted_at|date:"M d, Y" }}
+          </div>
+        </div>
+        <div class="text-end">
+          {% if attempt.percentage is not None %}
+          <div class="fw-bold {% if attempt.passed %}text-success{% else %}text-danger{% endif %}">
+            {{ attempt.percentage }}%
+          </div>
+          <div class="text-muted" style="font-size:.75rem;">
+            {{ attempt.score }}/{{ attempt.assessment.total_marks }}
+            {% if attempt.passed %}
+            <i class="bi bi-check-circle-fill text-success ms-1"></i>
+            {% else %}
+            <i class="bi bi-x-circle-fill text-danger ms-1"></i>
+            {% endif %}
+          </div>
+          {% else %}
+          <span class="badge badge-pending rounded-pill" style="font-size:.72rem;">Awaiting Grade</span>
+          {% endif %}
+          <div class="mt-1">
+            <a href="{% url 'kiswate_digital_app:assessment_result' attempt.pk %}"
+               class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">Review</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">No graded assessments yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Attendance by program -->
+  <div class="col-lg-5">
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-person-check me-1 text-success"></i>Attendance by Program</h6>
+      {% if attendance_by_program %}
+      {% for program, data in attendance_by_program.items %}
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="fw-semibold" style="font-size:.875rem;">{{ program.name }}</span>
+          <span class="fw-bold {% if data.rate >= 75 %}text-success{% elif data.rate >= 50 %}text-warning{% else %}text-danger{% endif %}" style="font-size:.875rem;">
+            {{ data.rate }}%
+          </span>
+        </div>
+        <div class="rate-bar mb-1">
+          <div class="rate-fill"
+               style="width:{{ data.rate }}%;
+                      background:{% if data.rate >= 75 %}#10b981{% elif data.rate >= 50 %}#f59e0b{% else %}#ef4444{% endif %};">
+          </div>
+        </div>
+        <div class="text-muted" style="font-size:.76rem;">
+          {{ data.present }} / {{ data.total }} classes attended
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">No attendance data found.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

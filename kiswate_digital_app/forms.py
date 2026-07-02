@@ -10,10 +10,17 @@ from django.core.validators import MinValueValidator
 from django.conf import settings
 from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
-from school.models import School,Scholarship,SchoolSubscription,SubscriptionPlan,County,City,Constituency,SubCounty,Ward, Streams,Grade
+from school.models import School, Scholarship, SchoolSubscription, SubscriptionPlan, County, City, Constituency, SubCounty, Ward, Streams, Grade, StaffProfile
 from userauths.models import User
+from django.forms import inlineformset_factory
 
-
+ 
+from .models import (
+    UserProfile, Guardian, Subject, Program, Enrollment,
+    VirtualClass, Lesson, Assignment, AssignmentSubmission,
+    Assessment, Question, Choice,
+    NotificationTemplate, NotificationLog,
+)
 
 
 class SchoolCreationForm(forms.ModelForm):
@@ -163,6 +170,19 @@ class SchoolCreationForm(forms.ModelForm):
         school.school_admin = admin_user
         if commit:
             school.save()
+
+            # Create a StaffProfile for the principal so they can access school views,
+            # be assigned lessons, and appear in staff lists.
+            staff_id = f"PRIN-{school.code or school.pk}"
+            # Ensure uniqueness if school code clashes
+            if StaffProfile.objects.filter(staff_id=staff_id).exists():
+                staff_id = f"PRIN-{school.pk}-{admin_user.pk}"
+            StaffProfile.objects.create(
+                user=admin_user,
+                staff_id=staff_id,
+                school=school,
+                position='teacher',
+            )
 
         # Send email if requested
         if self.cleaned_data['send_email'] and getattr(settings, 'EMAIL_HOST', None):
@@ -504,3 +524,353 @@ class StreamForm(forms.ModelForm):
         model = Streams
         fields = ['name','capacity']
         #filter grades for the school
+
+
+
+ 
+# ─── SHARED WIDGET HELPERS ───────────────────────────────────────────────────
+ 
+INPUT = 'form-control'
+SELECT = 'form-select'
+CHECK = 'form-check-input'
+TEXTAREA = 'form-control'
+ 
+ 
+def _w(widget_class, **kwargs):
+    return widget_class(attrs={'class': INPUT, **kwargs})
+ 
+ 
+# ─── USER MANAGEMENT FORMS ───────────────────────────────────────────────────
+ 
+class StudentRegistrationForm(forms.ModelForm):
+    first_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
+    last_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
+    email = forms.EmailField(widget=forms.EmailInput(attrs={'class': INPUT}))
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
+    confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
+ 
+    class Meta:
+        model = UserProfile
+        fields = ['school', 'phone', 'date_of_birth', 'gender']
+        widgets = {
+            'school': forms.Select(attrs={'class': SELECT}),
+            'phone': forms.TextInput(attrs={'class': INPUT}),
+            'date_of_birth': forms.DateInput(attrs={'class': INPUT, 'type': 'date'}),
+            'gender': forms.Select(attrs={'class': SELECT}),
+        }
+ 
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('password') != cleaned.get('confirm_password'):
+            raise forms.ValidationError("Passwords do not match.")
+        return cleaned
+ 
+    def save(self, commit=True):
+        data = self.cleaned_data
+        user = User.objects.create_user(
+            username=data['email'],
+            email=data['email'],
+            password=data['password'],
+            first_name=data['first_name'],
+            last_name=data['last_name'],
+        )
+        profile = super().save(commit=False)
+        profile.user = user
+        profile.role = 'student'
+        if commit:
+            profile.save()
+        return profile
+ 
+ 
+class TeacherRegistrationForm(forms.ModelForm):
+    first_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
+    last_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
+    email = forms.EmailField(widget=forms.EmailInput(attrs={'class': INPUT}))
+    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
+    confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
+    subjects = forms.ModelMultipleChoiceField(
+        queryset=Subject.objects.all(),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': CHECK}),
+        required=False
+    )
+ 
+    class Meta:
+        model = UserProfile
+        fields = ['school', 'phone', 'date_of_birth', 'gender', 'bio', 'id_number']
+        widgets = {
+            'school': forms.Select(attrs={'class': SELECT}),
+            'phone': forms.TextInput(attrs={'class': INPUT}),
+            'date_of_birth': forms.DateInput(attrs={'class': INPUT, 'type': 'date'}),
+            'gender': forms.Select(attrs={'class': SELECT}),
+            'bio': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+            'id_number': forms.TextInput(attrs={'class': INPUT}),
+        }
+ 
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('password') != cleaned.get('confirm_password'):
+            raise forms.ValidationError("Passwords do not match.")
+        return cleaned
+ 
+    def save(self, commit=True):
+        data = self.cleaned_data
+        user = User.objects.create_user(
+            username=data['email'],
+            email=data['email'],
+            password=data['password'],
+            first_name=data['first_name'],
+            last_name=data['last_name'],
+        )
+        profile = super().save(commit=False)
+        profile.user = user
+        profile.role = 'teacher'
+        if commit:
+            profile.save()
+        return profile
+ 
+ 
+class GuardianForm(forms.ModelForm):
+    class Meta:
+        model = Guardian
+        fields = ['name', 'relationship', 'phone', 'email', 'is_primary']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': INPUT}),
+            'relationship': forms.TextInput(attrs={'class': INPUT}),
+            'phone': forms.TextInput(attrs={'class': INPUT}),
+            'email': forms.EmailInput(attrs={'class': INPUT}),
+            'is_primary': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+class VettingForm(forms.ModelForm):
+    class Meta:
+        model = UserProfile
+        fields = ['vetting_status', 'vetting_notes']
+        widgets = {
+            'vetting_status': forms.Select(attrs={'class': SELECT}),
+            'vetting_notes': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+        }
+ 
+ 
+class EnrollmentForm(forms.ModelForm):
+    class Meta:
+        model = Enrollment
+        fields = ['student', 'program']
+        widgets = {
+            'student': forms.Select(attrs={'class': SELECT}),
+            'program': forms.Select(attrs={'class': SELECT}),
+        }
+ 
+    def __init__(self, *args, **kwargs):
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['student'].queryset = UserProfile.objects.filter(
+                school=school, role='student', vetting_status='approved')
+            self.fields['program'].queryset = Program.objects.filter(school=school, is_active=True)
+ 
+ 
+# ─── VIRTUAL LEARNING FORMS ──────────────────────────────────────────────────
+ 
+class VirtualClassForm(forms.ModelForm):
+    class Meta:
+        model = VirtualClass
+        fields = [
+            'program', 'title', 'description', 'platform', 'meeting_link',
+            'meeting_id', 'passcode', 'scheduled_at', 'duration_minutes',
+            'is_recurring', 'notes'
+        ]
+        widgets = {
+            'program': forms.Select(attrs={'class': SELECT}),
+            'title': forms.TextInput(attrs={'class': INPUT}),
+            'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+            'platform': forms.Select(attrs={'class': SELECT}),
+            'meeting_link': forms.URLInput(attrs={'class': INPUT, 'placeholder': 'https://meet.google.com/...'}),
+            'meeting_id': forms.TextInput(attrs={'class': INPUT}),
+            'passcode': forms.TextInput(attrs={'class': INPUT}),
+            'scheduled_at': forms.DateTimeInput(attrs={'class': INPUT, 'type': 'datetime-local'}),
+            'duration_minutes': forms.NumberInput(attrs={'class': INPUT}),
+            'is_recurring': forms.CheckboxInput(attrs={'class': CHECK}),
+            'notes': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+        }
+ 
+    def __init__(self, *args, **kwargs):
+        teacher_profile = kwargs.pop('teacher_profile', None)
+        super().__init__(*args, **kwargs)
+        if teacher_profile:
+            self.fields['program'].queryset = Program.objects.filter(
+                teacher=teacher_profile, is_active=True)
+ 
+ 
+class RecordingUploadForm(forms.ModelForm):
+    class Meta:
+        model = VirtualClass
+        fields = ['recording_link']
+        widgets = {
+            'recording_link': forms.URLInput(attrs={'class': INPUT, 'placeholder': 'https://...'}),
+        }
+ 
+ 
+class AttendanceManualForm(forms.Form):
+    """Teacher manually marks attendance for a virtual class."""
+    present_students = forms.ModelMultipleChoiceField(
+        queryset=UserProfile.objects.none(),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': CHECK}),
+        required=False,
+        label="Mark Present"
+    )
+ 
+    def __init__(self, *args, **kwargs):
+        virtual_class = kwargs.pop('virtual_class')
+        super().__init__(*args, **kwargs)
+        enrolled = UserProfile.objects.filter(
+            enrollments__program=virtual_class.program,
+            enrollments__is_active=True,
+            role='student'
+        )
+        self.fields['present_students'].queryset = enrolled
+ 
+ 
+class LessonForm(forms.ModelForm):
+    class Meta:
+        model = Lesson
+        fields = ['program', 'title', 'description', 'topic', 'notes_file', 'video_url', 'order', 'is_published']
+        widgets = {
+            'program': forms.Select(attrs={'class': SELECT}),
+            'title': forms.TextInput(attrs={'class': INPUT}),
+            'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+            'topic': forms.TextInput(attrs={'class': INPUT}),
+            'video_url': forms.URLInput(attrs={'class': INPUT}),
+            'order': forms.NumberInput(attrs={'class': INPUT}),
+            'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+class AssignmentForm(forms.ModelForm):
+    class Meta:
+        model = Assignment
+        fields = ['program', 'lesson', 'title', 'instructions', 'attachment', 'due_date', 'total_marks', 'is_published']
+        widgets = {
+            'program': forms.Select(attrs={'class': SELECT}),
+            'lesson': forms.Select(attrs={'class': SELECT}),
+            'title': forms.TextInput(attrs={'class': INPUT}),
+            'instructions': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 4}),
+            'due_date': forms.DateTimeInput(attrs={'class': INPUT, 'type': 'datetime-local'}),
+            'total_marks': forms.NumberInput(attrs={'class': INPUT}),
+            'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+class SubmissionForm(forms.ModelForm):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ['file', 'text_answer']
+        widgets = {
+            'text_answer': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 5}),
+        }
+ 
+ 
+class GradeSubmissionForm(forms.ModelForm):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ['marks_obtained', 'feedback']
+        widgets = {
+            'marks_obtained': forms.NumberInput(attrs={'class': INPUT}),
+            'feedback': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+        }
+ 
+ 
+# ─── ASSESSMENT FORMS ────────────────────────────────────────────────────────
+ 
+class AssessmentForm(forms.ModelForm):
+    class Meta:
+        model = Assessment
+        fields = [
+            'program', 'title', 'assessment_type', 'instructions',
+            'total_marks', 'pass_mark', 'duration_minutes',
+            'start_time', 'end_time', 'is_published'
+        ]
+        widgets = {
+            'program': forms.Select(attrs={'class': SELECT}),
+            'title': forms.TextInput(attrs={'class': INPUT}),
+            'assessment_type': forms.Select(attrs={'class': SELECT}),
+            'instructions': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+            'total_marks': forms.NumberInput(attrs={'class': INPUT}),
+            'pass_mark': forms.NumberInput(attrs={'class': INPUT}),
+            'duration_minutes': forms.NumberInput(attrs={'class': INPUT}),
+            'start_time': forms.DateTimeInput(attrs={'class': INPUT, 'type': 'datetime-local'}),
+            'end_time': forms.DateTimeInput(attrs={'class': INPUT, 'type': 'datetime-local'}),
+            'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+class QuestionForm(forms.ModelForm):
+    class Meta:
+        model = Question
+        fields = ['text', 'question_type', 'marks', 'order', 'explanation']
+        widgets = {
+            'text': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+            'question_type': forms.Select(attrs={'class': SELECT}),
+            'marks': forms.NumberInput(attrs={'class': INPUT}),
+            'order': forms.NumberInput(attrs={'class': INPUT}),
+            'explanation': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+        }
+ 
+ 
+class ChoiceForm(forms.ModelForm):
+    class Meta:
+        model = Choice
+        fields = ['text', 'is_correct']
+        widgets = {
+            'text': forms.TextInput(attrs={'class': INPUT}),
+            'is_correct': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+ChoiceFormSet = inlineformset_factory(Question, Choice, form=ChoiceForm, extra=4, max_num=6, can_delete=True)
+ 
+ 
+class PublishResultsForm(forms.ModelForm):
+    class Meta:
+        model = Assessment
+        fields = ['results_published']
+        widgets = {
+            'results_published': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+# ─── COMMUNICATION FORMS ─────────────────────────────────────────────────────
+ 
+class NotificationTemplateForm(forms.ModelForm):
+    class Meta:
+        model = NotificationTemplate
+        fields = ['name', 'notification_type', 'subject', 'body', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': INPUT}),
+            'notification_type': forms.Select(attrs={'class': SELECT}),
+            'subject': forms.TextInput(attrs={'class': INPUT}),
+            'body': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 5,
+                                          'placeholder': 'Use {name}, {class_title}, {date}, {link}'}),
+            'is_active': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+ 
+ 
+class BulkNotificationForm(forms.Form):
+    RECIPIENT_CHOICES = [
+        ('all_students', 'All Students'),
+        ('all_teachers', 'All Teachers'),
+        ('program', 'Specific Program'),
+        ('school', 'Specific School'),
+    ]
+    notification_type = forms.ChoiceField(
+        choices=[('sms', 'SMS'), ('email', 'Email'), ('both', 'Both')],
+        widget=forms.Select(attrs={'class': SELECT})
+    )
+    recipients = forms.ChoiceField(choices=RECIPIENT_CHOICES, widget=forms.Select(attrs={'class': SELECT}))
+    program = forms.ModelChoiceField(queryset=Program.objects.all(), required=False,
+                                     widget=forms.Select(attrs={'class': SELECT}))
+    school = forms.ModelChoiceField(queryset=School.objects.all(), required=False,
+                                    widget=forms.Select(attrs={'class': SELECT}))
+    subject = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': INPUT}))
+    message = forms.CharField(widget=forms.Textarea(attrs={'class': TEXTAREA, 'rows': 4}))
+ 

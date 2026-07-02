@@ -1,0 +1,23 @@
+{% extends "dim/base.html" %}
+{% block title %}Registration Submitted{% endblock %}
+{% block page_title %}Registration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5 text-center py-5">
+    <div class="mx-auto rounded-circle bg-success-subtle d-flex align-items-center justify-content-center mb-4"
+         style="width:72px;height:72px;font-size:2rem;">
+      <i class="bi bi-check-circle-fill text-success"></i>
+    </div>
+    <h5 class="fw-bold mb-2">Registration Submitted!</h5>
+    <p class="text-muted mb-4" style="font-size:.9rem;">
+      Your profile has been submitted for review. You will be notified via email
+      once an admin has approved your account.
+    </p>
+    <div class="alert alert-info d-inline-flex align-items-center gap-2" style="font-size:.83rem;">
+      <i class="bi bi-clock me-1"></i>
+      Vetting usually takes 1–2 business days.
+    </div>
+  </div>
+</div>
+{% endblock %}

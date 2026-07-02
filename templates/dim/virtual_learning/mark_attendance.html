@@ -1,0 +1,54 @@
+{% extends "dim/base.html" %}
+{% block title %}Mark Attendance{% endblock %}
+{% block page_title %}Mark Attendance{% endblock %}
+{% block nav_classes_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">Mark Attendance</h5>
+    <span class="text-muted" style="font-size:.83rem;">{{ vc.title }} · {{ vc.scheduled_at|date:"M d, Y H:i" }}</span>
+  </div>
+  <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="form-card">
+      <div class="alert alert-info mb-4" style="font-size:.83rem;">
+        <i class="bi bi-info-circle me-1"></i>
+        Tick each student who was present. This supplements <strong>join-click attendance</strong> —
+        students who already clicked "Join" are still recorded automatically.
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+        <h6 class="fw-semibold mb-3">Enrolled Students</h6>
+
+        {% if form.present_students.field.queryset %}
+        <div style="max-height:400px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px; padding:.75rem;">
+          {% for widget in form.present_students %}
+          <div class="form-check py-1 border-bottom">
+            {{ widget.tag }} <label class="form-check-label ms-2" for="{{ widget.id_for_label }}">
+              {{ widget.choice_label }}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No enrolled students found for this program.</p>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand">
+            <i class="bi bi-check-lg me-1"></i>Save Attendance
+          </button>
+          <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

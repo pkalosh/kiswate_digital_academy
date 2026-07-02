@@ -1,0 +1,81 @@
+{% extends "dim/base.html" %}
+{% block title %}Student Registration{% endblock %}
+{% block page_title %}Student Registration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="text-center mb-4">
+      <div class="mx-auto rounded-circle bg-success d-flex align-items-center justify-content-center mb-3"
+           style="width:56px;height:56px;font-size:1.4rem;">
+        <i class="bi bi-mortarboard text-white"></i>
+      </div>
+      <h5 class="fw-bold">Student Registration</h5>
+      <p class="text-muted" style="font-size:.875rem;">
+        Create your account. Your profile will be reviewed before you can access classes.
+      </p>
+    </div>
+
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name <span class="text-danger">*</span></label>
+            {{ form.first_name }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name <span class="text-danger">*</span></label>
+            {{ form.last_name }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email Address <span class="text-danger">*</span></label>
+            {{ form.email }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password <span class="text-danger">*</span></label>
+            {{ form.password }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
+            {{ form.confirm_password }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">School <span class="text-danger">*</span></label>
+            {{ form.school }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            {{ form.phone }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Date of Birth</label>
+            {{ form.date_of_birth }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Gender</label>
+            {{ form.gender }}
+          </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger mt-3" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-brand w-100 mt-4">
+          <i class="bi bi-person-plus me-1"></i>Register as Student
+        </button>
+      </form>
+
+      <hr class="my-3">
+      <p class="text-center text-muted mb-0" style="font-size:.83rem;">
+        Are you a teacher? <a href="{% url 'kiswate_digital_app:teacher_register' %}">Register here</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

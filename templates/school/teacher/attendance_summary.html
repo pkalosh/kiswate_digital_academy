@@ -1,0 +1,89 @@
+{% extends "school/teacher/base.html" %}
+{% load humanize %}
+
+{% block title %}Attendance Summary{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:860px">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h5 class="fw-bold mb-0">Attendance Summary</h5>
+      <small class="text-muted">{{ period_start|date:"M d, Y" }} – {{ period_end|date:"M d, Y" }}</small>
+    </div>
+  </div>
+
+  <!-- Date filter -->
+  <form method="get" class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">From</label>
+        <input type="date" name="start" value="{{ period_start|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">To</label>
+        <input type="date" name="end" value="{{ period_end|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-sm btn-success w-100">Filter</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- KPI cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4">{{ total_records|intcomma }}</div>
+        <small class="text-muted">Total Records</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4 text-success">{{ summary.P|default:0|intcomma }}</div>
+        <small class="text-muted">Present</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4 text-danger">{{ summary.UA|default:0|intcomma }}</div>
+        <small class="text-muted">Unexcused Absent</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4 text-success">{{ present_pct }}%</div>
+        <small class="text-muted">Attendance Rate</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Breakdown -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-0 pt-3 pb-0 px-3">
+      <span class="fw-semibold">Status Breakdown</span>
+    </div>
+    <div class="card-body">
+      {% for status, count in summary.items %}
+      <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:.85rem">
+        <span class="fw-semibold">
+          {% if status == 'P' %}Present
+          {% elif status == 'ET' %}Excused Tardy
+          {% elif status == 'UT' %}Unexcused Tardy
+          {% elif status == 'EA' %}Excused Absent
+          {% elif status == 'UA' %}Unexcused Absent
+          {% elif status == '18' %}Suspended
+          {% elif status == '20' %}Expelled
+          {% elif status == 'IB' %}In Building
+          {% else %}{{ status }}{% endif %}
+        </span>
+        <span class="badge bg-secondary rounded-pill">{{ count }}</span>
+      </div>
+      {% empty %}
+      <p class="text-muted text-center py-3">No attendance records for this period.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

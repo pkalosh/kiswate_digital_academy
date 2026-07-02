@@ -1,0 +1,72 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ action }} Assignment{% endblock %}
+{% block page_title %}{{ action }} Assignment{% endblock %}
+{% block nav_asgn_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>{{ action }} Assignment</h5>
+  <a href="{% url 'kiswate_digital_app:assignment_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="form-card">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Program <span class="text-danger">*</span></label>
+            {{ form.program }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Lesson <small class="text-muted">(optional)</small></label>
+            {{ form.lesson }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            {{ form.title }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Instructions <span class="text-danger">*</span></label>
+            {{ form.instructions }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Attachment</label>
+            {{ form.attachment }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Due Date & Time <span class="text-danger">*</span></label>
+            {{ form.due_date }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Total Marks</label>
+            {{ form.total_marks }}
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              {{ form.is_published }}
+              <label class="form-check-label fw-semibold">Publish to students</label>
+            </div>
+          </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger mt-3" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand"><i class="bi bi-check-lg me-1"></i>{{ action }} Assignment</button>
+          <a href="{% url 'kiswate_digital_app:assignment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "dim/base.html" %}
+{% block title %}{{ lesson.title }}{% endblock %}
+{% block page_title %}Lesson{% endblock %}
+{% block nav_lessons_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0">{{ lesson.title }}</h5>
+    <span class="text-muted" style="font-size:.83rem;">{{ lesson.program.name }}</span>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'kiswate_digital_app:lesson_edit' lesson.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-pencil"></i>
+    </a>
+    <a href="{% url 'kiswate_digital_app:lesson_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="module-card mb-4">
+      {% if lesson.topic %}
+      <div class="mb-2">
+        <span class="badge bg-primary-subtle text-primary rounded-pill" style="font-size:.78rem;">
+          <i class="bi bi-tag me-1"></i>{{ lesson.topic }}
+        </span>
+      </div>
+      {% endif %}
+      {% if lesson.description %}
+      <p style="font-size:.9rem;">{{ lesson.description }}</p>
+      {% endif %}
+      <div class="d-flex gap-3 flex-wrap mt-3" style="font-size:.83rem;">
+        <span class="text-muted"><i class="bi bi-person me-1"></i>{{ lesson.teacher.full_name }}</span>
+        <span class="text-muted"><i class="bi bi-hash me-1"></i>Lesson {{ lesson.order }}</span>
+        <span class="text-muted"><i class="bi bi-calendar3 me-1"></i>{{ lesson.created_at|date:"M d, Y" }}</span>
+      </div>
+    </div>
+
+    <!-- Resources -->
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-folder me-1 text-warning"></i>Resources</h6>
+      {% if lesson.notes_file %}
+      <a href="{{ lesson.notes_file.url }}" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Download Notes
+      </a>
+      {% endif %}
+      {% if lesson.video_url %}
+      <a href="{{ lesson.video_url }}" class="btn btn-outline-danger btn-sm" target="_blank">
+        <i class="bi bi-play-circle me-1"></i>Watch Video
+      </a>
+      {% endif %}
+      {% if not lesson.notes_file and not lesson.video_url %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">No resources uploaded yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Assignments in this lesson -->
+    <div class="module-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-file-earmark-text me-1 text-primary"></i>Assignments</h6>
+        <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-plus-lg me-1"></i>Add
+        </a>
+      </div>
+      {% if assignments %}
+      {% for a in assignments %}
+      <div class="d-flex align-items-center justify-content-between border-bottom py-2" style="font-size:.875rem;">
+        <div>
+          <div class="fw-semibold">{{ a.title }}</div>
+          <div class="text-muted" style="font-size:.78rem;">Due: {{ a.due_date|date:"M d, Y H:i" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="text-muted mb-0" style="font-size:.85rem;">No assignments for this lesson.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3">Info</h6>
+      <dl class="row g-1 mb-0" style="font-size:.85rem;">
+        <dt class="col-6 text-muted fw-normal">Program</dt>
+        <dd class="col-6">{{ lesson.program.name }}</dd>
+        <dt class="col-6 text-muted fw-normal">Teacher</dt>
+        <dd class="col-6">{{ lesson.teacher.full_name }}</dd>
+        <dt class="col-6 text-muted fw-normal">Order</dt>
+        <dd class="col-6">#{{ lesson.order }}</dd>
+        <dt class="col-6 text-muted fw-normal">Status</dt>
+        <dd class="col-6">
+          {% if lesson.is_published %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
+          {% else %}
+          <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %}

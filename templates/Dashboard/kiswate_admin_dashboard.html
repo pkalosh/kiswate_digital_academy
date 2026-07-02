@@ -1,139 +1,255 @@
 {% extends 'Dashboard/base.html' %}
-{% block title %}Dashboard | {{ school.name }}{% endblock %}
+{% load static %}
+{% load humanize %}
+{% block title %}Kiswate Admin Dashboard{% endblock %}
 
 {% block content %}
-<section class="bg-light">
-  <div class="container">
-        {% if messages %}
-    <div class="row mb-3">
-        {% for message in messages %}
-        <div class="col-12">
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-                {{ message }}
-                <button class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+<div class="container-fluid py-3">
 
-    <div class="row g-4">
+{% if messages %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3">
+  {{ message }}<button class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
 
-      <!-- Total Teachers -->
-      <div class="col-md-6 col-lg-3">
-        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
-          <div class="card-body">
-            <div class="text-primary mb-2">
-              <i class="bi bi-person-badge-fill fs-1"></i>
-            </div>
-            <h5 class="fw-semibold">Total Schools</h5>
-            <h3 class="fw-bold">{{ schools|default:"0" }}</h3>
-            <p class="text-muted small mb-0">+5% since last week</p>
-          </div>
-        </div>
-      </div>
+<!-- Header -->
+<div class="mb-4">
+  <h4 class="fw-bold mb-0">Kiswate Platform Overview</h4>
+  <small class="text-muted">Real-time SaaS metrics across all schools</small>
+</div>
 
-      <!-- Total Students -->
-      <div class="col-md-6 col-lg-3">
-        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
-          <div class="card-body">
-            <div class="text-success mb-2">
-              <i class="bi bi-person-lines-fill fs-1"></i>
-            </div>
-            <h5 class="fw-semibold">Total Students</h5>
-            <h3 class="fw-bold">{{ students|default:"0" }}</h3>
-            <p class="text-muted small mb-0">+8% this month</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Total Parents -->
-      <div class="col-md-6 col-lg-3">
-        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
-          <div class="card-body">
-            <div class="text-warning mb-2">
-              <i class="bi bi-person-heart fs-1"></i>
-            </div>
-            <h5 class="fw-semibold">Parents</h5>
-            <h3 class="fw-bold">{{ parents|default:"0" }}</h3>
-            <p class="text-muted small mb-0">+3% this week</p>
-          </div>
-        </div>
-      </div>
-      <!-- Demo Requests -->
-            <div class="col-md-6 col-lg-3">
-        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
-          <div class="card-body">
-            <div class="text-warning mb-2">
-              <i class="bi bi-person-heart fs-1"></i>
-            </div>
-            <h5 class="fw-semibold">Demo Requests</h5>
-            <h3 class="fw-bold">{{ demo_requests|default:"0" }}</h3>
-            <p class="text-muted small mb-0">+3% this week</p>
-          </div>
-        </div>
-      </div>
-      <!-- Scholarships -->
-      <div class="col-md-6 col-lg-3">
-        <div class="card shadow-sm border-0 rounded-4 text-center p-3">
-          <div class="card-body">
-            <div class="text-danger mb-2">
-              <i class="bi bi-gem fs-1"></i>
-            </div>
-            <h5 class="fw-semibold">Scholarships</h5>
-            <h3 class="fw-bold">{{ scholarships|default:"0" }}</h3>
-            <p class="text-muted small mb-0">-2% vs last week</p>
-          </div>
-        </div>
-      </div>
-
+<!-- Top KPI Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-building fs-2 text-primary mb-1"></i>
+      <div class="small text-muted">Total Schools</div>
+      <div class="h4 fw-bold mb-0">{{ total_schools|intcomma }}</div>
+      <small class="text-success">{{ active_schools }} active</small>
     </div>
   </div>
-</section>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-people fs-2 text-success mb-1"></i>
+      <div class="small text-muted">Total Students</div>
+      <div class="h4 fw-bold mb-0">{{ total_students|intcomma }}</div>
+      <small class="text-success">{{ active_students }} active</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-person-badge fs-2 text-info mb-1"></i>
+      <div class="small text-muted">Teachers</div>
+      <div class="h4 fw-bold mb-0">{{ total_teachers|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-person-heart fs-2 text-warning mb-1"></i>
+      <div class="small text-muted">Parents</div>
+      <div class="h4 fw-bold mb-0">{{ total_parents|intcomma }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-envelope-paper fs-2 text-danger mb-1"></i>
+      <div class="small text-muted">Demo Requests</div>
+      <div class="h4 fw-bold mb-0">{{ total_demo_requests|intcomma }}</div>
+      {% if new_demos %}<small class="text-danger">{{ new_demos }} new</small>{% endif %}
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
+      <i class="bi bi-gem fs-2 text-secondary mb-1"></i>
+      <div class="small text-muted">Scholarships</div>
+      <div class="h4 fw-bold mb-0">{{ total_scholarships|intcomma }}</div>
+    </div>
+  </div>
+</div>
 
-<section class="py-5">
-  <div class="container">
-    <h2 class="fw-bold mb-4 text-center">Recent Payments</h2>
-
-    <div class="card shadow-sm border-0 rounded-4">
+<!-- Population & Subscription Row -->
+<div class="row g-3 mb-4">
+  <!-- Student Composition -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-pie-chart me-1 text-success"></i>Student Status</h6>
+      </div>
       <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead class="table-light">
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">School</th>
-                <th scope="col">Invoice</th>
-                <th scope="col">Subscription</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Payment Date</th>
-                <th scope="col" class="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for payment in recent_payment %}
-              <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>
-                 
-                </td>
-                <td>{{ activity.user.email }}</td>
-                <td><span class="badge bg-{{ activity.status|lower }}">{{ activity.get_status_display }}</span></td>
-                <td>${{ activity.amount|default:"0" }}</td>
-                <td>{{ activity.date|date:"M d, Y" }}</td>
-                <td class="text-center">
-                  <a href="" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
-                  <button class="btn btn-sm btn-outline-danger" onclick="deleteActivity({{ activity.id }})"><i class="bi bi-trash"></i></button>
-                </td>
-              </tr>
-              {% empty %}
-              <tr><td colspan="7" class="text-center text-muted">No recent Payments.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <canvas id="studentStatusChart" height="180"></canvas>
+        <div class="d-flex justify-content-around mt-2" style="font-size:.78rem;">
+          <span><span class="badge bg-success">Active</span> {{ active_students }}</span>
+          <span><span class="badge bg-warning text-dark">Suspended</span> {{ suspended_students }}</span>
+          <span><span class="badge bg-secondary">Other</span> {{ total_students|add:"-"|add:active_students|add:"-"|add:suspended_students|default:0 }}</span>
         </div>
       </div>
     </div>
   </div>
-</section>
+
+  <!-- Subscription Health -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-shield-check me-1 text-primary"></i>Subscription Health</h6>
+      </div>
+      <div class="card-body">
+        <canvas id="subChart" height="180"></canvas>
+        <div class="d-flex justify-content-around mt-2" style="font-size:.78rem;">
+          <span><span class="badge bg-success">Active</span> {{ active_subs }}</span>
+          <span><span class="badge bg-info">Trial</span> {{ trial_subs }}</span>
+          <span><span class="badge bg-danger">Expired</span> {{ expired_subs }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schools by Classification -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-bar-chart me-1 text-warning"></i>Schools by Classification</h6>
+      </div>
+      <div class="card-body">
+        {% for cls in schools_by_class %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-semibold">
+            {% if cls.school_classification == 'C1' %}National
+            {% elif cls.school_classification == 'C2' %}Extra-County
+            {% elif cls.school_classification == 'C3' %}County
+            {% elif cls.school_classification == 'C4' %}Sub-County/Day
+            {% else %}{{ cls.school_classification|default:"Unclassified" }}{% endif %}
+          </span>
+          <div class="d-flex align-items-center gap-2">
+            <div class="progress" style="width:80px;height:6px;">
+              <div class="progress-bar bg-primary" style="width:{% widthratio cls.n total_schools 100 %}%"></div>
+            </div>
+            <span class="badge bg-primary-subtle text-primary border border-primary">{{ cls.n }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-muted small text-center py-3">No classification data.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Schools by County + Recent Schools -->
+<div class="row g-3 mb-4">
+  <div class="col-md-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-geo-alt me-1 text-danger"></i>Schools by County (Top 10)</h6>
+      </div>
+      <div class="card-body p-0">
+        <canvas id="countyChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 py-2 d-flex align-items-center justify-content-between">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-building me-1 text-success"></i>Recent Schools</h6>
+        <a href="{% url 'kiswate_digital_app:school_list' %}" class="btn btn-xs btn-outline-success" style="font-size:.72rem;padding:.2rem .5rem;">View All</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
+          <thead class="table-light">
+            <tr><th>School</th><th>Code</th><th>Type</th><th>Status</th><th>Joined</th></tr>
+          </thead>
+          <tbody>
+            {% for s in recent_schools %}
+            <tr>
+              <td>
+                <div class="fw-semibold">{{ s.name }}</div>
+                <small class="text-muted">{{ s.county.name|default:"—" }}</small>
+              </td>
+              <td class="text-muted">{{ s.code }}</td>
+              <td>{{ s.get_school_classification_display|default:"—" }}</td>
+              <td>
+                {% if s.is_active %}<span class="badge bg-success">Active</span>
+                {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+              </td>
+              <td class="text-muted">{{ s.created_at|date:"d M Y" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">No schools yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Demo Requests -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-header bg-white border-0 py-2 d-flex align-items-center justify-content-between">
+    <h6 class="fw-semibold mb-0"><i class="bi bi-envelope-paper me-1 text-danger"></i>Recent Demo Requests</h6>
+    <a href="{% url 'kiswate_digital_app:demo_request_list' %}" class="btn btn-xs btn-outline-danger" style="font-size:.72rem;padding:.2rem .5rem;">View All</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
+      <thead class="table-light">
+        <tr><th>Name</th><th>School</th><th>County</th><th>Phone</th><th>Status</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        {% for d in recent_demos %}
+        <tr>
+          <td>{{ d.first_name }} {{ d.last_name }}</td>
+          <td>{{ d.school_name|default:"—" }}</td>
+          <td>{{ d.county|default:"—" }}</td>
+          <td>{{ d.contact_phone|default:"—" }}</td>
+          <td>
+            {% if d.lead_status == 'new' %}<span class="badge bg-danger">New</span>
+            {% elif d.lead_status == 'contacted' %}<span class="badge bg-info">Contacted</span>
+            {% elif d.lead_status == 'converted' %}<span class="badge bg-success">Converted</span>
+            {% else %}<span class="badge bg-secondary">{{ d.lead_status }}</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ d.created_at|date:"d M Y" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-3">No demo requests.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /container-fluid -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Student Status
+new Chart(document.getElementById('studentStatusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Active', 'Suspended', 'Other'],
+    datasets: [{ data: [{{ active_students }}, {{ suspended_students }}, 0], backgroundColor: ['#198754','#ffc107','#6c757d'], borderWidth:2 }]
+  },
+  options: { responsive:true, plugins:{ legend:{ display:false } } }
+});
+
+// Subscription Health
+new Chart(document.getElementById('subChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Active', 'Trial', 'Expired'],
+    datasets: [{ data: [{{ active_subs }}, {{ trial_subs }}, {{ expired_subs }}], backgroundColor: ['#198754','#0dcaf0','#dc3545'], borderWidth:2 }]
+  },
+  options: { responsive:true, plugins:{ legend:{ display:false } } }
+});
+
+// Schools by County
+new Chart(document.getElementById('countyChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for c in schools_by_county %}'{{ c.county_name|default:"Unknown" }}',{% endfor %}],
+    datasets: [{ label:'Schools', data:[{% for c in schools_by_county %}{{ c.n }},{% endfor %}], backgroundColor:'rgba(13,110,253,.7)', borderRadius:4 }]
+  },
+  options: { indexAxis:'y', responsive:true, plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ precision:0 } } } }
+});
+</script>
 {% endblock %}

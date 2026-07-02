@@ -1,0 +1,100 @@
+{% extends 'Dashboard/base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}Subscriptions & Invoices{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0"><i class="bi bi-gem me-2 text-primary"></i>School Subscriptions</h4>
+    <small class="text-muted">All school subscription records</small>
+  </div>
+  <a href="{% url 'kiswate_digital_app:subscription_plan_list' %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-file-earmark-plus me-1"></i>Manage Plans
+  </a>
+</div>
+
+<!-- Filters -->
+<form method="get" class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search school name or code...">
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
+          <option value="trial" {% if status == 'trial' %}selected{% endif %}>Trial</option>
+          <option value="expired" {% if status == 'expired' %}selected{% endif %}>Expired</option>
+          <option value="suspended" {% if status == 'suspended' %}selected{% endif %}>Suspended</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button class="btn btn-sm btn-success flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="{% url 'kiswate_digital_app:invoice_list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x"></i></a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>School</th>
+          <th>Plan</th>
+          <th>Status</th>
+          <th>Price Charged</th>
+          <th>Billing</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Students</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in subscriptions %}
+        <tr>
+          <td>
+            <div class="fw-semibold">{{ sub.school.name }}</div>
+            <small class="text-muted">{{ sub.school.code }}</small>
+          </td>
+          <td>{{ sub.plan.name|default:"—" }}</td>
+          <td>
+            {% if sub.status == 'active' %}<span class="badge bg-success">Active</span>
+            {% elif sub.status == 'trial' %}<span class="badge bg-info">Trial</span>
+            {% elif sub.status == 'expired' %}<span class="badge bg-danger">Expired</span>
+            {% else %}<span class="badge bg-secondary">{{ sub.status }}</span>{% endif %}
+          </td>
+          <td>KES {{ sub.price_charged|floatformat:0|intcomma }}</td>
+          <td>{{ sub.billing_cycle|default:"—" }}</td>
+          <td class="text-muted small">{{ sub.start_date|date:"d M Y"|default:"—" }}</td>
+          <td class="text-muted small">{{ sub.end_date|date:"d M Y"|default:"—" }}</td>
+          <td>{{ sub.current_students_count|default:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No subscriptions found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if subscriptions.has_other_pages %}
+  <div class="card-footer bg-white">
+    <nav><ul class="pagination pagination-sm justify-content-center mb-0">
+      {% if subscriptions.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ subscriptions.previous_page_number }}&q={{ q }}&status={{ status }}">&laquo;</a></li>{% endif %}
+      {% for n in subscriptions.paginator.page_range %}
+        {% if subscriptions.number == n %}<li class="page-item active"><span class="page-link">{{ n }}</span></li>
+        {% elif n > subscriptions.number|add:-3 and n < subscriptions.number|add:3 %}<li class="page-item"><a class="page-link" href="?page={{ n }}&q={{ q }}&status={{ status }}">{{ n }}</a></li>{% endif %}
+      {% endfor %}
+      {% if subscriptions.has_next %}<li class="page-item"><a class="page-link" href="?page={{ subscriptions.next_page_number }}&q={{ q }}&status={{ status }}">&raquo;</a></li>{% endif %}
+    </ul></nav>
+  </div>
+  {% endif %}
+</div>
+
+</div>
+{% endblock %}

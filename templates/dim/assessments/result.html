@@ -1,0 +1,89 @@
+{% extends "dim/base.html" %}
+{% block title %}Result: {{ attempt.assessment.title }}{% endblock %}
+{% block page_title %}Assessment Result{% endblock %}
+{% block nav_assess_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0">{{ attempt.assessment.title }} — Result</h5>
+  <a href="{% url 'kiswate_digital_app:assessment_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-trophy"></i></div>
+      <div class="stat-value">{{ attempt.score|default:"—" }}</div>
+      <div class="stat-label">Score / {{ attempt.assessment.total_marks }}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon {% if attempt.passed %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %} mb-2">
+        <i class="bi {% if attempt.passed %}bi-check-circle{% else %}bi-x-circle{% endif %}"></i>
+      </div>
+      <div class="stat-value">{{ attempt.percentage|default:"—" }}%</div>
+      <div class="stat-label">{% if attempt.passed %}Passed{% else %}Not passed{% endif %}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-bullseye"></i></div>
+      <div class="stat-value">{{ attempt.assessment.pass_mark }}%</div>
+      <div class="stat-label">Pass Mark</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon bg-secondary-subtle text-secondary mb-2"><i class="bi bi-clock-history"></i></div>
+      <div class="stat-value" style="font-size:1rem;">{{ attempt.submitted_at|date:"M d H:i"|default:"—" }}</div>
+      <div class="stat-label">Submitted</div>
+    </div>
+  </div>
+</div>
+
+{% if attempt.assessment.results_published %}
+<div class="module-card">
+  <h6 class="fw-semibold mb-3">Answer Review</h6>
+  {% for answer in answers %}
+  <div class="border rounded-3 p-3 mb-3
+    {% if answer.marks_awarded %}
+      {% if answer.marks_awarded >= answer.question.marks %}border-success
+      {% else %}border-danger{% endif %}
+    {% endif %}">
+    <div class="fw-semibold mb-2" style="font-size:.875rem;">
+      {{ forloop.counter }}. {{ answer.question.text }}
+    </div>
+    {% if answer.question.question_type in 'mcq,true_false' %}
+    <div style="font-size:.83rem;">
+      <span class="text-muted">Your answer: </span>
+      <strong>{{ answer.selected_choice.text|default:"Not answered" }}</strong>
+      {% if answer.selected_choice.is_correct %}
+      <i class="bi bi-check-circle-fill text-success ms-1"></i>
+      {% elif answer.selected_choice %}
+      <i class="bi bi-x-circle-fill text-danger ms-1"></i>
+      {% endif %}
+    </div>
+    {% if answer.question.explanation %}
+    <div class="text-muted mt-1" style="font-size:.78rem;">
+      <i class="bi bi-lightbulb me-1"></i>{{ answer.question.explanation }}
+    </div>
+    {% endif %}
+    {% else %}
+    <div style="font-size:.83rem;"><span class="text-muted">Answer: </span>{{ answer.text_answer|default:"—" }}</div>
+    {% if answer.marks_awarded is not None %}
+    <div class="text-muted" style="font-size:.78rem;">Marks: {{ answer.marks_awarded }} / {{ answer.question.marks }}</div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="module-card text-center py-4 text-muted">
+  <i class="bi bi-lock" style="font-size:2rem;"></i>
+  <p class="mt-2 mb-0">Results have not been published yet. Check back later.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -145,18 +145,34 @@
       </div>
       <nav class="d-flex flex-column gap-1">
 
-      <a class="side-link active" href="{% url 'userauths:parent-dashboard' %}">
+      <a class="side-link {% block nav_dashboard %}{% endblock %}" href="{% url 'school:parent-portal' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
-
-
-        <a class="side-link" href=""><i class="bi bi-clipboard-check"></i> Timetables</a>
-        <a class="side-link" href=""><i class="bi bi-clipboard-check"></i> Announcements</a>
-
-
-      <a class="side-link" href=""><i class="bi bi-gear"></i> Profile</a>
+      <a class="side-link {% block nav_notifications %}{% endblock %}" href="{% url 'school:parent-notifications' %}">
+        <i class="bi bi-bell"></i> Notifications
+        {% with cnt=request.user.notifications.filter_unread %}{% endwith %}
+      </a>
+      <a class="side-link {% block nav_complaints %}{% endblock %}" href="{% url 'school:parent-complaints' %}">
+        <i class="bi bi-chat-square-text"></i> Complaints
+      </a>
+      <a class="side-link {% block nav_assignments %}{% endblock %}" href="{% url 'school:parent-assignments' %}">
+        <i class="bi bi-clipboard-check"></i> Assignments
+      </a>
+      <a class="side-link {% block nav_results %}{% endblock %}" href="{% url 'school:parent-exam-results' %}">
+        <i class="bi bi-bar-chart-line"></i> Exam Results
+      </a>
+      <a class="side-link {% block nav_fees %}{% endblock %}" href="{% url 'school:parent-fees' %}">
+        <i class="bi bi-cash-stack"></i> Fee Updates
+      </a>
+      <a class="side-link {% block nav_attendance %}{% endblock %}" href="{% url 'school:parent-attendance' %}">
+        <i class="bi bi-person-check"></i> Attendance
+      </a>
+      <a class="side-link {% block nav_announcements %}{% endblock %}" href="{% url 'school:parent-announcements' %}">
+        <i class="bi bi-megaphone"></i> Announcements
+      </a>
+      <hr class="border-secondary my-1">
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
-        <i class="bi bi-gear"></i> Sign Out
+        <i class="bi bi-box-arrow-right"></i> Sign Out
       </a>
     </nav>
 

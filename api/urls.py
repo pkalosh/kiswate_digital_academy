@@ -5,10 +5,13 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     register, login, LogoutView, StaticDataView,
     TeacherTimetableView, StudentTimetableView,
-    AttendanceRecordsView, DisciplineRecordsView,
-    AssignmentsView, AnnouncementsView,
-    StudentStatsView, ParentStatsView,AttendanceDetailView,TeacherStatsView,ParentChildrenView,TeacherLessonsView,
-    StudentsListView,StreamAttendanceRecordsView
+    AttendanceRecordsView, AttendanceDetailView,
+    DisciplineRecordsView, DisciplineDetailView,
+    AssignmentsView, AssignmentDetailView,
+    AnnouncementsView,
+    StudentStatsView, ParentStatsView, TeacherStatsView,
+    ParentChildrenView, TeacherLessonsView,
+    StudentsListView, StreamAttendanceRecordsView,
 )
 
 urlpatterns = [
@@ -37,9 +40,9 @@ urlpatterns = [
 
     path('school/students/', StudentsListView.as_view(), name='school_students'),
     path('discipline/', DisciplineRecordsView.as_view(), name='discipline_records'),
-    path('discipline/<int:pk>/', DisciplineRecordsView.as_view(), name='discipline_detail'),
+    path('discipline/<int:pk>/', DisciplineDetailView.as_view(), name='discipline_detail'),
     path('assignments/', AssignmentsView.as_view(), name='assignments'),
-    path('assignments/<int:pk>/', AssignmentsView.as_view(), name='assignment_detail'),
+    path('assignments/<int:pk>/', AssignmentDetailView.as_view(), name='assignment_detail'),
     
     path('announcements/', AnnouncementsView.as_view(), name='announcements'),
     

@@ -1,0 +1,94 @@
+{% extends "dim/base.html" %}
+{% block title %}Attendance Report{% endblock %}
+{% block page_title %}Attendance Report{% endblock %}
+{% block nav_reports_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-person-check me-2 text-success"></i>Attendance Report</h5>
+</div>
+
+<!-- Filter -->
+<div class="module-card mb-4">
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-5">
+      <label class="form-label">Program</label>
+      <select name="program" class="form-select form-select-sm">
+        <option value="">— Select Program —</option>
+        {% for prog in programs %}
+        <option value="{{ prog.pk }}" {% if program.pk == prog.pk %}selected{% endif %}>{{ prog.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-brand btn-sm">
+        <i class="bi bi-funnel me-1"></i>Filter
+      </button>
+    </div>
+  </form>
+</div>
+
+{% if program %}
+<div class="mb-3">
+  <h6 class="fw-semibold">{{ program.name }}</h6>
+  <p class="text-muted" style="font-size:.83rem;">
+    Attendance is derived from student <strong>Join-click records</strong>
+    and teacher <strong>manual marks</strong>. Each row = one virtual class session.
+  </p>
+</div>
+
+{% if classes_data %}
+<div class="table-card mb-4">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Class</th><th>Date</th><th>Enrolled</th><th>Present</th><th>Absent</th>
+        <th style="width:160px;">Rate</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in classes_data %}
+      <tr>
+        <td class="fw-semibold" style="font-size:.875rem;">{{ row.vc.title }}</td>
+        <td style="font-size:.8rem;">{{ row.vc.scheduled_at|date:"M d, Y H:i" }}</td>
+        <td>{{ row.enrolled_count }}</td>
+        <td class="text-success fw-semibold">{{ row.present_count }}</td>
+        <td class="text-danger">{{ row.absent_count }}</td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <div class="rate-bar flex-grow-1">
+              <div class="rate-fill" style="width:{{ row.rate_pct }}%;
+                background: {% if row.rate_pct >= 75 %}#10b981{% elif row.rate_pct >= 50 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+            </div>
+            <span style="font-size:.75rem; min-width:35px;">{{ row.rate_pct }}%</span>
+          </div>
+        </td>
+        <td>
+          <a href="{% url 'kiswate_digital_app:virtual_class_detail' row.vc.pk %}"
+             class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">Detail</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="module-card text-center py-4 text-muted">
+  <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+  <p class="mt-2 mb-0">No classes found for this program.</p>
+</div>
+{% endif %}
+{% else %}
+<div class="module-card text-center py-5 text-muted">
+  <i class="bi bi-funnel" style="font-size:2.5rem;"></i>
+  <p class="mt-3 mb-0">Select a program above to view attendance data.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Pass programs list for filter — loaded from view context
+const programs = [{% for prog in programs %}{"id": {{ prog.pk }}, "name": "{{ prog.name }}"}{% if not forloop.last %},{% endif %}{% endfor %}];
+</script>
+{% endblock %}

@@ -27,19 +27,21 @@
 
     <nav class="menu">
       <!-- Dashboard -->
-      <a class="side-link active" href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
+      <a class="side-link" href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
-      <!-- Administration -->
+      <!-- Schools -->
       <div class="menu-group">
         <button class="side-link has-sub" data-target="administration">
-          <i class="bi bi-gear-wide-connected"></i> Administration
+          <i class="bi bi-building"></i> Schools
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu" id="administration">
-          <li><a href=""><i class="bi bi-building"></i> All Schools</a></li>
-          <li><a href=""><i class="bi bi-building"></i> New Schools</a></li>
+          <li><a href="{% url 'kiswate_digital_app:school_list' %}"><i class="bi bi-list-ul"></i> All Schools</a></li>
+          <li><a href="{% url 'kiswate_digital_app:new_school' %}"><i class="bi bi-plus-circle"></i> Add School</a></li>
+          <li><a href="{% url 'kiswate_digital_app:school_admin_list' %}"><i class="bi bi-person-badge"></i> School Admins</a></li>
+          <li><a href="{% url 'kiswate_digital_app:demo_request_list' %}"><i class="bi bi-envelope-paper"></i> Demo Requests</a></li>
         </ul>
       </div>
 
@@ -50,42 +52,97 @@
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu" id="users">
-          <li><a href=""><i class="bi bi-person-lines-fill"></i> School Admins</a></li>
-        
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All Users</a></li>
+          <li><a href="{% url 'kiswate_digital_app:staff-members' %}"><i class="bi bi-person-workspace"></i> Staff Members</a></li>
+          <li><a href="{% url 'kiswate_digital_app:enrollment_list' %}"><i class="bi bi-journal-bookmark"></i> Enrollments</a></li>
         </ul>
       </div>
 
-            <!-- Subscriptions -->
+      <!-- Subscriptions -->
       <div class="menu-group">
         <button class="side-link has-sub" data-target="Subscriptions">
           <i class="bi bi-gem"></i> Subscriptions
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu" id="Subscriptions">
-          <li><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}"><i class="bi bi-file-earmark-plus"></i> Subscriptions List</a></li>
-          <li><a href=""><i class="bi bi-file-earmark-plus"></i> School Subscriptions</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-plus"></i> Invoices</a></li>
-          <li><a href="#"><i class="bi bi-arrow-down-circle"></i> Payment transactions</a></li>
+          <li><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}"><i class="bi bi-file-earmark-plus"></i> Subscription Plans</a></li>
+          <li><a href="{% url 'kiswate_digital_app:invoice_list' %}"><i class="bi bi-receipt"></i> School Subscriptions</a></li>
+          <li><a href="{% url 'kiswate_digital_app:payment_history' %}"><i class="bi bi-arrow-down-circle"></i> Payment History</a></li>
         </ul>
       </div>
 
+      <!-- Classes & Assignments -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="classes">
+          <i class="bi bi-camera-video"></i> Classes
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu" id="classes">
+          <li><a href="{% url 'kiswate_digital_app:virtual_class_list' %}"><i class="bi bi-play-circle"></i> Virtual Classes</a></li>
+          <li><a href="{% url 'kiswate_digital_app:lesson_list' %}"><i class="bi bi-book"></i> Lessons</a></li>
+          <li><a href="{% url 'kiswate_digital_app:assignment_list' %}"><i class="bi bi-clipboard-check"></i> Assignments</a></li>
+        </ul>
+      </div>
+
+      <!-- Assessments -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="assessments">
+          <i class="bi bi-pencil-square"></i> Assessments
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu" id="assessments">
+          <li><a href="{% url 'kiswate_digital_app:assessment_list' %}"><i class="bi bi-list-check"></i> All Assessments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:assessment_create' %}"><i class="bi bi-plus-circle"></i> New Assessment</a></li>
+        </ul>
+      </div>
 
       <!-- Scholarships -->
       <div class="menu-group">
         <button class="side-link has-sub" data-target="scholarships">
-          <i class="bi bi-gem"></i> Scholarships
+          <i class="bi bi-award"></i> Scholarships
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu" id="scholarships">
-          <li><a href="{% url 'kiswate_digital_app:scholarship_list_create' %}"><i class="bi bi-file-earmark-plus"></i> Scholarship List</a></li>
-          <li><a href="#"><i class="bi bi-file-earmark-plus"></i> Applications</a></li>
-          <li><a href="#"><i class="bi bi-arrow-down-circle"></i> Disbursements</a></li>
+          <li><a href="{% url 'kiswate_digital_app:scholarship_list_create' %}"><i class="bi bi-trophy"></i> Scholarship List</a></li>
         </ul>
       </div>
 
-      <!-- Settings -->
+      <!-- Notifications -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="notifications">
+          <i class="bi bi-bell"></i> Notifications
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu" id="notifications">
+          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-bell-fill"></i> All Notifications</a></li>
+          <li><a href="{% url 'kiswate_digital_app:send_bulk_notification' %}"><i class="bi bi-broadcast"></i> Send Bulk</a></li>
+        </ul>
+      </div>
+
+      <!-- Reports -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="reports">
+          <i class="bi bi-bar-chart-line"></i> Reports
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu" id="reports">
+          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-speedometer"></i> Reports Dashboard</a></li>
+          <li><a href="{% url 'kiswate_digital_app:student_performance_report' %}"><i class="bi bi-person-check"></i> Student Performance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:attendance_report' %}"><i class="bi bi-calendar-check"></i> Attendance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:teacher_activity_report' %}"><i class="bi bi-person-workspace"></i> Teacher Activity</a></li>
+        </ul>
+      </div>
+
+      <!-- Support -->
+      <a class="side-link" href="{% url 'kiswate_digital_app:support' %}">
+        <i class="bi bi-headset"></i> Support
+      </a>
+
+      <hr style="border-color:#333;margin:.5rem 1rem;">
+
+      <!-- Sign Out -->
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
-        <i class="bi bi-gear"></i> Sign Out
+        <i class="bi bi-box-arrow-right"></i> Sign Out
       </a>
     </nav>
   </aside>

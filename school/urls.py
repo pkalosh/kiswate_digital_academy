@@ -49,6 +49,7 @@ urlpatterns = [
     path("ajax/schools/", views.ajax_schools, name="ajax-schools"),
     path("ajax/grades/", views.ajax_grades, name="ajax-grades"),
     path("ajax/subjects/", views.ajax_subjects, name="ajax-subjects"),
+    path("ajax/students/", views.ajax_students_search, name="ajax-students-search"),
 
     # # Parents Management
     # path('parents/', views.parent_list_create, name='parent_list_create'),
@@ -150,11 +151,11 @@ urlpatterns = [
     path('ajax/streams/', views.get_streams_by_grade, name='get_streams_by_grade'),
     # Attendance Reports
     path('teacher/attendance/', views.teacher_attendance, name='teacher-attendance'),
-    path('teacher/<int:lesson_id>/attendance/summary/', views.teacher_attendance_summary, name='teacher-attendance-summary'),
+    path('teacher/attendance/summary/', views.teacher_attendance_summary, name='teacher-attendance-summary'),
     path('teacher/attendance/<int:lesson_id>/mark/', views.teacher_attendance_mark, name='teacher-attendance-mark'),
     path('teacher/attendance/<int:attendance_id>/edit/', views.teacher_attendance_edit, name='teacher-attendance-edit'),
     path('teacher/attendance/<int:attendance_id>/delete/', views.teacher_attendance_delete, name='teacher-attendance-delete'),
-    path('teacher/attendance/<int:grade_id>/class/', views.teacher_class_attendance_report, name='teacher-class-attendance-report'),
+    path('teacher/attendance/<int:stream_id>/class/', views.teacher_class_attendance_report, name='teacher-class-attendance-report'),
     path('assign-class-teacher/<int:teacher_id>/', views.assign_class_teacher_for_teacher, name='assign-class-teacher-for-teacher'),
     
     # Discipline Management
@@ -166,8 +167,8 @@ urlpatterns = [
     #teacher discipline'
     path('teacher/discipline/', views.teacher_discipline, name='teacher-discipline'),
     path('teacher/discipline/create/', views.teacher_discipline_create, name='teacher-discipline-create'),
-    path('teacher/discipline/<int:pk>/edit/', views.teacher_discipline_edit, name='teacher-discipline-edit'),
-    path('teacher/discipline/<int:pk>/delete/', views.teacher_discipline_delete, name='teacher-discipline-delete'),
+    path('teacher/discipline/<int:record_id>/edit/', views.teacher_discipline_edit, name='teacher-discipline-edit'),
+    path('teacher/discipline/<int:record_id>/delete/', views.teacher_discipline_delete, name='teacher-discipline-delete'),
     # Notifications
     path('notifications/', views.school_notifications, name='school-notifications'),
     path('notifications/send/', views.notification_send, name='notification-send'),
@@ -188,6 +189,7 @@ urlpatterns = [
     # student submission create
     path('submissions/create/', views.submission_create, name='submission-create'),
     path('student-submissions/', views.student_submissions, name='student-submissions'),
+    path('student/assignments/', views.student_assignments_portal, name='student-assignments'),
     path('submissions/<int:pk>/edit/', views.submission_edit, name='submission-edit'),
     path('submissions/<int:pk>/delete/', views.submission_delete, name='submission-delete'),
 
@@ -221,5 +223,53 @@ urlpatterns = [
     path("teacher/attendance/<int:lesson_id>/smart/", views.teacher_attendance_smart, name="teacher-attendance-smart"),
     path("teacher/discipline/create/ajax/", views.teacher_discipline_create_ajax, name="teacher-discipline-create-ajax"),
     path('upload-excel/', views.universal_excel_upload, name='universal_excel_upload'),
-    path('upload-page/', views.upload_excel_page, name='upload_excel_page')
+    path('upload-page/', views.upload_excel_page, name='upload_excel_page'),
+
+    # Subject Catalog (Kiswate admin)
+    path('catalog/subjects/', views.catalog_subject_list, name='catalog-subject-list'),
+    path('catalog/subjects/create/', views.catalog_subject_create, name='catalog-subject-create'),
+    path('catalog/subjects/<int:pk>/edit/', views.catalog_subject_edit, name='catalog-subject-edit'),
+    path('catalog/subjects/<int:pk>/delete/', views.catalog_subject_delete, name='catalog-subject-delete'),
+    path('catalog/subjects/<int:pk>/toggle/', views.catalog_subject_toggle, name='catalog-subject-toggle'),
+    path('catalog/subjects/bulk-upload/', views.catalog_subject_bulk_upload, name='catalog-subject-bulk-upload'),
+
+    # Subject Activation (school principal)
+    path('subjects/from-catalog/', views.subject_activate_from_catalog, name='subject-activate-catalog'),
+
+    # Parent Self-Service Portal
+    path('parent/portal/', views.parent_portal, name='parent-portal'),
+    path('parent/notifications/', views.parent_notifications, name='parent-notifications'),
+    path('parent/complaints/', views.parent_complaints, name='parent-complaints'),
+    path('parent/assignments/', views.parent_assignments, name='parent-assignments'),
+    path('parent/exam-results/', views.parent_exam_results, name='parent-exam-results'),
+    path('parent/fees/', views.parent_fee_updates, name='parent-fees'),
+    path('parent/attendance/', views.parent_attendance, name='parent-attendance'),
+
+    # Student status actions (principal/deputy only)
+    path('students/<int:student_id>/suspend/', views.student_suspend, name='student-suspend'),
+    path('students/<int:student_id>/expel/', views.student_expel, name='student-expel'),
+    path('students/<int:student_id>/reinstate/', views.student_reinstate, name='student-reinstate'),
+
+    # Admin: view complaints
+    path('manage-complaints/', views.admin_complaints_list, name='admin-complaints'),
+
+    # Bulk notifications
+    path('notifications/bulk/', views.bulk_notify, name='bulk-notify'),
+
+    # Student notifications (in-app)
+    path('student/notifications/', views.student_notifications, name='student-notifications'),
+
+    # Announcements
+    path('announcements/', views.announcement_list, name='announcements'),
+    path('announcements/create/', views.announcement_create, name='announcement-create'),
+    path('announcements/<int:pk>/delete/', views.announcement_delete, name='announcement-delete'),
+    path('parent/announcements/', views.parent_announcements, name='parent-announcements'),
+    path('student/announcements/', views.student_announcements, name='student-announcements'),
+
+    # Finance Dashboard
+    path('finance-dashboard/', views.finance_dashboard, name='finance-dashboard'),
+    path('finance/invoice/create/', views.finance_create_invoice, name='finance-create-invoice'),
+    path('finance/invoice/<int:invoice_id>/payment/', views.finance_record_payment, name='finance-record-payment'),
+    path('finance/invoice/<int:invoice_id>/receipt/', views.finance_receipt, name='finance-receipt'),
+    path('finance/invoice/<int:invoice_id>/stk-push/', views.finance_stk_push, name='finance-stk-push'),
 ]

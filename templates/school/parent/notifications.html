@@ -1,0 +1,140 @@
+{% extends 'school/parent/base.html' %}
+{% block title %}Notifications{% endblock %}
+{% block nav_notifications %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h5 class="fw-bold mb-0"><i class="bi bi-bell me-1 text-success"></i>Notifications</h5>
+    {% if unread_count %}<small class="text-warning fw-semibold">{{ unread_count }} unread</small>{% endif %}
+  </div>
+  {% if unread_count %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="mark_all_read">
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-check2-all me-1"></i>Mark all read</button>
+  </form>
+  {% endif %}
+</div>
+
+<!-- Filters -->
+<form method="get" class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label form-label-sm mb-1">From Date</label>
+        <input type="date" name="date_from" value="{{ request.GET.date_from }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label form-label-sm mb-1">To Date</label>
+        <input type="date" name="date_to" value="{{ request.GET.date_to }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label form-label-sm mb-1">Status</label>
+        <select name="read_status" class="form-select form-select-sm">
+          <option value="">All</option>
+          <option value="unread" {% if request.GET.read_status == 'unread' %}selected{% endif %}>Unread</option>
+          <option value="read" {% if request.GET.read_status == 'read' %}selected{% endif %}>Read</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button class="btn btn-sm btn-success flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="{% url 'school:parent-notifications' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x"></i></a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="card k-card border-0 shadow-sm">
+  <div class="list-group list-group-flush">
+    {% for notif in notifications %}
+    <div class="list-group-item {% if not notif.is_read %}bg-light{% endif %} d-flex gap-3 align-items-start py-3">
+      <div class="mt-1 flex-shrink-0">
+        {% if not notif.is_read %}
+          <span class="badge bg-warning rounded-pill" style="width:10px;height:10px;padding:0;display:inline-block;"></span>
+        {% else %}
+          <i class="bi bi-check2 text-muted"></i>
+        {% endif %}
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-semibold">{{ notif.title }}</div>
+        <div class="text-muted small">{{ notif.message }}</div>
+        {% if notif.related_attendance %}
+        <div class="mt-1 small text-info">
+          <i class="bi bi-person-check me-1"></i>
+          Attendance: {{ notif.related_attendance.get_status_display }} on {{ notif.related_attendance.date }}
+        </div>
+        {% endif %}
+        {% if notif.related_discipline %}
+        <div class="mt-1 small text-danger">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Discipline: {{ notif.related_discipline.get_incident_type_display }}
+        </div>
+        <div class="mt-1 d-flex gap-2 flex-wrap">
+          {% if notif.sms_sent is not None %}
+            {% if notif.sms_sent %}
+            <span class="badge rounded-pill" style="background:#e6f7ec;color:#0b7a2a;font-size:.7rem;">
+              <i class="bi bi-chat-dots me-1"></i>SMS Sent
+            </span>
+            {% else %}
+            <span class="badge rounded-pill" style="background:#fde8ec;color:#bb0a21;font-size:.7rem;" title="{{ notif.sms_error }}">
+              <i class="bi bi-chat-dots-fill me-1"></i>SMS Failed
+            </span>
+            {% endif %}
+          {% endif %}
+          {% if notif.email_sent is not None %}
+            {% if notif.email_sent %}
+            <span class="badge rounded-pill" style="background:#e6f7ec;color:#0b7a2a;font-size:.7rem;">
+              <i class="bi bi-envelope-check me-1"></i>Email Sent
+            </span>
+            {% else %}
+            <span class="badge rounded-pill" style="background:#fde8ec;color:#bb0a21;font-size:.7rem;" title="{{ notif.email_error }}">
+              <i class="bi bi-envelope-x me-1"></i>Email Failed
+            </span>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="text-end flex-shrink-0">
+        <div class="text-muted small text-nowrap">{{ notif.sent_at|date:"d M Y" }}</div>
+        <div class="text-muted" style="font-size:.72rem;">{{ notif.sent_at|time:"H:i" }}</div>
+        {% if not notif.is_read %}
+        <form method="post" class="mt-1">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="mark_read">
+          <input type="hidden" name="notification_id" value="{{ notif.pk }}">
+          <button type="submit" class="btn btn-xs btn-outline-secondary px-1 py-0" style="font-size:.7rem;">Mark read</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-bell-slash display-4 d-block mb-2 opacity-50"></i>
+      No notifications found.
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if notifications.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if notifications.has_previous %}
+    <li class="page-item"><a class="page-link" href="?page={{ notifications.previous_page_number }}&date_from={{ request.GET.date_from }}&date_to={{ request.GET.date_to }}&read_status={{ request.GET.read_status }}">&laquo;</a></li>
+    {% endif %}
+    {% for num in notifications.paginator.page_range %}
+      {% if notifications.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > notifications.number|add:-3 and num < notifications.number|add:3 %}
+        <li class="page-item"><a class="page-link" href="?page={{ num }}&date_from={{ request.GET.date_from }}&date_to={{ request.GET.date_to }}&read_status={{ request.GET.read_status }}">{{ num }}</a></li>
+      {% endif %}
+    {% endfor %}
+    {% if notifications.has_next %}
+    <li class="page-item"><a class="page-link" href="?page={{ notifications.next_page_number }}&date_from={{ request.GET.date_from }}&date_to={{ request.GET.date_to }}&read_status={{ request.GET.read_status }}">&raquo;</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

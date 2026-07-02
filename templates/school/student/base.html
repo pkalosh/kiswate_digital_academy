@@ -142,26 +142,24 @@
          <span> Student Dashboard</span></a>
       </div>
       <nav class="d-flex flex-column gap-1">
-
-      <a class="side-link active" href="{% url 'userauths:student-dashboard' %}">
-        <i class="bi bi-speedometer2"></i> Dashboard
+      <a class="side-link" href="{% url 'userauths:student-dashboard' %}">
+        <i class="bi bi-speedometer2 me-1"></i> Dashboard
       </a>
-
-      
-      <!-- Dropdown (Collapsible) -->
-      <a class="side-link d-flex justify-content-between align-items-center" 
-        data-bs-toggle="collapse" href="#agencyMenu" role="button" aria-expanded="false" aria-controls="agencyMenu">
-        <span><i class="bi bi-diagram-3"></i> Schools Management</span>
-        <i class="bi bi-chevron-down small"></i>
+      <a class="side-link" href="{% url 'school:student-assignments' %}">
+        <i class="bi bi-clipboard-check me-1"></i> Assignments
       </a>
-      <div class="collapse ps-4" id="agencyMenu">
-
-        <a class="side-link" href="{% url 'school:school-assignments' %}"><i class="bi bi-clipboard-check"></i> Assignments</a>
-        <a class="side-link" href="{% url 'school:school-assignments' %}"><i class="bi bi-clipboard-check"></i> Annoucements</a>
-      </div>
-      <a class="side-link" href=""><i class="bi bi-gear"></i> Profile</a>
+      <a class="side-link" href="{% url 'school:student-announcements' %}">
+        <i class="bi bi-megaphone me-1"></i> Announcements
+      </a>
+      <a class="side-link" href="{% url 'school:student-notifications' %}">
+        <i class="bi bi-bell me-1"></i> Notifications
+      </a>
+      <a class="side-link" href="{% url 'school:parent-fees' %}">
+        <i class="bi bi-cash-stack me-1"></i> Fee Balance
+      </a>
+      <hr class="border-secondary my-1">
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
-        <i class="bi bi-gear"></i> Sign Out
+        <i class="bi bi-box-arrow-right me-1"></i> Sign Out
       </a>
     </nav>
 

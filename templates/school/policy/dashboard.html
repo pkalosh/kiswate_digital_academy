@@ -1,169 +1,542 @@
 {% extends "school/policy/base.html" %}
 {% load humanize %}
+{% block title %}National Dashboard{% endblock %}
+{% block nav_dash %}active{% endblock %}
+{% block page_title %}National School Intelligence Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{% endblock %}
 
 {% block content %}
 
-<div class="container mt-4">
+<!-- ══════════════════════════════════════════════════════════
+     FILTER BAR
+═══════════════════════════════════════════════════════════ -->
+<form method="get" id="filterForm" class="filter-bar mb-4">
+  <div class="row g-2 align-items-end">
+    <div class="col-6 col-sm-4 col-lg-2">
+      <label class="form-label fw-semibold mb-1" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">County</label>
+      <select name="county" id="filterCounty" class="form-select form-select-sm" onchange="onCountyChange(this)">
+        <option value="">All Counties</option>
+        {% for co in counties %}
+        <option value="{{ co.id }}" {% if sel_county == co.id|stringformat:'s' %}selected{% endif %}>{{ co.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-sm-4 col-lg-2">
+      <label class="form-label fw-semibold mb-1" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">Sub-County</label>
+      <select name="subcounty" id="filterSubcounty" class="form-select form-select-sm">
+        <option value="">All Sub-Counties</option>
+        {% for sc in sub_counties %}
+        <option value="{{ sc.id }}" {% if sel_subcounty == sc.id|stringformat:'s' %}selected{% endif %}>{{ sc.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-sm-4 col-lg-2">
+      <label class="form-label fw-semibold mb-1" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">Classification</label>
+      <select name="classification" class="form-select form-select-sm">
+        <option value="">All Types</option>
+        {% for val, label in classification_choices %}
+        <option value="{{ val }}" {% if sel_classification == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-sm-4 col-lg-2">
+      <label class="form-label fw-semibold mb-1" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px">Term</label>
+      <select name="term" class="form-select form-select-sm">
+        <option value="">All Terms</option>
+        {% for t in all_terms %}
+        <option value="{{ t.id }}" {% if sel_term == t.id|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-lg-4 d-flex gap-2 justify-content-lg-end">
+      <button type="submit" class="btn btn-sm btn-success px-3">
+        <i class="bi bi-funnel me-1"></i> Apply
+      </button>
+      <a href="{% url 'school:policy-dashboard' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-x-circle me-1"></i> Clear
+      </a>
+      <button type="button" class="btn btn-sm btn-outline-dark" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i> Print
+      </button>
+    </div>
+  </div>
+</form>
 
-<h2>📊 National School Intelligence Dashboard</h2>
+<!-- ══════════════════════════════════════════════════════════
+     KPI TILES
+═══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
 
-<!-- KPI CARDS -->
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(11,122,42,.1);color:#0b7a2a">
+        <i class="bi bi-building"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ total_schools|intcomma }}</div>
+        <div class="kpi-label">Schools</div>
+      </div>
+    </div>
+  </div>
 
-<div class="row mb-4">
-{% for card in stats_cards %}
-<div class="col-md-3">
-<div class="card shadow-sm">
-<div class="card-body text-center">
-<i class="bi {{card.icon}} fs-2 text-success"></i>
-<h3>{{card.value|intcomma}}</h3>
-<p>{{card.title}}</p>
-</div>
-</div>
-</div>
-{% endfor %}
-</div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(52,152,219,.1);color:#2980b9">
+        <i class="bi bi-people"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ total_students|intcomma }}</div>
+        <div class="kpi-label">Students</div>
+      </div>
+    </div>
+  </div>
 
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(155,89,182,.1);color:#8e44ad">
+        <i class="bi bi-person-badge"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ total_teachers|intcomma }}</div>
+        <div class="kpi-label">Teachers</div>
+      </div>
+    </div>
+  </div>
 
-<!-- SCHOOL RANKING -->
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(241,196,15,.1);color:#d68910">
+        <i class="bi bi-journal-text"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ total_lessons|intcomma }}</div>
+        <div class="kpi-label">Lessons</div>
+      </div>
+    </div>
+  </div>
 
-<h4 class="mt-4">🏫 Top Performing Schools</h4>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(46,204,113,.1);color:#27ae60">
+        <i class="bi bi-check-circle"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ national_rate }}%</div>
+        <div class="kpi-label">Attendance Rate</div>
+      </div>
+    </div>
+  </div>
 
-<table class="table table-striped table-bordered">
-<thead>
-<tr>
-<th>Rank</th>
-<th>School</th>
-<th>Attendance %</th>
-</tr>
-</thead>
-<tbody>
-
-{% for s in school_rankings %}
-<tr>
-<td>{{forloop.counter}}</td>
-<td>{{s.enrollment__school__name}}</td>
-<td><b>{{s.present_rate|floatformat:1}}%</b></td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
-
-
-<!-- COUNTY RANKING -->
-
-<h4 class="mt-5">🗺 County Ranking</h4>
-
-<table class="table table-striped table-bordered">
-
-<thead>
-<tr>
-<th>Rank</th>
-<th>County</th>
-<th>Attendance %</th>
-</tr>
-</thead>
-
-<tbody>
-
-{% for c in county_rankings %}
-<tr>
-<td>{{forloop.counter}}</td>
-<td>{{c.enrollment__school__county__name}}</td>
-<td>{{c.present_rate|floatformat:1}}%</td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
-
-
-
-<!-- TEACHER PERFORMANCE -->
-
-<h4 class="mt-5">👩‍🏫 Top Teachers</h4>
-
-<table class="table table-striped table-bordered">
-
-<thead>
-<tr>
-<th>Rank</th>
-<th>Teacher</th>
-<th>Performance %</th>
-</tr>
-</thead>
-
-<tbody>
-
-{% for t in teacher_rankings %}
-<tr>
-<td>{{forloop.counter}}</td>
-<td>{{t.enrollment__lesson__teacher__first_name}} {{t.enrollment__lesson__teacher__last_name}}</td>
-<td>{{t.performance|floatformat:1}}%</td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
-
-
-
-<!-- GRADE PERFORMANCE -->
-
-<h4 class="mt-5">🎓 Grade Performance</h4>
-
-<table class="table table-striped table-bordered">
-
-<thead>
-<tr>
-<th>Rank</th>
-<th>Grade</th>
-<th>Attendance %</th>
-</tr>
-</thead>
-
-<tbody>
-
-{% for g in grade_rankings %}
-<tr>
-<td>{{forloop.counter}}</td>
-<td>{{g.enrollment__lesson__stream__grade__name}}</td>
-<td>{{g.performance|floatformat:1}}%</td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
-
-
-
-<!-- SUBJECT PERFORMANCE -->
-
-<h4 class="mt-5">📚 Subject Performance</h4>
-
-<table class="table table-striped table-bordered">
-
-<thead>
-<tr>
-<th>Rank</th>
-<th>Subject</th>
-<th>Attendance %</th>
-</tr>
-</thead>
-
-<tbody>
-
-{% for s in subject_rankings %}
-<tr>
-<td>{{forloop.counter}}</td>
-<td>{{s.enrollment__lesson__subject__name}}</td>
-<td>{{s.performance|floatformat:1}}%</td>
-</tr>
-{% endfor %}
-
-</tbody>
-</table>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div class="kpi-tile">
+      <div class="kpi-icon" style="background:rgba(231,76,60,.1);color:#c0392b">
+        <i class="bi bi-exclamation-triangle"></i>
+      </div>
+      <div>
+        <div class="kpi-value">{{ total_discipline|intcomma }}</div>
+        <div class="kpi-label">Discipline Cases</div>
+      </div>
+    </div>
+  </div>
 
 </div>
 
+<!-- ══════════════════════════════════════════════════════════
+     ATTENDANCE BREAKDOWN PILLS  +  TREND CHART
+═══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Attendance breakdown -->
+  <div class="col-12 col-lg-4">
+    <div class="k-card h-100">
+      <div class="k-card-header">
+        <i class="bi bi-pie-chart text-success"></i> Attendance Breakdown
+      </div>
+      <div class="k-card-body">
+        {% if totals.total %}
+        {% with total=totals.total present=totals.present absent=totals.absent_unexcused tardy=totals.tardy %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">Present</span>
+            <span class="small fw-semibold text-success">{{ present|intcomma }} ({% widthratio present total 100 %}%)</span>
+          </div>
+          <div class="k-bar"><span style="width:{% widthratio present total 100 %}%"></span></div>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">Absent (Unexcused)</span>
+            <span class="small fw-semibold text-danger">{{ absent|intcomma }} ({% widthratio absent total 100 %}%)</span>
+          </div>
+          <div class="k-bar danger"><span style="width:{% widthratio absent total 100 %}%"></span></div>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">Late / Tardy</span>
+            <span class="small fw-semibold text-warning">{{ tardy|intcomma }} ({% widthratio tardy total 100 %}%)</span>
+          </div>
+          <div class="k-bar" style=""><span style="width:{% widthratio tardy total 100 %}%;background:linear-gradient(90deg,#f39c12,#e67e22)"></span></div>
+        </div>
+        <div class="text-muted small border-top pt-2 mt-2">
+          Total records: <strong>{{ total|intcomma }}</strong>
+        </div>
+        {% endwith %}
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-inbox display-6 d-block mb-2 opacity-40"></i>
+          No attendance data for selected filters.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Trend chart -->
+  <div class="col-12 col-lg-8">
+    <div class="k-card h-100">
+      <div class="k-card-header">
+        <i class="bi bi-graph-up text-primary"></i> Attendance Trend (Last 6 Months)
+      </div>
+      <div class="k-card-body" style="position:relative;min-height:200px">
+        {% if trend_labels_json != '[]' %}
+        <canvas id="trendChart"></canvas>
+        {% else %}
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-bar-chart display-6 d-block mb-2 opacity-40"></i>
+          No trend data yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     RANKINGS ROW
+═══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- School Rankings -->
+  <div class="col-12 col-xl-8">
+    <div class="k-card">
+      <div class="k-card-header">
+        <i class="bi bi-trophy text-warning"></i> Top 20 Schools by Attendance
+        <span class="ms-auto badge badge-grey">{{ school_rankings|length }} shown</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="table k-table mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>School</th>
+              <th>Classification</th>
+              <th style="min-width:140px">Attendance Rate</th>
+              <th class="text-end">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in school_rankings %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ s.enrollment__school__name }}</td>
+              <td>
+                <span class="badge badge-grey">{{ s.enrollment__school__school_classification|default:"—" }}</span>
+              </td>
+              <td>
+                <div class="k-bar">
+                  <span style="width:{{ s.present_rate|floatformat:0 }}%"></span>
+                </div>
+              </td>
+              <td class="text-end fw-semibold
+                {% if s.present_rate >= 90 %}text-success
+                {% elif s.present_rate >= 75 %}text-warning
+                {% else %}text-danger{% endif %}">
+                {{ s.present_rate|floatformat:1 }}%
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No data for selected filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- County Rankings -->
+  <div class="col-12 col-xl-4">
+    <div class="k-card h-100">
+      <div class="k-card-header">
+        <i class="bi bi-map text-info"></i> County Attendance Ranking
+      </div>
+      <div style="overflow-x:auto">
+        <table class="table k-table mb-0">
+          <thead>
+            <tr><th>#</th><th>County</th><th class="text-end">Rate</th></tr>
+          </thead>
+          <tbody>
+            {% for c in county_rankings %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td>{{ c.enrollment__school__county__name|default:"Unknown" }}</td>
+              <td class="text-end fw-semibold
+                {% if c.performance >= 90 %}text-success
+                {% elif c.performance >= 75 %}text-warning
+                {% else %}text-danger{% endif %}">
+                {{ c.performance|floatformat:1 }}%
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-3">No data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PERFORMANCE TABLES ROW
+═══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Grade Performance -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-mortarboard text-success"></i> Grade Performance</div>
+      <table class="table k-table mb-0">
+        <thead><tr><th>#</th><th>Grade</th><th class="text-end">Rate</th></tr></thead>
+        <tbody>
+          {% for g in grade_rankings %}
+          <tr>
+            <td class="text-muted">{{ forloop.counter }}</td>
+            <td>{{ g.enrollment__lesson__stream__grade__name }}</td>
+            <td class="text-end fw-semibold {% if g.performance >= 90 %}text-success{% elif g.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+              {{ g.performance|floatformat:1 }}%
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-center text-muted py-3">No data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Subject Performance -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-journal-bookmark text-primary"></i> Subject Attendance</div>
+      <table class="table k-table mb-0">
+        <thead><tr><th>#</th><th>Subject</th><th class="text-end">Rate</th></tr></thead>
+        <tbody>
+          {% for s in subject_rankings %}
+          <tr>
+            <td class="text-muted">{{ forloop.counter }}</td>
+            <td>{{ s.enrollment__lesson__subject__name }}</td>
+            <td class="text-end fw-semibold {% if s.performance >= 90 %}text-success{% elif s.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+              {{ s.performance|floatformat:1 }}%
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-center text-muted py-3">No data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Top Teachers -->
+  <div class="col-12 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-person-badge text-purple" style="color:#8e44ad"></i> Top Teachers</div>
+      <table class="table k-table mb-0">
+        <thead><tr><th>#</th><th>Teacher</th><th>School</th><th class="text-end">Rate</th></tr></thead>
+        <tbody>
+          {% for t in teacher_rankings %}
+          <tr>
+            <td class="text-muted">{{ forloop.counter }}</td>
+            <td class="fw-semibold" style="white-space:nowrap">
+              {{ t.enrollment__lesson__teacher__user__first_name }}
+              {{ t.enrollment__lesson__teacher__user__last_name }}
+            </td>
+            <td class="text-muted small" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {{ t.enrollment__school__name|truncatechars:20 }}
+            </td>
+            <td class="text-end fw-semibold {% if t.performance >= 90 %}text-success{% elif t.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+              {{ t.performance|floatformat:1 }}%
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted py-3">No data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     DISCIPLINE + GENDER + SCHOOL TYPE
+═══════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- Discipline by type -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-exclamation-octagon text-danger"></i> Discipline by Incident Type</div>
+      <div class="k-card-body">
+        {% for dt in discipline_by_type %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">{{ dt.incident_type|default:"Other"|title }}</span>
+            <span class="badge badge-red">{{ dt.count }}</span>
+          </div>
+          <div class="k-bar danger">
+            {% with max_count=discipline_by_type.0.count %}
+            {% if max_count %}
+            <span style="width:{% widthratio dt.count max_count 100 %}%;background:linear-gradient(90deg,#e74c3c,#c0392b)"></span>
+            {% endif %}
+            {% endwith %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3 small">No discipline records for selected filters.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Gender breakdown -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-gender-ambiguous text-primary"></i> Student Gender Breakdown</div>
+      <div class="k-card-body" style="min-height:180px">
+        {% if gender_labels_json != '[]' %}
+        <canvas id="genderChart" style="max-height:200px"></canvas>
+        {% else %}
+        <div class="text-center text-muted py-4 small">No student data.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- School classification breakdown -->
+  <div class="col-12 col-xl-4">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-building-check text-success"></i> Schools by Classification</div>
+      <div class="k-card-body">
+        {% for st in school_type_qs %}
+        <div class="d-flex align-items-center justify-content-between py-1 border-bottom">
+          <span class="small">{{ st.school_classification|default:"Unclassified" }}</span>
+          <div class="d-flex align-items-center gap-2">
+            <div class="k-bar" style="width:80px">
+              {% with max_st=school_type_qs.0.count %}
+              {% if max_st %}
+              <span style="width:{% widthratio st.count max_st 100 %}%"></span>
+              {% endif %}
+              {% endwith %}
+            </div>
+            <span class="badge badge-green">{{ st.count }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3 small">No data.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Trend Chart ──────────────────────────────────────────────
+const trendLabels = {{ trend_labels_json|safe }};
+const trendRates  = {{ trend_rates_json|safe }};
+if (trendLabels.length) {
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: trendLabels,
+      datasets: [{
+        label: 'Attendance %',
+        data: trendRates,
+        borderColor: '#0b7a2a',
+        backgroundColor: 'rgba(11,122,42,.08)',
+        tension: .35,
+        pointRadius: 4,
+        pointBackgroundColor: '#0b7a2a',
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ── Gender Chart ─────────────────────────────────────────────
+const genderLabels = {{ gender_labels_json|safe }};
+const genderCounts = {{ gender_counts_json|safe }};
+if (genderLabels.length) {
+  new Chart(document.getElementById('genderChart'), {
+    type: 'doughnut',
+    data: {
+      labels: genderLabels,
+      datasets: [{
+        data: genderCounts,
+        backgroundColor: ['rgba(11,122,42,.75)', 'rgba(187,10,33,.75)', 'rgba(52,152,219,.75)', '#ccc'],
+        borderWidth: 2,
+        borderColor: '#fff',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } }
+      },
+      cutout: '65%',
+    }
+  });
+}
+
+// ── Cascading county → sub-county ────────────────────────────
+function onCountyChange(sel) {
+  const countyId = sel.value;
+  const subcountyEl = document.getElementById('filterSubcounty');
+  subcountyEl.innerHTML = '<option value="">Loading…</option>';
+  if (!countyId) {
+    subcountyEl.innerHTML = '<option value="">All Sub-Counties</option>';
+    return;
+  }
+  fetch(`{% url 'school:ajax-subcounties' %}?county_id=${countyId}`)
+    .then(r => r.json())
+    .then(data => {
+      subcountyEl.innerHTML = '<option value="">All Sub-Counties</option>';
+      (data.subcounties || []).forEach(sc => {
+        const opt = document.createElement('option');
+        opt.value = sc.id;
+        opt.textContent = sc.name;
+        subcountyEl.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      subcountyEl.innerHTML = '<option value="">All Sub-Counties</option>';
+    });
+}
+</script>
 {% endblock %}

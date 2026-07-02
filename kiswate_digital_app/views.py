@@ -9,7 +9,8 @@ from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.http import JsonResponse
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count, F
+from django.db import models
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
@@ -18,6 +19,31 @@ from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
+
+
+from .models import (
+    School, UserProfile, Guardian, Program, Enrollment,
+    VirtualClass, ClassAttendance, Lesson, Assignment, AssignmentSubmission,
+    Assessment, Question, Choice, StudentAssessmentAttempt, StudentAnswer,
+    NotificationTemplate, NotificationLog,
+)
+from .forms import (
+    StudentRegistrationForm, TeacherRegistrationForm, GuardianForm,
+    VettingForm, EnrollmentForm,
+    VirtualClassForm, RecordingUploadForm, AttendanceManualForm,
+    LessonForm, AssignmentForm, SubmissionForm, GradeSubmissionForm,
+    AssessmentForm, QuestionForm, ChoiceForm, ChoiceFormSet, PublishResultsForm,
+    NotificationTemplateForm, BulkNotificationForm,
+)
+from .utils import (
+    auto_grade_attempt, record_join_attendance, get_attendance_summary,
+    get_program_performance_report, get_teacher_activity_report,
+    get_school_utilization_report, send_notification, notify_class_reminder,
+    notify_assignment_due,
+)
+ 
+
+
 logger = logging.getLogger(__name__)
 
 @login_required
@@ -102,7 +128,6 @@ def edit_school(request, pk):
             logger.info(f"Updated school {school.code} by superuser {request.user.email}.")
             return redirect('kiswate_digital_app:school_list')
         else:
-            print(f"Form errors: {form.errors}")  # Debug log
             messages.error(request, "Please correct the form errors.")
     # For GET: Redirect to list (modal-driven)
     messages.info(request, "Use the edit button in the list to modify.")
@@ -163,20 +188,56 @@ def kiswate_dashboard(request):
         messages.error(request, "Access denied: Superuser privileges required.")
         return redirect('userauths:sign-in')
 
-    schools = School.objects.count()
-    teachers = StaffProfile.objects.filter(position='teacher').count()
-    students = Student.objects.count()
-    parents = Parent.objects.count()
-    scholarships = Scholarship.objects.count()
-    demo_requests = ContactMessage.objects.count()
+    from django.db.models import Count, Q
 
-    return render(request, "Dashboard/index.html", {
-        "schools": schools,
-        "teachers": teachers,
-        "students": students,
-        "parents": parents,
-        "scholarships": scholarships,
-        "demo_requests": demo_requests
+    total_schools = School.objects.count()
+    active_schools = School.objects.filter(is_active=True).count()
+    total_teachers = StaffProfile.objects.filter(position='teacher').count()
+    total_students = Student.objects.count()
+    active_students = Student.objects.filter(is_active=True).count()
+    suspended_students = Student.objects.filter(suspended=True).count()
+    total_parents = Parent.objects.count()
+    total_scholarships = Scholarship.objects.count()
+    total_demo_requests = ContactMessage.objects.count()
+    new_demos = ContactMessage.objects.filter(lead_status='new').count()
+
+    # School subscriptions breakdown
+    active_subs = SchoolSubscription.objects.filter(status='active').count()
+    trial_subs = SchoolSubscription.objects.filter(status='trial').count()
+    expired_subs = SchoolSubscription.objects.filter(status='expired').count()
+
+    # Schools by classification
+    schools_by_class = School.objects.values('school_classification').annotate(n=Count('id')).order_by('-n')
+
+    # Schools by county (top 10)
+    schools_by_county = School.objects.values(
+        county_name=models.F('county__name')
+    ).annotate(n=Count('id')).order_by('-n')[:10]
+
+    # Recent schools
+    recent_schools = School.objects.select_related('school_admin').order_by('-created_at')[:8]
+
+    # Recent demo requests
+    recent_demos = ContactMessage.objects.order_by('-created_at')[:5]
+
+    return render(request, "Dashboard/kiswate_admin_dashboard.html", {
+        "total_schools": total_schools,
+        "active_schools": active_schools,
+        "total_teachers": total_teachers,
+        "total_students": total_students,
+        "active_students": active_students,
+        "suspended_students": suspended_students,
+        "total_parents": total_parents,
+        "total_scholarships": total_scholarships,
+        "total_demo_requests": total_demo_requests,
+        "new_demos": new_demos,
+        "active_subs": active_subs,
+        "trial_subs": trial_subs,
+        "expired_subs": expired_subs,
+        "schools_by_class": list(schools_by_class),
+        "schools_by_county": list(schools_by_county),
+        "recent_schools": recent_schools,
+        "recent_demos": recent_demos,
     })
 
 
@@ -284,17 +345,65 @@ def kiswate_settings(request):
     return render(request, "Dashboard/kiswate_settings.html", {})
 
 
+@login_required
 def invoice_list(request):
-    return render(request, "Dashboard/invoice_list.html", {})
-def create_invoice(request):
-    return render(request, "Dashboard/create_invoice.html", {})
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    from school.models import SchoolSubscription
+    q = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '')
+    subs = SchoolSubscription.objects.select_related('school', 'plan', 'managed_by').order_by('-created_at')
+    if q:
+        subs = subs.filter(Q(school__name__icontains=q) | Q(school__code__icontains=q))
+    if status:
+        subs = subs.filter(status=status)
+    from django.core.paginator import Paginator
+    page = Paginator(subs, 20).get_page(request.GET.get('page'))
+    return render(request, "Dashboard/invoice_list.html", {'subscriptions': page, 'q': q, 'status': status})
 
+
+@login_required
+def create_invoice(request):
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    return redirect('kiswate_digital_app:invoice_list')
+
+
+@login_required
 def payment_history(request):
-    return render(request, "Dashboard/payment_history.html", {})
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    from school.models import Payment
+    q = request.GET.get('q', '').strip()
+    payments = Payment.objects.select_related('student__user', 'school').order_by('-paid_at', '-id')
+    if q:
+        payments = payments.filter(
+            Q(student__user__first_name__icontains=q) |
+            Q(student__user__last_name__icontains=q) |
+            Q(transaction_id__icontains=q) |
+            Q(school__name__icontains=q)
+        )
+    from django.core.paginator import Paginator
+    page = Paginator(payments, 25).get_page(request.GET.get('page'))
+    return render(request, "Dashboard/payment_history.html", {'payments': page, 'q': q})
+
+
+@login_required
 def reports(request):
-    return render(request, "Dashboard/reports.html", {})
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    return redirect('kiswate_digital_app:reports_dashboard')
+
+
+@login_required
 def support(request):
-    return render(request, "Dashboard/support.html", {})
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    from school.models import ContactMessage
+    messages_qs = ContactMessage.objects.order_by('-created_at')
+    from django.core.paginator import Paginator
+    page = Paginator(messages_qs, 20).get_page(request.GET.get('page'))
+    return render(request, "Dashboard/support.html", {'contact_messages': page})
 
 
 @login_required
@@ -498,16 +607,26 @@ def subscription_plan_delete(request, pk):
 
 
 
+@login_required
 def announcements(request):
-    return render(request, "Dashboard/announcements.html", {})
+    if not (request.user.is_superuser or request.user.is_kiswate_user):
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+    return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+
+
+@login_required
 def new_announcement(request):
-    return render(request, "Dashboard/new_announcement.html", {})
+    return redirect('kiswate_digital_app:kiswate_admin_dashboard')
 
+
+@login_required
 def edit_announcement(request):
-    return render(request, "Dashboard/edit_announcement.html", {})
+    return redirect('kiswate_digital_app:kiswate_admin_dashboard')
 
+
+@login_required
 def delete_announcement(request):
-    return render(request, "Dashboard/delete_announcement.html", {})
+    return redirect('kiswate_digital_app:kiswate_admin_dashboard')
 
 
 @login_required
@@ -676,3 +795,767 @@ def delete_staff_member(request, pk):
     staff.delete()
     messages.success(request, f"{staff_name} deleted successfully.")
     return redirect("kiswate_digital_app:staff-members")
+
+
+ 
+def _get_profile(request):
+    """Returns the UserProfile for the logged-in user, or None."""
+    try:
+        return request.user.profile
+    except UserProfile.DoesNotExist:
+        return None
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODULE 1: USER MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+ 
+def student_register(request):
+    """Public registration for students."""
+    if request.method == 'POST':
+        form = StudentRegistrationForm(request.POST)
+        if form.is_valid():
+            profile = form.save()
+            messages.success(request, "Registration submitted. Awaiting approval.")
+            return redirect('kiswate_digital_app:student_register_done')
+    else:
+        form = StudentRegistrationForm()
+    return render(request, 'dim/users/student_register.html', {'form': form})
+ 
+ 
+def teacher_register(request):
+    """Public registration for teachers."""
+    if request.method == 'POST':
+        form = TeacherRegistrationForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Registration submitted. Your profile will be vetted.")
+            return redirect('kiswate_digital_app:teacher_register_done')
+    else:
+        form = TeacherRegistrationForm()
+    return render(request, 'dim/users/teacher_register.html', {'form': form})
+ 
+ 
+def register_done(request):
+    return render(request, 'dim/users/register_done.html')
+ 
+ 
+@login_required
+def user_list(request):
+    """Admin: list all users with filter by role/vetting status."""
+    role = request.GET.get('role', '')
+    status = request.GET.get('status', '')
+    search = request.GET.get('q', '')
+ 
+    profiles = UserProfile.objects.select_related('user', 'school').order_by('-created_at')
+    if role:
+        profiles = profiles.filter(role=role)
+    if status:
+        profiles = profiles.filter(vetting_status=status)
+    if search:
+        profiles = profiles.filter(
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search) |
+            Q(user__email__icontains=search)
+        )
+ 
+    return render(request, 'dim/users/user_list.html', {
+        'profiles': profiles, 'role': role, 'status': status, 'search': search,
+    })
+ 
+ 
+@login_required
+def user_detail(request, pk):
+    profile = get_object_or_404(UserProfile, pk=pk)
+    guardians = profile.guardians.all() if profile.role == 'student' else []
+    enrollments = profile.enrollments.select_related('program') if profile.role == 'student' else []
+    return render(request, 'dim/users/user_detail.html', {
+        'profile': profile, 'guardians': guardians, 'enrollments': enrollments,
+    })
+ 
+ 
+@login_required
+def vet_user(request, pk):
+    """Admin: approve or reject a user profile."""
+    profile = get_object_or_404(UserProfile, pk=pk)
+    if request.method == 'POST':
+        form = VettingForm(request.POST, instance=profile)
+        if form.is_valid():
+            p = form.save(commit=False)
+            p.vetted_by = request.user
+            p.vetted_at = timezone.now()
+            p.save()
+            messages.success(request, f"Profile {p.get_vetting_status_display()} successfully.")
+            return redirect('kiswate_digital_app:user_detail', pk=pk)
+    else:
+        form = VettingForm(instance=profile)
+    return render(request, 'dim/users/vet_user.html', {'form': form, 'profile': profile})
+ 
+ 
+@login_required
+def add_guardian(request, student_pk):
+    student = get_object_or_404(UserProfile, pk=student_pk, role='student')
+    if request.method == 'POST':
+        form = GuardianForm(request.POST)
+        if form.is_valid():
+            g = form.save(commit=False)
+            g.student = student
+            g.save()
+            messages.success(request, "Guardian added.")
+            return redirect('kiswate_digital_app:user_detail', pk=student_pk)
+    else:
+        form = GuardianForm()
+    return render(request, 'dim/users/guardian_form.html',
+                  {'form': form, 'student': student})
+ 
+ 
+@login_required
+def enrollment_list(request):
+    enrollments = Enrollment.objects.select_related('student__user', 'program').order_by('-enrolled_at')
+    return render(request, 'dim/users/enrollment_list.html', {'enrollments': enrollments})
+ 
+ 
+@login_required
+def enroll_student(request):
+    profile = _get_profile(request)
+    school = profile.school if profile else None
+    if request.method == 'POST':
+        form = EnrollmentForm(request.POST, school=school)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Student enrolled successfully.")
+            return redirect('kiswate_digital_app:enrollment_list')
+    else:
+        form = EnrollmentForm(school=school)
+    return render(request, 'dim/users/enroll_student.html', {'form': form})
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODULE 2: VIRTUAL LEARNING
+# ═══════════════════════════════════════════════════════════════════════════════
+ 
+@login_required
+def virtual_class_list(request):
+    profile = _get_profile(request)
+    upcoming_qs = VirtualClass.objects.filter(
+        is_cancelled=False, scheduled_at__gte=timezone.now()
+    ).select_related('program', 'teacher__user')
+    past_qs = VirtualClass.objects.filter(
+        is_cancelled=False, scheduled_at__lt=timezone.now()
+    ).select_related('program', 'teacher__user')
+ 
+    if profile and profile.role == 'teacher':
+        upcoming_qs = upcoming_qs.filter(teacher=profile)
+        past_qs = past_qs.filter(teacher=profile)
+    elif profile and profile.role == 'student':
+        enrolled_programs = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
+        upcoming_qs = upcoming_qs.filter(program_id__in=enrolled_programs)
+        past_qs = past_qs.filter(program_id__in=enrolled_programs)
+ 
+    return render(request, 'dim/virtual_learning/class_list.html', {
+        'upcoming_classes': upcoming_qs[:20],
+        'past_classes': past_qs[:20],
+        'profile': profile,
+    })
+ 
+ 
+@login_required
+def virtual_class_create(request):
+    profile = _get_profile(request)
+    if request.method == 'POST':
+        form = VirtualClassForm(request.POST, teacher_profile=profile)
+        if form.is_valid():
+            vc = form.save(commit=False)
+            vc.teacher = profile
+            vc.save()
+            messages.success(request, "Class scheduled successfully.")
+            return redirect('kiswate_digital_app:virtual_class_detail', pk=vc.pk)
+    else:
+        form = VirtualClassForm(teacher_profile=profile)
+    return render(request, 'dim/virtual_learning/class_form.html',
+                  {'form': form, 'action': 'Schedule'})
+ 
+ 
+@login_required
+def virtual_class_detail(request, pk):
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    profile = _get_profile(request)
+    attendance_summary = get_attendance_summary(vc)
+    my_attendance = None
+    if profile and profile.role == 'student':
+        my_attendance = ClassAttendance.objects.filter(
+            virtual_class=vc, student=profile).first()
+ 
+    attendance_records = vc.attendance_records.select_related('student__user').filter(is_present=True)
+ 
+    return render(request, 'dim/virtual_learning/class_detail.html', {
+        'vc': vc,
+        'profile': profile,
+        'attendance_summary': attendance_summary,
+        'my_attendance': my_attendance,
+        'attendance_records': attendance_records,
+    })
+ 
+ 
+@login_required
+def virtual_class_edit(request, pk):
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    profile = _get_profile(request)
+    if request.method == 'POST':
+        form = VirtualClassForm(request.POST, instance=vc, teacher_profile=profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Class updated.")
+            return redirect('kiswate_digital_app:virtual_class_detail', pk=pk)
+    else:
+        form = VirtualClassForm(instance=vc, teacher_profile=profile)
+    return render(request, 'dim/virtual_learning/class_form.html',
+                  {'form': form, 'action': 'Edit', 'vc': vc})
+ 
+ 
+@login_required
+def virtual_class_cancel(request, pk):
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    if request.method == 'POST':
+        vc.is_cancelled = True
+        vc.save(update_fields=['is_cancelled'])
+        messages.warning(request, "Class cancelled.")
+    return redirect('kiswate_digital_app:virtual_class_list')
+ 
+ 
+@login_required
+def join_class(request, pk):
+    """
+    Student clicks 'Join' — records attendance then redirects to the meeting link.
+    This is the core attendance tracking mechanism.
+    """
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    profile = _get_profile(request)
+ 
+    if profile and profile.role == 'student':
+        record, created = record_join_attendance(vc, profile)
+        if created:
+            messages.info(request, "Your attendance has been recorded.")
+ 
+    return redirect(vc.meeting_link)
+ 
+ 
+@login_required
+def mark_attendance_manual(request, pk):
+    """Teacher manually marks attendance for a class."""
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    if request.method == 'POST':
+        form = AttendanceManualForm(request.POST, virtual_class=vc)
+        if form.is_valid():
+            present_students = form.cleaned_data['present_students']
+            # Clear existing teacher-marked records, re-set
+            ClassAttendance.objects.filter(virtual_class=vc, marked_by_teacher=True).delete()
+            for student in present_students:
+                ClassAttendance.objects.update_or_create(
+                    virtual_class=vc, student=student,
+                    defaults={'is_present': True, 'marked_by_teacher': True, 'joined_at': timezone.now()}
+                )
+            messages.success(request, "Attendance saved.")
+            return redirect('kiswate_digital_app:virtual_class_detail', pk=pk)
+    else:
+        form = AttendanceManualForm(virtual_class=vc)
+    return render(request, 'dim/virtual_learning/mark_attendance.html',
+                  {'form': form, 'vc': vc})
+ 
+ 
+@login_required
+def upload_recording(request, pk):
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    if request.method == 'POST':
+        form = RecordingUploadForm(request.POST, instance=vc)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Recording link saved.")
+            return redirect('kiswate_digital_app:virtual_class_detail', pk=pk)
+    else:
+        form = RecordingUploadForm(instance=vc)
+    return render(request, 'dim/virtual_learning/upload_recording.html',
+                  {'form': form, 'vc': vc})
+ 
+ 
+@login_required
+def lesson_list(request):
+    profile = _get_profile(request)
+    lessons = Lesson.objects.select_related('program', 'teacher__user')
+    if profile and profile.role == 'teacher':
+        lessons = lessons.filter(teacher=profile)
+    elif profile and profile.role == 'student':
+        enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
+        lessons = lessons.filter(program_id__in=enrolled, is_published=True)
+    return render(request, 'dim/virtual_learning/lesson_list.html', {'lessons': lessons})
+ 
+ 
+@login_required
+def lesson_create(request):
+    profile = _get_profile(request)
+    if request.method == 'POST':
+        form = LessonForm(request.POST, request.FILES)
+        if form.is_valid():
+            lesson = form.save(commit=False)
+            lesson.teacher = profile
+            lesson.save()
+            messages.success(request, "Lesson created.")
+            return redirect('kiswate_digital_app:lesson_list')
+    else:
+        form = LessonForm()
+    return render(request, 'dim/virtual_learning/lesson_form.html',
+                  {'form': form, 'action': 'Create'})
+ 
+ 
+@login_required
+def lesson_detail(request, pk):
+    lesson = get_object_or_404(Lesson, pk=pk)
+    assignments = lesson.assignments.filter(is_published=True)
+    return render(request, 'dim/virtual_learning/lesson_detail.html',
+                  {'lesson': lesson, 'assignments': assignments})
+ 
+ 
+@login_required
+def lesson_edit(request, pk):
+    lesson = get_object_or_404(Lesson, pk=pk)
+    if request.method == 'POST':
+        form = LessonForm(request.POST, request.FILES, instance=lesson)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Lesson updated.")
+            return redirect('kiswate_digital_app:lesson_detail', pk=pk)
+    else:
+        form = LessonForm(instance=lesson)
+    return render(request, 'dim/virtual_learning/lesson_form.html',
+                  {'form': form, 'action': 'Edit', 'lesson': lesson})
+ 
+ 
+@login_required
+def assignment_list(request):
+    profile = _get_profile(request)
+    assignments = Assignment.objects.select_related('program', 'lesson').order_by('-due_date')
+    if profile and profile.role == 'student':
+        enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
+        assignments = assignments.filter(program_id__in=enrolled, is_published=True)
+    return render(request, 'dim/virtual_learning/assignment_list.html',
+                  {'assignments': assignments, 'profile': profile})
+ 
+ 
+@login_required
+def assignment_create(request):
+    if request.method == 'POST':
+        form = AssignmentForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            asgn = form.instance
+            notify_assignment_due(asgn)
+            messages.success(request, "Assignment created and students notified.")
+            return redirect('kiswate_digital_app:assignment_list')
+    else:
+        form = AssignmentForm()
+    return render(request, 'dim/virtual_learning/assignment_form.html',
+                  {'form': form, 'action': 'Create'})
+ 
+ 
+@login_required
+def assignment_detail(request, pk):
+    assignment = get_object_or_404(Assignment, pk=pk)
+    profile = _get_profile(request)
+    my_submission = None
+    submissions = []
+    if profile and profile.role == 'student':
+        my_submission = AssignmentSubmission.objects.filter(
+            assignment=assignment, student=profile).first()
+    elif profile and profile.role in ('teacher', 'school_admin', 'super_admin'):
+        submissions = assignment.submissions.select_related('student__user').order_by('-submitted_at')
+    return render(request, 'dim/virtual_learning/assignment_detail.html', {
+        'assignment': assignment, 'profile': profile,
+        'my_submission': my_submission, 'submissions': submissions,
+    })
+ 
+ 
+@login_required
+def submit_assignment(request, pk):
+    assignment = get_object_or_404(Assignment, pk=pk)
+    profile = _get_profile(request)
+    existing = AssignmentSubmission.objects.filter(assignment=assignment, student=profile).first()
+    if existing:
+        messages.warning(request, "You have already submitted this assignment.")
+        return redirect('kiswate_digital_app:assignment_detail', pk=pk)
+ 
+    if request.method == 'POST':
+        form = SubmissionForm(request.POST, request.FILES)
+        if form.is_valid():
+            sub = form.save(commit=False)
+            sub.assignment = assignment
+            sub.student = profile
+            sub.save()
+            messages.success(request, "Submission received.")
+            return redirect('kiswate_digital_app:assignment_detail', pk=pk)
+    else:
+        form = SubmissionForm()
+    return render(request, 'dim/virtual_learning/submit_assignment.html',
+                  {'form': form, 'assignment': assignment})
+ 
+ 
+@login_required
+def grade_submission(request, pk):
+    submission = get_object_or_404(AssignmentSubmission, pk=pk)
+    if request.method == 'POST':
+        form = GradeSubmissionForm(request.POST, instance=submission)
+        if form.is_valid():
+            s = form.save(commit=False)
+            s.graded_at = timezone.now()
+            s.graded_by = _get_profile(request)
+            s.save()
+            messages.success(request, "Submission graded.")
+            return redirect('kiswate_digital_app:assignment_detail', pk=submission.assignment.pk)
+    else:
+        form = GradeSubmissionForm(instance=submission)
+    return render(request, 'dim/virtual_learning/grade_submission.html',
+                  {'form': form, 'submission': submission})
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODULE 3: ASSESSMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+ 
+@login_required
+def assessment_list(request):
+    profile = _get_profile(request)
+    assessments = Assessment.objects.select_related('program').order_by('-created_at')
+    if profile and profile.role == 'student':
+        enrolled = profile.enrollments.filter(is_active=True).values_list('program_id', flat=True)
+        assessments = assessments.filter(program_id__in=enrolled, is_published=True)
+    return render(request, 'dim/assessments/assessment_list.html',
+                  {'assessments': assessments, 'profile': profile})
+ 
+ 
+@login_required
+def assessment_create(request):
+    profile = _get_profile(request)
+    if request.method == 'POST':
+        form = AssessmentForm(request.POST)
+        if form.is_valid():
+            a = form.save(commit=False)
+            a.created_by = profile
+            a.save()
+            messages.success(request, "Assessment created. Now add questions.")
+            return redirect('kiswate_digital_app:assessment_questions', pk=a.pk)
+    else:
+        form = AssessmentForm()
+    return render(request, 'dim/assessments/assessment_form.html',
+                  {'form': form, 'action': 'Create'})
+ 
+ 
+@login_required
+def assessment_detail(request, pk):
+    assessment = get_object_or_404(Assessment, pk=pk)
+    profile = _get_profile(request)
+    questions = assessment.questions.prefetch_related('choices')
+    my_attempt = None
+    if profile and profile.role == 'student':
+        my_attempt = StudentAssessmentAttempt.objects.filter(
+            assessment=assessment, student=profile).first()
+    results = None
+    if assessment.results_published:
+        results = assessment.attempts.filter(is_graded=True).select_related('student__user')
+    return render(request, 'dim/assessments/assessment_detail.html', {
+        'assessment': assessment, 'questions': questions,
+        'my_attempt': my_attempt, 'results': results, 'profile': profile,
+    })
+ 
+ 
+@login_required
+def assessment_questions(request, pk):
+    """Add/manage questions for an assessment."""
+    assessment = get_object_or_404(Assessment, pk=pk)
+    questions = assessment.questions.prefetch_related('choices').all()
+    return render(request, 'dim/assessments/assessment_questions.html',
+                  {'assessment': assessment, 'questions': questions})
+ 
+ 
+@login_required
+def question_create(request, assessment_pk):
+    assessment = get_object_or_404(Assessment, pk=assessment_pk)
+    if request.method == 'POST':
+        form = QuestionForm(request.POST)
+        formset = ChoiceFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            question = form.save(commit=False)
+            question.assessment = assessment
+            question.save()
+            formset.instance = question
+            formset.save()
+            messages.success(request, "Question added.")
+            return redirect('kiswate_digital_app:assessment_questions', pk=assessment_pk)
+    else:
+        form = QuestionForm()
+        formset = ChoiceFormSet()
+    return render(request, 'dim/assessments/question_form.html',
+                  {'form': form, 'formset': formset, 'assessment': assessment})
+ 
+ 
+@login_required
+def question_edit(request, pk):
+    question = get_object_or_404(Question, pk=pk)
+    if request.method == 'POST':
+        form = QuestionForm(request.POST, instance=question)
+        formset = ChoiceFormSet(request.POST, instance=question)
+        if form.is_valid() and formset.is_valid():
+            form.save()
+            formset.save()
+            messages.success(request, "Question updated.")
+            return redirect('kiswate_digital_app:assessment_questions', pk=question.assessment.pk)
+    else:
+        form = QuestionForm(instance=question)
+        formset = ChoiceFormSet(instance=question)
+    return render(request, 'dim/assessments/question_form.html',
+                  {'form': form, 'formset': formset, 'assessment': question.assessment, 'question': question})
+ 
+ 
+@login_required
+def take_assessment(request, pk):
+    """Student takes an assessment."""
+    assessment = get_object_or_404(Assessment, pk=pk)
+    profile = _get_profile(request)
+ 
+    # Check time window
+    now = timezone.now()
+    if assessment.start_time and now < assessment.start_time:
+        messages.warning(request, "This assessment has not started yet.")
+        return redirect('kiswate_digital_app:assessment_detail', pk=pk)
+    if assessment.end_time and now > assessment.end_time:
+        messages.warning(request, "This assessment has closed.")
+        return redirect('kiswate_digital_app:assessment_detail', pk=pk)
+ 
+    attempt, created = StudentAssessmentAttempt.objects.get_or_create(
+        assessment=assessment, student=profile,
+        defaults={'started_at': now}
+    )
+    if attempt.submitted_at:
+        messages.info(request, "You have already submitted this assessment.")
+        return redirect('kiswate_digital_app:assessment_result', pk=attempt.pk)
+ 
+    questions = assessment.questions.prefetch_related('choices').all()
+ 
+    if request.method == 'POST':
+        # Save answers
+        for question in questions:
+            field_name = f"q_{question.pk}"
+            if question.question_type in ('mcq', 'true_false'):
+                choice_id = request.POST.get(field_name)
+                choice = Choice.objects.filter(pk=choice_id).first() if choice_id else None
+                StudentAnswer.objects.update_or_create(
+                    attempt=attempt, question=question,
+                    defaults={'selected_choice': choice}
+                )
+            else:
+                text = request.POST.get(field_name, '')
+                StudentAnswer.objects.update_or_create(
+                    attempt=attempt, question=question,
+                    defaults={'text_answer': text}
+                )
+        attempt.submitted_at = timezone.now()
+        attempt.save(update_fields=['submitted_at'])
+        auto_grade_attempt(attempt)
+        messages.success(request, "Assessment submitted.")
+        return redirect('kiswate_digital_app:assessment_result', pk=attempt.pk)
+ 
+    return render(request, 'dim/assessments/take_assessment.html',
+                  {'assessment': assessment, 'questions': questions, 'attempt': attempt})
+ 
+ 
+@login_required
+def assessment_result(request, pk):
+    attempt = get_object_or_404(StudentAssessmentAttempt, pk=pk)
+    answers = attempt.answers.select_related('question', 'selected_choice').all()
+    return render(request, 'dim/assessments/result.html',
+                  {'attempt': attempt, 'answers': answers})
+ 
+ 
+@login_required
+def publish_results(request, pk):
+    assessment = get_object_or_404(Assessment, pk=pk)
+    if request.method == 'POST':
+        assessment.results_published = True
+        assessment.save(update_fields=['results_published'])
+        messages.success(request, "Results published to students.")
+    return redirect('kiswate_digital_app:assessment_detail', pk=pk)
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODULE 4: COMMUNICATION & NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+ 
+@login_required
+def notification_list(request):
+    logs = NotificationLog.objects.select_related('recipient__user').order_by('-created_at')[:100]
+    return render(request, 'dim/communication/notification_list.html', {'logs': logs})
+ 
+ 
+@login_required
+def notification_template_list(request):
+    templates = NotificationTemplate.objects.all()
+    return render(request, 'dim/communication/template_list.html', {'templates': templates})
+ 
+ 
+@login_required
+def notification_template_create(request):
+    if request.method == 'POST':
+        form = NotificationTemplateForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Template saved.")
+            return redirect('kiswate_digital_app:notification_template_list')
+    else:
+        form = NotificationTemplateForm()
+    return render(request, 'dim/communication/template_form.html',
+                  {'form': form, 'action': 'Create'})
+ 
+ 
+@login_required
+def notification_template_edit(request, pk):
+    template = get_object_or_404(NotificationTemplate, pk=pk)
+    if request.method == 'POST':
+        form = NotificationTemplateForm(request.POST, instance=template)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Template updated.")
+            return redirect('kiswate_digital_app:notification_template_list')
+    else:
+        form = NotificationTemplateForm(instance=template)
+    return render(request, 'dim/communication/template_form.html',
+                  {'form': form, 'action': 'Edit', 'template': template})
+ 
+ 
+@login_required
+def send_bulk_notification(request):
+    if request.method == 'POST':
+        form = BulkNotificationForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            recipients = []
+            if data['recipients'] == 'all_students':
+                recipients = UserProfile.objects.filter(role='student', vetting_status='approved')
+            elif data['recipients'] == 'all_teachers':
+                recipients = UserProfile.objects.filter(role='teacher', vetting_status='approved')
+            elif data['recipients'] == 'program' and data.get('program'):
+                recipients = UserProfile.objects.filter(
+                    enrollments__program=data['program'], enrollments__is_active=True)
+            elif data['recipients'] == 'school' and data.get('school'):
+                recipients = UserProfile.objects.filter(school=data['school'])
+ 
+            sent = 0
+            for r in recipients:
+                send_notification(r, data['message'], data.get('subject', ''), data['notification_type'])
+                sent += 1
+            messages.success(request, f"Notification queued for {sent} recipients.")
+            return redirect('kiswate_digital_app:notification_list')
+    else:
+        form = BulkNotificationForm()
+    return render(request, 'dim/communication/bulk_notify.html', {'form': form})
+ 
+ 
+@login_required
+def send_class_reminder(request, pk):
+    """Quick action: send reminder for an upcoming class."""
+    vc = get_object_or_404(VirtualClass, pk=pk)
+    if request.method == 'POST':
+        notify_class_reminder(vc)
+        messages.success(request, "Reminder sent to all enrolled students.")
+    return redirect('kiswate_digital_app:virtual_class_detail', pk=pk)
+ 
+ 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MODULE 5: REPORTS & ANALYTICS
+# ═══════════════════════════════════════════════════════════════════════════════
+ 
+@login_required
+def reports_dashboard(request):
+    """Main reports landing page with summary tiles."""
+    from .models import School, Program
+    schools = School.objects.filter(is_active=True)
+    programs = Program.objects.filter(is_active=True)
+    return render(request, 'dim/reports/dashboard.html',
+                  {'schools': schools, 'programs': programs})
+ 
+ 
+@login_required
+def student_performance_report(request):
+    program_id = request.GET.get('program')
+    school_id = request.GET.get('school')
+    program = None
+    report = []
+ 
+    if program_id:
+        program = get_object_or_404(Program, pk=program_id)
+        report = get_program_performance_report(program)
+    elif school_id:
+        school = get_object_or_404(School, pk=school_id)
+        for prog in Program.objects.filter(school=school, is_active=True):
+            report.extend(get_program_performance_report(prog))
+ 
+    return render(request, 'dim/reports/student_performance.html', {
+        'report': report, 'program': program,
+    })
+ 
+ 
+@login_required
+def attendance_report(request):
+    """
+    Attendance report built from ClassAttendance records.
+    Shows per-class and per-student attendance derived from join-click and teacher-marked data.
+    """
+    program_id = request.GET.get('program')
+    program = None
+    classes_data = []
+ 
+    if program_id:
+        program = get_object_or_404(Program, pk=program_id)
+        virtual_classes = VirtualClass.objects.filter(
+            program=program, is_cancelled=False
+        ).order_by('scheduled_at')
+ 
+        for vc in virtual_classes:
+            summary = get_attendance_summary(vc)
+            classes_data.append({'vc': vc, **summary})
+ 
+    return render(request, 'dim/reports/attendance.html', {
+        'program': program, 'classes_data': classes_data,
+    })
+ 
+ 
+@login_required
+def teacher_activity_report(request):
+    teachers = UserProfile.objects.filter(role='teacher', vetting_status='approved')
+    report = [get_teacher_activity_report(t) for t in teachers]
+    return render(request, 'dim/reports/teacher_activity.html', {'report': report})
+ 
+ 
+@login_required
+def school_utilization_report(request):
+    schools = School.objects.filter(is_active=True)
+    report = [get_school_utilization_report(s) for s in schools]
+    return render(request, 'dim/reports/school_utilization.html', {'report': report})
+ 
+ 
+@login_required
+def my_performance(request):
+    """Student's personal performance view."""
+    profile = _get_profile(request)
+    attempts = StudentAssessmentAttempt.objects.filter(
+        student=profile, is_graded=True
+    ).select_related('assessment__program').order_by('-submitted_at')
+    enrollments = profile.enrollments.filter(is_active=True).select_related('program')
+ 
+    attendance_by_program = {}
+    for enr in enrollments:
+        from .utils import get_student_attendance_rate
+        attendance_by_program[enr.program] = get_student_attendance_rate(profile, enr.program)
+ 
+    return render(request, 'dim/reports/my_performance.html', {
+        'profile': profile, 'attempts': attempts,
+        'attendance_by_program': attendance_by_program,
+    })
+ 

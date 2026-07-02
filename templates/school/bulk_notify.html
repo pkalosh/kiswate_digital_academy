@@ -1,0 +1,239 @@
+{% extends 'school/base.html' %}
+{% block title %}Bulk Notifications | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <a href="{% url 'school:school-notifications' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+      <h5 class="fw-bold mb-0">Send Bulk Notification</h5>
+      <small class="text-muted">{{ school.name }} — reach parents, students, and staff across all channels.</small>
+    </div>
+  </div>
+
+  {% if not sms_configured %}
+  <div class="alert alert-warning d-flex gap-2 align-items-start py-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+    <div>
+      <strong>SMS not configured.</strong>
+      Set <code>SMS_API_KEY</code>, <code>SMS_PARTNERID</code>, and <code>SMS_SHORTCODE</code>
+      in settings to enable SMS delivery.
+      In-app and email channels work without SMS credentials.
+    </div>
+  </div>
+  {% endif %}
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  {% if result %}
+  <!-- ── Send result ── -->
+  <div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-header py-2 bg-success text-white d-flex align-items-center gap-2">
+      <i class="bi bi-check-circle-fill"></i>
+      <span class="fw-semibold">Notification sent — "{{ result.title }}"</span>
+    </div>
+    <div class="card-body">
+      <p class="mb-2 text-muted small">Audience: <strong>{{ result.audience }}</strong> &bull; {{ result.total }} recipient(s)</p>
+      <div class="row g-2">
+        <div class="col-sm-4">
+          <div class="border rounded-3 p-3 text-center">
+            <div class="fw-bold fs-5 text-success">{{ result.inapp_sent }}</div>
+            <small class="text-muted"><i class="bi bi-bell me-1"></i>In-App</small>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="border rounded-3 p-3 text-center">
+            <div class="fw-bold fs-5 {% if result.email_failed %}text-warning{% else %}text-success{% endif %}">
+              {{ result.email_sent }}
+              {% if result.email_failed %}<small class="text-danger">({{ result.email_failed }} failed)</small>{% endif %}
+            </div>
+            <small class="text-muted"><i class="bi bi-envelope me-1"></i>Email</small>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="border rounded-3 p-3 text-center">
+            <div class="fw-bold fs-5 {% if result.sms_failed %}text-warning{% else %}text-success{% endif %}">
+              {{ result.sms_sent }}
+              {% if result.sms_failed %}<small class="text-danger">({{ result.sms_failed }} failed)</small>{% endif %}
+            </div>
+            <small class="text-muted"><i class="bi bi-phone me-1"></i>SMS</small>
+          </div>
+        </div>
+      </div>
+      <a href="{% url 'school:bulk-notify' %}" class="btn btn-sm btn-outline-primary mt-3">
+        <i class="bi bi-plus me-1"></i> Send Another
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <!-- Compose form -->
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-megaphone me-2"></i>Compose</span>
+        </div>
+        <div class="card-body">
+          <form method="post" id="bulkForm">
+            {% csrf_token %}
+
+            <!-- Channels -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Delivery Channels <span class="text-danger">*</span></label>
+              <div class="d-flex gap-3 flex-wrap">
+                <div class="form-check form-switch">
+                  {{ form.channel_inapp }}
+                  <label class="form-check-label" for="{{ form.channel_inapp.id_for_label }}">
+                    <i class="bi bi-bell me-1 text-success"></i>{{ form.channel_inapp.label }}
+                  </label>
+                </div>
+                <div class="form-check form-switch">
+                  {{ form.channel_email }}
+                  <label class="form-check-label" for="{{ form.channel_email.id_for_label }}">
+                    <i class="bi bi-envelope me-1 text-primary"></i>{{ form.channel_email.label }}
+                  </label>
+                </div>
+                <div class="form-check form-switch {% if not sms_configured %}opacity-50{% endif %}">
+                  {{ form.channel_sms }}
+                  <label class="form-check-label" for="{{ form.channel_sms.id_for_label }}">
+                    <i class="bi bi-phone me-1 text-warning"></i>{{ form.channel_sms.label }}
+                    {% if not sms_configured %}<small class="text-muted">(not configured)</small>{% endif %}
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Audience -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Audience <span class="text-danger">*</span></label>
+                {{ form.audience }}
+              </div>
+              <div class="col-md-6" id="gradeField" style="display:none">
+                <label class="form-label small fw-semibold">Grade</label>
+                {{ form.grade }}
+              </div>
+              <div class="col-md-6" id="streamField" style="display:none">
+                <label class="form-label small fw-semibold">Stream</label>
+                {{ form.stream }}
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">Title / SMS Header <span class="text-danger">*</span></label>
+              {{ form.title }}
+              {% if form.title.errors %}<div class="text-danger small">{{ form.title.errors }}</div>{% endif %}
+            </div>
+
+            <!-- Message -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold d-flex justify-content-between">
+                Message <span class="text-muted small fw-normal" id="charCount">0 / 320 chars</span>
+              </label>
+              {{ form.message }}
+              {% if form.message.errors %}<div class="text-danger small">{{ form.message.errors }}</div>{% endif %}
+              <div class="form-text">SMS splits every 160 chars. Keep under 160 for single-part messages.</div>
+            </div>
+
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2 small">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <button type="submit" class="btn btn-success"
+                    onclick="return confirm('Send this notification to all selected recipients?')">
+              <i class="bi bi-send me-1"></i> Send Now
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Guide panel -->
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm rounded-3 mb-3">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-info-circle me-2"></i>Channel Guide</span>
+        </div>
+        <div class="card-body small">
+          <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge bg-success"><i class="bi bi-bell"></i> In-App</span>
+            </div>
+            Recipients see the notification inside the Kiswate web app when they next log in.
+            Parents view it at <em>Parent Portal → Notifications</em>.
+            Students view it at their notification page.
+            Zero cost, instant delivery.
+          </div>
+          <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge bg-primary"><i class="bi bi-envelope"></i> Email</span>
+            </div>
+            Sent to the address on the user's account. Requires email to be configured in settings.
+            Good for long messages, documents, and links.
+          </div>
+          <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge bg-warning text-dark"><i class="bi bi-phone"></i> SMS</span>
+            </div>
+            Delivered to the phone number on record via the EUJIM / AdvantaSMS gateway.
+            Requires SMS credentials in settings. Best for urgent short alerts.
+            Costs apply per message.
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-header py-2">
+          <span class="fw-semibold"><i class="bi bi-people me-2"></i>Audience Quick Ref</span>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th>Option</th><th>Who receives</th></tr></thead>
+            <tbody class="small">
+              <tr><td>All Parents</td><td>Every parent linked to a student in this school</td></tr>
+              <tr><td>All Students</td><td>Every active enrolled student</td></tr>
+              <tr><td>All Staff</td><td>Every staff profile in the school</td></tr>
+              <tr><td>Everyone</td><td>Parents + Students + Staff</td></tr>
+              <tr><td>Parents of Grade</td><td>Parents whose child is in the selected grade</td></tr>
+              <tr><td>Students in Grade</td><td>Students enrolled in the selected grade</td></tr>
+              <tr><td>Parents of Stream</td><td>Parents whose child is in the selected stream</td></tr>
+              <tr><td>Students in Stream</td><td>Students enrolled in the selected stream</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const audienceSel = document.getElementById('id_audience');
+const gradeField  = document.getElementById('gradeField');
+const streamField = document.getElementById('streamField');
+const msgArea     = document.getElementById('id_bulk_message');
+const charCount   = document.getElementById('charCount');
+
+function updateFields() {
+  const v = audienceSel.value;
+  gradeField.style.display  = v.includes('grade')  ? '' : 'none';
+  streamField.style.display = v.includes('stream') ? '' : 'none';
+}
+audienceSel.addEventListener('change', updateFields);
+updateFields();
+
+msgArea && msgArea.addEventListener('input', () => {
+  const len = msgArea.value.length;
+  charCount.textContent = `${len} / 320 chars`;
+  charCount.className = len > 160 ? 'text-warning small fw-semibold' : 'text-muted small fw-normal';
+});
+</script>
+{% endblock %}

@@ -1,261 +1,574 @@
 {% extends "school/base.html" %}
 {% load static %}
 {% load humanize %}
-{% load dic_filters %} {# for get_item filter #}
 
 {% block title %}Dashboard | {{ school.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid px-3 py-3" style="max-width:1600px">
 
-  <!-- KPIs -->
-  <div class="row mb-4">
-    {% for kpi in kpis %}
-      <div class="col-md-2 mb-3">
-        <div class="card shadow-sm rounded-4 p-3">
-          <div class="d-flex align-items-center">
-            <div class="me-3">
-              <i class="bi bi-{{ kpi.icon }} text-success fs-2"></i>
+<!-- ══════════════════════════════════════════════════════════════
+     HEADER STRIP
+══════════════════════════════════════════════════════════════ -->
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+  <div>
+    <h5 class="fw-bold mb-0">{{ school.name }}</h5>
+    <div class="d-flex flex-wrap gap-2 mt-1">
+      {% if active_term %}
+      <span class="badge rounded-pill px-2 py-1" style="background:rgba(11,122,42,.12);color:#0b7a2a;font-size:.75rem">
+        <i class="bi bi-calendar3 me-1"></i>{{ active_term.name }}
+        &bull; {{ term_days_left }} day{{ term_days_left|pluralize }} left
+      </span>
+      {% endif %}
+      <span class="badge rounded-pill px-2 py-1 bg-light text-secondary" style="font-size:.75rem">
+        <i class="bi bi-clock me-1"></i>{{ today|date:"l, j F Y" }}
+      </span>
+      {% if is_current_week %}
+      <span class="badge rounded-pill px-2 py-1" style="background:rgba(52,152,219,.12);color:#2980b9;font-size:.75rem">
+        <i class="bi bi-lightning-fill me-1"></i>Live Week
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'school:bulk-notify' %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-megaphone me-1"></i> Notify
+    </a>
+    <a href="{% url 'school:upload_excel_page' %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-upload me-1"></i> Upload
+    </a>
+    <a href="{% url 'school:generate_timetable' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-calendar-week me-1"></i> Timetable
+    </a>
+    <a href="{% url 'school:attendance-export-csv' %}" class="btn btn-sm btn-outline-dark">
+      <i class="bi bi-download me-1"></i> Export
+    </a>
+  </div>
+</div>
+
+{% if active_term %}
+<!-- Term progress bar -->
+<div class="mb-3">
+  <div class="d-flex justify-content-between mb-1" style="font-size:.75rem;color:#888">
+    <span>{{ active_term.start_date|date:"j M" }}</span>
+    <span class="fw-semibold" style="color:#0b7a2a">{{ term_progress }}% complete</span>
+    <span>{{ active_term.end_date|date:"j M" }}</span>
+  </div>
+  <div style="height:5px;background:#e9ecef;border-radius:99px;overflow:hidden">
+    <div style="height:100%;width:{{ term_progress }}%;background:linear-gradient(90deg,#0b7a2a,#2ecc71);border-radius:99px"></div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════
+     KPI TILES  (row of 8)
+══════════════════════════════════════════════════════════════ -->
+<div class="row g-2 mb-3">
+
+  <!-- Students -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(52,152,219,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-people-fill" style="color:#2980b9;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ total_students|intcomma }}</div>
+            <div style="font-size:.72rem;color:#888">Students</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teachers -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(155,89,182,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-person-badge-fill" style="color:#8e44ad;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ total_teachers|intcomma }}</div>
+            <div style="font-size:.72rem;color:#888">Teachers</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Parents -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(241,196,15,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-person-hearts" style="color:#d68910;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ total_parents|intcomma }}</div>
+            <div style="font-size:.72rem;color:#888">Parents</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Today Attendance -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem;border-left:3px solid {% if today_rate >= 90 %}#27ae60{% elif today_rate >= 75 %}#f39c12{% else %}#e74c3c{% endif %} !important">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:{% if today_rate >= 90 %}rgba(46,204,113,.12){% elif today_rate >= 75 %}rgba(243,156,18,.12){% else %}rgba(231,76,60,.12){% endif %};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-check-circle-fill" style="color:{% if today_rate >= 90 %}#27ae60{% elif today_rate >= 75 %}#f39c12{% else %}#e74c3c{% endif %};font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1;color:{% if today_rate >= 90 %}#27ae60{% elif today_rate >= 75 %}#f39c12{% else %}#e74c3c{% endif %}">{{ today_rate }}%</div>
+            <div style="font-size:.72rem;color:#888">Today's Att.</div>
+          </div>
+        </div>
+        {% if today_total %}<div style="font-size:.68rem;color:#aaa;margin-top:.2rem">{{ today_present }}/{{ today_total }} present</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Term Attendance -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(11,122,42,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-calendar-check-fill" style="color:#0b7a2a;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ term_rate }}%</div>
+            <div style="font-size:.72rem;color:#888">Term Att.</div>
+          </div>
+        </div>
+        <div style="height:3px;background:#e9ecef;border-radius:99px;margin-top:.4rem;overflow:hidden">
+          <div style="height:100%;width:{{ term_rate }}%;background:#0b7a2a;border-radius:99px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fee Collection -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(26,188,156,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-cash-coin" style="color:#16a085;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ fee_rate }}%</div>
+            <div style="font-size:.72rem;color:#888">Fees Collected</div>
+          </div>
+        </div>
+        {% if fee_pending_count %}<div style="font-size:.68rem;color:#e74c3c;margin-top:.2rem"><i class="bi bi-exclamation-circle me-1"></i>{{ fee_pending_count }} pending</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Discipline -->
+  <div class="col-6 col-md-3 col-xl">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(231,76,60,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-shield-exclamation" style="color:#c0392b;font-size:1rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ discipline_count }}</div>
+            <div style="font-size:.72rem;color:#888">Discipline</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Complaints -->
+  <div class="col-6 col-md-3 col-xl">
+    <a href="{% url 'school:admin-complaints' %}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center gap-2">
+            <div style="width:36px;height:36px;border-radius:.5rem;background:rgba(230,126,34,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="bi bi-chat-square-text-fill" style="color:#d35400;font-size:1rem"></i>
             </div>
             <div>
-              <h5 class="mb-0">{{ kpi.value }}</h5>
-              <small>{{ kpi.label }}</small>
+              <div class="fw-bold" style="font-size:1.25rem;line-height:1">{{ open_complaints }}</div>
+              <div style="font-size:.72rem;color:#888">Open Cases</div>
             </div>
           </div>
         </div>
       </div>
-    {% endfor %}
+    </a>
   </div>
 
-  <!-- Date Navigation -->
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <a href="?date={{ prev_week }}" class="btn btn-outline-secondary">&laquo; Previous Week</a>
-    <h5>Week of {{ week_days.0|date:"M d, Y" }}</h5>
-    <a href="?date={{ next_week }}" class="btn btn-outline-secondary">Next Week &raquo;</a>
-  </div>
+</div><!-- /KPI row -->
 
-  <!-- Main Tabs -->
-  <ul class="nav nav-tabs mb-3" id="dashboardTabs">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#teachers">Teachers missed classes</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#students">Students missed classes</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#suspensions">Suspensions</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#expulsions">Expulsions</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#charts">Weekly Trends</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#heatmap">Teacher Heatmap</button></li>
-  </ul>
 
-  <div class="tab-content">
+<!-- ══════════════════════════════════════════════════════════════
+     MAIN GRID  (charts left · live panel right)
+══════════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-3">
 
-    <!-- Teachers Tab -->
-    <div class="tab-pane fade show active" id="teachers">
-      <div class="table-responsive">
-        <table class="table table-striped table-bordered">
-          <thead>
-            <tr>
-              <th>Teacher</th>
-              <th>Missed Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for tm in teachers_missed %}
-              <tr>
-                <td>{{ tm.teacher }}</td>
-                <td>{{ tm.missed_count }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+  <!-- ── Attendance trend chart ─────────────────────────────── -->
+  <div class="col-12 col-xl-8">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
+        <div>
+          <span class="fw-semibold" style="font-size:.9rem">Weekly Attendance</span>
+          <span class="ms-2 text-muted" style="font-size:.75rem">
+            {{ week_days.0|date:"M d" }} – {{ week_days.4|date:"M d, Y" }}
+          </span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <a href="?date={{ prev_week }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">‹</a>
+          {% if not is_current_week %}
+          <a href="{% url 'school:dashboard' %}" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.75rem">Today</a>
+          {% endif %}
+          <a href="?date={{ next_week }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">›</a>
+        </div>
+      </div>
+      <div class="card-body px-3 pt-2 pb-3">
+        <canvas id="weeklyChart" style="max-height:230px"></canvas>
       </div>
     </div>
+  </div>
 
-    <!-- Students Tab -->
-    <div class="tab-pane fade" id="students">
-      <!-- Sub-tabs for streams -->
-      <ul class="nav nav-pills mb-3">
-        {% for stream in student_missed_by_stream %}
-          <li class="nav-item">
-            <button class="nav-link {% if forloop.first %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#stream-{{ forloop.counter }}">
-              {{ stream.stream }}
-            </button>
-          </li>
-        {% endfor %}
-      </ul>
+  <!-- ── Today live panel ───────────────────────────────────── -->
+  <div class="col-12 col-xl-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3">
+        <span class="fw-semibold" style="font-size:.9rem">Today at a Glance</span>
+        <span class="ms-1 text-muted" style="font-size:.75rem">{{ today|date:"l" }}</span>
+      </div>
+      <div class="card-body px-3 pt-2 pb-1">
+        {% if today_total %}
+        <div class="d-flex justify-content-center mb-2" style="height:130px">
+          <canvas id="donutChart"></canvas>
+        </div>
+        <div class="row g-1 text-center mb-2">
+          <div class="col-3"><div style="font-size:.68rem;color:#27ae60;font-weight:700">{{ donut_data.0 }}</div><div style="font-size:.62rem;color:#aaa">Present</div></div>
+          <div class="col-3"><div style="font-size:.68rem;color:#e74c3c;font-weight:700">{{ donut_data.1 }}</div><div style="font-size:.62rem;color:#aaa">Absent</div></div>
+          <div class="col-3"><div style="font-size:.68rem;color:#f39c12;font-weight:700">{{ donut_data.2 }}</div><div style="font-size:.62rem;color:#aaa">Tardy</div></div>
+          <div class="col-3"><div style="font-size:.68rem;color:#8e44ad;font-weight:700">{{ donut_data.3 }}</div><div style="font-size:.62rem;color:#aaa">Action</div></div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3" style="font-size:.82rem">
+          <i class="bi bi-calendar-x d-block mb-1" style="font-size:1.5rem;opacity:.4"></i>
+          No attendance recorded today
+        </div>
+        {% endif %}
 
-      <div class="tab-content">
-        {% for stream in student_missed_by_stream %}
-          <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="stream-{{ forloop.counter }}">
-            <div class="table-responsive">
-              <table class="table table-bordered table-striped">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Missed Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for student in stream.students %}
-                    <tr>
-                      <td>{{ student.student }}</td>
-                      <td>{{ student.missed_count }}</td>
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+        <!-- Today's schedule -->
+        <div class="border-top pt-2">
+          <div style="font-size:.72rem;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.5px" class="mb-1">Schedule Today</div>
+          {% for lesson in todays_lessons %}
+          <div class="d-flex align-items-center gap-2 py-1 border-bottom" style="font-size:.78rem">
+            <span class="text-muted" style="min-width:52px;font-size:.7rem">
+              {% if lesson.time_slot %}{{ lesson.time_slot.start_time|time:"H:i" }}{% endif %}
+            </span>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="fw-semibold text-truncate">{{ lesson.subject.name }}</div>
+              <div class="text-muted" style="font-size:.68rem">{{ lesson.stream.grade.name }} {{ lesson.stream.name }} &bull; {{ lesson.teacher.user.get_full_name }}</div>
             </div>
           </div>
+          {% empty %}
+          <div class="text-muted" style="font-size:.75rem">No lessons scheduled today</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main grid -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ALERTS ROW  (teachers · discipline · suspensions)
+══════════════════════════════════════════════════════════════ -->
+<div class="row g-3 mb-3">
+
+  <!-- Teachers with missed lessons -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
+        <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-person-x-fill text-danger me-1"></i>Teachers — Missed Lessons</span>
+        <span class="badge bg-danger rounded-pill" style="font-size:.68rem">{{ teachers_missed|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% for t in teachers_missed %}
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom" style="font-size:.8rem">
+          <div>
+            <div class="fw-semibold">{{ t.user.get_full_name }}</div>
+          </div>
+          <span class="badge rounded-pill px-2" style="background:rgba(231,76,60,.1);color:#c0392b;font-size:.72rem">
+            {{ t.missed_count }} missed
+          </span>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-4" style="font-size:.8rem">
+          <i class="bi bi-check2-all d-block mb-1" style="font-size:1.4rem;color:#27ae60;opacity:.7"></i>
+          All teachers present this week
+        </div>
         {% endfor %}
       </div>
     </div>
-
-    <!-- Suspensions Tab -->
-    <div class="tab-pane fade" id="suspensions">
-      <div class="table-responsive">
-        <table class="table table-bordered table-striped">
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Lesson</th>
-              <th>Date</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for att in suspensions %}
-              <tr>
-                <td>{{ att.enrollment.student.user.get_full_name }}</td>
-                <td>{% if att.enrollment.lesson %}{{ att.enrollment.lesson.subject.name }}{% else %}N/A{% endif %}</td>
-                <td>{{ att.date }}</td>
-                <td>
-                  <a href="#" class="btn btn-sm btn-primary">Terminate</a>
-                  </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% if suspensions.has_other_pages %}
-          <nav>
-            <ul class="pagination">
-              {% if suspensions.has_previous %}
-                <li class="page-item">
-                  <a class="page-link" href="?susp_page={{ suspensions.previous_page_number }}&date={{ week_days.0 }}#suspensions">&laquo;</a>
-                </li>
-              {% endif %}
-              {% for num in suspensions.paginator.page_range %}
-                <li class="page-item {% if suspensions.number == num %}active{% endif %}">
-                  <a class="page-link" href="?susp_page={{ num }}&date={{ week_days.0 }}#suspensions">{{ num }}</a>
-                </li>
-              {% endfor %}
-              {% if suspensions.has_next %}
-                <li class="page-item">
-                  <a class="page-link" href="?susp_page={{ suspensions.next_page_number }}&date={{ week_days.0 }}#suspensions">&raquo;</a>
-                </li>
-              {% endif %}
-            </ul>
-          </nav>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Expulsions Tab -->
-    <div class="tab-pane fade" id="expulsions">
-      <div class="table-responsive">
-        <table class="table table-bordered table-striped">
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Lesson</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for att in expulsions %}
-              <tr>
-                <td>{{ att.enrollment.student.user.get_full_name }}</td>
-                <td>{% if att.enrollment.lesson %}{{ att.enrollment.lesson.subject.name }}{% else %}N/A{% endif %}</td>
-                <td>{{ att.date }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% if expulsions.has_other_pages %}
-          <nav>
-            <ul class="pagination">
-              {% if expulsions.has_previous %}
-                <li class="page-item">
-                  <a class="page-link" href="?exp_page={{ expulsions.previous_page_number }}&date={{ week_days.0 }}#expulsions">&laquo;</a>
-                </li>
-              {% endif %}
-              {% for num in expulsions.paginator.page_range %}
-                <li class="page-item {% if expulsions.number == num %}active{% endif %}">
-                  <a class="page-link" href="?exp_page={{ num }}&date={{ week_days.0 }}#expulsions">{{ num }}</a>
-                </li>
-              {% endfor %}
-              {% if expulsions.has_next %}
-                <li class="page-item">
-                  <a class="page-link" href="?exp_page={{ expulsions.next_page_number }}&date={{ week_days.0 }}#expulsions">&raquo;</a>
-                </li>
-              {% endif %}
-            </ul>
-          </nav>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Weekly Trends Tab -->
-    <div class="tab-pane fade" id="charts">
-      <canvas id="weeklyChart" height="150"></canvas>
-    </div>
-
-    <!-- Teacher Heatmap Tab -->
-    <div class="tab-pane fade" id="heatmap">
-      <div class="table-responsive">
-        <table class="table table-bordered text-center">
-          <thead>
-            <tr>
-              <th>Teacher</th>
-              {% for day in week_days %}
-                <th>{{ day|date:"D M d" }}</th>
-              {% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for t in teacher_heatmap %}
-              <tr>
-                <td>{{ t.teacher }}</td>
-                {% for day in week_days %}
-                  <td style="background-color: {{ t.day_colors|get_item:day }};">
-                    {{ t.day_counts|get_item:day }}
-                  </td>
-                {% endfor %}
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
   </div>
 
-</div>
+  <!-- Recent discipline -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
+        <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-shield-exclamation text-warning me-1"></i>Recent Discipline Cases</span>
+        <a href="{% url 'school:school-discipline' %}" class="text-muted" style="font-size:.72rem">View all</a>
+      </div>
+      <div class="card-body p-0">
+        {% for d in discipline_recent %}
+        <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom" style="font-size:.8rem">
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ d.student.user.get_full_name }}</div>
+            <div class="text-muted" style="font-size:.72rem">{{ d.incident_type|title }} &bull; {{ d.date|date:"M j" }}</div>
+          </div>
+          <span class="badge rounded-pill px-2" style="font-size:.68rem;
+            {% if d.severity == 'high' %}background:rgba(231,76,60,.1);color:#c0392b
+            {% elif d.severity == 'medium' %}background:rgba(243,156,18,.1);color:#d68910
+            {% else %}background:rgba(0,0,0,.06);color:#555{% endif %}">
+            {{ d.get_severity_display|default:d.severity }}
+          </span>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-4" style="font-size:.8rem">
+          <i class="bi bi-shield-check d-block mb-1" style="font-size:1.4rem;color:#27ae60;opacity:.7"></i>
+          No recent discipline cases
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 
-<!-- ChartJS Script -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Suspensions / Expulsions this week -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3">
+        <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-ban text-danger me-1"></i>Suspensions & Expulsions</span>
+        <span class="text-muted ms-1" style="font-size:.72rem">this week</span>
+      </div>
+      <div class="card-body p-0">
+        {% for att in suspensions %}
+        <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style="font-size:.8rem">
+          <span class="badge bg-warning text-dark" style="font-size:.65rem;min-width:22px">S</span>
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ att.enrollment.student.user.get_full_name }}</div>
+            <div class="text-muted" style="font-size:.7rem">{{ att.date|date:"M j" }} &bull; {{ att.enrollment.lesson.subject.name|default:"—" }}</div>
+          </div>
+        </div>
+        {% endfor %}
+        {% for att in expulsions %}
+        <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style="font-size:.8rem">
+          <span class="badge bg-danger" style="font-size:.65rem;min-width:22px">E</span>
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ att.enrollment.student.user.get_full_name }}</div>
+            <div class="text-muted" style="font-size:.7rem">{{ att.date|date:"M j" }} &bull; {{ att.enrollment.lesson.subject.name|default:"—" }}</div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if not suspensions and not expulsions %}
+        <div class="text-center text-muted py-4" style="font-size:.8rem">
+          <i class="bi bi-emoji-smile d-block mb-1" style="font-size:1.4rem;opacity:.5"></i>
+          No suspensions or expulsions this week
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div><!-- /alerts row -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     BOTTOM ROW  (grade breakdown · students missed)
+══════════════════════════════════════════════════════════════ -->
+<div class="row g-3">
+
+  <!-- Grade-level attendance breakdown -->
+  <div class="col-12 col-lg-5">
+    <div class="card border-0 shadow-sm" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3">
+        <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-mortarboard text-primary me-1"></i>Attendance by Grade (Term)</span>
+      </div>
+      <div class="card-body px-3 py-2">
+        {% for g in grade_att %}
+        {% if g.grade_name %}
+        <div class="mb-2">
+          <div class="d-flex justify-content-between mb-1" style="font-size:.78rem">
+            <span class="fw-semibold">{{ g.grade_name }}</span>
+            <span class="{% if g.rate >= 90 %}text-success{% elif g.rate >= 75 %}text-warning{% else %}text-danger{% endif %} fw-semibold">
+              {{ g.rate|floatformat:1 }}%
+            </span>
+          </div>
+          <div style="height:6px;background:#e9ecef;border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:{{ g.rate|floatformat:0 }}%;border-radius:99px;
+              background:{% if g.rate >= 90 %}#27ae60{% elif g.rate >= 75 %}#f39c12{% else %}#e74c3c{% endif %}">
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% empty %}
+        <div class="text-muted text-center py-3" style="font-size:.8rem">No grade attendance data</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Students with missed lessons by stream -->
+  <div class="col-12 col-lg-7">
+    <div class="card border-0 shadow-sm" style="border-radius:.7rem">
+      <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
+        <span class="fw-semibold" style="font-size:.85rem"><i class="bi bi-person-x text-warning me-1"></i>Students with Absences — by Stream</span>
+        <span class="text-muted" style="font-size:.72rem">{{ week_days.0|date:"M d" }}–{{ week_days.4|date:"d" }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if student_missed_by_stream %}
+        <!-- Stream tabs -->
+        <ul class="nav nav-pills gap-1 px-3 pt-2 pb-1" style="flex-wrap:wrap">
+          {% for item in student_missed_by_stream %}
+          <li class="nav-item">
+            <button class="nav-link py-0 px-2 {% if forloop.first %}active{% endif %}"
+                    style="font-size:.75rem;border-radius:.4rem"
+                    data-bs-toggle="tab"
+                    data-bs-target="#missed-stream-{{ forloop.counter }}">
+              {{ item.stream.name }}
+              <span class="badge rounded-pill ms-1" style="font-size:.65rem;background:rgba(0,0,0,.08);color:#555">{{ item.students|length }}</span>
+            </button>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="tab-content">
+          {% for item in student_missed_by_stream %}
+          <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="missed-stream-{{ forloop.counter }}">
+            <table class="table mb-0" style="font-size:.8rem">
+              <thead class="table-light">
+                <tr>
+                  <th style="padding:.4rem .75rem">#</th>
+                  <th style="padding:.4rem .75rem">Student</th>
+                  <th style="padding:.4rem .75rem" class="text-end">Absences</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in item.students %}
+                <tr>
+                  <td style="padding:.35rem .75rem;color:#aaa">{{ forloop.counter }}</td>
+                  <td style="padding:.35rem .75rem" class="fw-semibold">{{ s.user.get_full_name }}</td>
+                  <td style="padding:.35rem .75rem" class="text-end">
+                    <span class="badge rounded-pill px-2" style="background:rgba(231,76,60,.1);color:#c0392b;font-size:.72rem">
+                      {{ s.missed_count }}
+                    </span>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:.8rem">
+          <i class="bi bi-check2-circle d-block mb-1" style="font-size:1.5rem;color:#27ae60;opacity:.7"></i>
+          No student absences recorded this week
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div><!-- /bottom row -->
+
+</div><!-- /container -->
+
+<!-- ═══════ SCRIPTS ═══════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-  const ctx = document.getElementById('weeklyChart').getContext('2d');
-  const weeklyChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: [{% for day in week_days %}'{{ day|date:"D M d" }}',{% endfor %}],
-      datasets: [
-        { label: 'Present', backgroundColor: 'green', data: [{% for n in week_counts.P %}{{ n }},{% endfor %}] },
-        { label: 'Excused Tardy', backgroundColor: 'orange', data: [{% for n in week_counts.ET %}{{ n }},{% endfor %}] },
-        { label: 'Unexcused Tardy', backgroundColor: 'red', data: [{% for n in week_counts.UT %}{{ n }},{% endfor %}] },
-        { label: 'Excused Absence', backgroundColor: '#0dcaf0', data: [{% for n in week_counts.EA %}{{ n }},{% endfor %}] },
-        { label: 'Unexcused Absence', backgroundColor: '#6c757d', data: [{% for n in week_counts.UA %}{{ n }},{% endfor %}] },
-      ]
+// ── Weekly Attendance Bar Chart ──────────────────────────────────────────────
+const wCtx = document.getElementById('weeklyChart').getContext('2d');
+new Chart(wCtx, {
+  type: 'bar',
+  data: {
+    labels: {{ chart_labels_json|safe }},
+    datasets: [
+      {
+        label: 'Present',
+        data: {{ chart_present_json|safe }},
+        backgroundColor: 'rgba(39,174,96,.75)',
+        borderRadius: 4,
+        borderSkipped: false,
+      },
+      {
+        label: 'Absent',
+        data: {{ chart_absent_json|safe }},
+        backgroundColor: 'rgba(231,76,60,.65)',
+        borderRadius: 4,
+        borderSkipped: false,
+      },
+      {
+        label: 'Tardy',
+        data: {{ chart_tardy_json|safe }},
+        backgroundColor: 'rgba(243,156,18,.65)',
+        borderRadius: 4,
+        borderSkipped: false,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}` } }
     },
-    options: { responsive: true, plugins: { legend: { position: 'top' } } }
-  });
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 }, grid: { color: '#f0f0f0' } }
+    }
+  }
+});
+
+// ── Today's Donut ────────────────────────────────────────────────────────────
+{% if today_total %}
+const dCtx = document.getElementById('donutChart').getContext('2d');
+new Chart(dCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Present','Absent','Tardy','Action'],
+    datasets: [{
+      data: {{ donut_data_json|safe }},
+      backgroundColor: [
+        'rgba(39,174,96,.8)',
+        'rgba(231,76,60,.8)',
+        'rgba(243,156,18,.8)',
+        'rgba(142,68,173,.8)',
+      ],
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '68%',
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}` } }
+    }
+  }
+});
+{% endif %}
 </script>
 
 {% endblock %}

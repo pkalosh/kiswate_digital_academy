@@ -22,7 +22,11 @@ Teacher Attendance Dashboard
     <div class="card shadow-sm rounded-4 mb-3 p-3">
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="form-label">Stream</label>
+                <label class="form-label small fw-semibold">Search Student</label>
+                <input type="text" name="student_search" value="{{ student_search }}" class="form-control" placeholder="Name or Reg No.">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Stream</label>
                 <select name="stream" class="form-select">
                     <option value="">All Streams</option>
                     {% for s in streams %}
@@ -30,8 +34,8 @@ Teacher Attendance Dashboard
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Grade</label>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Grade</label>
                 <select name="grade" class="form-select">
                     <option value="">All Grades</option>
                     {% for g in grades %}
@@ -39,16 +43,17 @@ Teacher Attendance Dashboard
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Start Date</label>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">Start Date</label>
                 <input type="date" name="start" value="{{ period_start }}" class="form-control">
             </div>
-            <div class="col-md-3">
-                <label class="form-label">End Date</label>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold">End Date</label>
                 <input type="date" name="end" value="{{ period_end }}" class="form-control">
             </div>
-            <div class="col-md-12 text-end mt-2">
-                <button class="btn btn-primary">Apply Filters</button>
+            <div class="col-md-1 d-flex align-items-end gap-1">
+                <button class="btn btn-success btn-sm flex-fill"><i class="bi bi-funnel"></i></button>
+                <a href="{% url 'school:teacher-attendance' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x"></i></a>
             </div>
         </form>
     </div>

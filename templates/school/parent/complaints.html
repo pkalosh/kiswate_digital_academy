@@ -1,0 +1,160 @@
+{% extends 'school/parent/base.html' %}
+{% block title %}Complaints{% endblock %}
+{% block nav_complaints %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="fw-bold mb-0">My Complaints</h5>
+  <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#newComplaintModal">
+    <i class="bi bi-plus"></i> New Complaint
+  </button>
+</div>
+
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+  {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+
+<div class="card k-card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 k-tight">
+      <thead class="table-light">
+        <tr>
+          <th>Subject</th>
+          <th>Category</th>
+          <th>Child</th>
+          <th>Submitted</th>
+          <th>Status</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in complaints %}
+        <tr>
+          <td class="fw-semibold">{{ c.subject|truncatechars:40 }}</td>
+          <td><span class="badge bg-secondary">{{ c.get_category_display }}</span></td>
+          <td>{{ c.student.user.get_full_name|default:"—" }}</td>
+          <td>{{ c.created_at|date:"M d, Y" }}</td>
+          <td>
+            <span class="badge {% if c.status == 'resolved' %}bg-success{% elif c.status == 'in_review' %}bg-warning text-dark{% elif c.status == 'closed' %}bg-secondary{% else %}bg-danger{% endif %}">
+              {{ c.get_status_display }}
+            </span>
+          </td>
+          <td>
+            {% if c.response %}
+              <button class="btn btn-xs btn-outline-secondary"
+                      data-bs-toggle="modal" data-bs-target="#viewResponseModal"
+                      data-subject="{{ c.subject|escapejs }}"
+                      data-response="{{ c.response|escapejs }}"
+                      data-by="{{ c.responded_by.user.get_full_name|default:'School Admin'|escapejs }}"
+                      data-at="{{ c.responded_at|date:'M d, Y H:i' }}">
+                View Reply
+              </button>
+            {% else %}
+              <span class="text-muted small">Pending</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">
+            No complaints submitted yet.
+            <a href="#" data-bs-toggle="modal" data-bs-target="#newComplaintModal">Submit one.</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if complaints.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if complaints.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ complaints.previous_page_number }}">&laquo;</a></li>{% endif %}
+    {% for num in complaints.paginator.page_range %}
+      {% if complaints.number == num %}<li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > complaints.number|add:-3 and num < complaints.number|add:3 %}<li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>{% endif %}
+    {% endfor %}
+    {% if complaints.has_next %}<li class="page-item"><a class="page-link" href="?page={{ complaints.next_page_number }}">&raquo;</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+<!-- New Complaint Modal -->
+<div class="modal fade" id="newComplaintModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title">Submit a Complaint</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Category</label>
+              {{ form.category }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">{{ form.student.label }}</label>
+              {{ form.student }}
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Subject / Title</label>
+              {{ form.subject }}
+              {% if form.subject.errors %}<div class="text-danger small">{{ form.subject.errors }}</div>{% endif %}
+            </div>
+            <div class="col-12">
+              <label class="form-label small fw-semibold">Description</label>
+              {{ form.description }}
+              {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                {{ form.is_anonymous }}
+                <label class="form-check-label small" for="{{ form.is_anonymous.id_for_label }}">
+                  Submit anonymously (your name will not be shown to the school)
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-success">Submit Complaint</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- View Response Modal -->
+<div class="modal fade" id="viewResponseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="responseSubject"></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="responseBody" class="mb-2"></p>
+        <small class="text-muted">— <span id="responseBy"></span>, <span id="responseAt"></span></small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>.btn-xs{padding:.2rem .45rem;font-size:.75rem}</style>
+<script>
+document.getElementById('viewResponseModal').addEventListener('show.bs.modal', e => {
+  const b = e.relatedTarget;
+  document.getElementById('responseSubject').textContent = b.dataset.subject;
+  document.getElementById('responseBody').textContent = b.dataset.response;
+  document.getElementById('responseBy').textContent = b.dataset.by;
+  document.getElementById('responseAt').textContent = b.dataset.at;
+});
+</script>
+{% endblock %}

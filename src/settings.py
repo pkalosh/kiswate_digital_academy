@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     'api',
     'widget_tweaks',
     'rest_framework',  # Add this
-    'rest_framework_simplejwt', 
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders', # Optional: for JWT
 ]
 MIDDLEWARE = [
@@ -237,8 +238,11 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Your mobile dev server (e.g., React Native)
@@ -247,9 +251,23 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 
 SMS_API_KEY = ''
-SMS_PARTNERID =''
+SMS_PARTNERID = ''
 SMS_SHORTCODE = ''
 SMS_API_URL = ''
+
+# ─── EMAIL ───────────────────────────────────────────────────────────────────
+# Development: Django prints emails to console (default backend).
+# Production: switch backend + fill in SMTP credentials below.
+#
+#   EMAIL_BACKEND   = 'django.core.mail.backends.smtp.EmailBackend'
+#   EMAIL_HOST      = 'smtp.gmail.com'          # or your provider
+#   EMAIL_PORT      = 587
+#   EMAIL_USE_TLS   = True
+#   EMAIL_HOST_USER = 'your@email.com'
+#   EMAIL_HOST_PASSWORD = 'app-password'
+#
+DEFAULT_FROM_EMAIL = 'Kiswate Digital <no-reply@kiswate.co.ke>'
+EMAIL_SUBJECT_PREFIX = '[Kiswate] '
 
 
 LOGIN_URL = "userauths:sign-in"

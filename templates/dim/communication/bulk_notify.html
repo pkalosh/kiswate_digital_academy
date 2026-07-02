@@ -1,0 +1,89 @@
+{% extends "dim/base.html" %}
+{% block title %}Send Bulk Notification{% endblock %}
+{% block page_title %}Send Bulk Notification{% endblock %}
+{% block nav_notif_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-send me-2 text-success"></i>Send Bulk Notification</h5>
+  <a href="{% url 'kiswate_digital_app:notification_list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Channel <span class="text-danger">*</span></label>
+            {{ form.notification_type }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Send To <span class="text-danger">*</span></label>
+            {{ form.recipients }}
+          </div>
+          <div class="col-md-6" id="program-field">
+            <label class="form-label">Program <small class="text-muted">(if targeting a program)</small></label>
+            {{ form.program }}
+          </div>
+          <div class="col-md-6" id="school-field">
+            <label class="form-label">School <small class="text-muted">(if targeting a school)</small></label>
+            {{ form.school }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Subject <small class="text-muted">(for email)</small></label>
+            {{ form.subject }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Message <span class="text-danger">*</span></label>
+            {{ form.message }}
+            <div class="form-text">Keep SMS under 160 characters to avoid split messages.</div>
+          </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger mt-3" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="alert alert-warning mt-4 d-flex gap-2" style="font-size:.83rem;">
+          <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+          This will queue messages for <strong>all matching recipients</strong>.
+          Review your selection before sending.
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-brand"
+                  onclick="return confirm('Send this notification to all selected recipients?')">
+            <i class="bi bi-send me-1"></i>Send Notification
+          </button>
+          <a href="{% url 'kiswate_digital_app:notification_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Show/hide program and school selectors based on recipient choice
+const recipientsSelect = document.querySelector('[name="recipients"]');
+const programField = document.getElementById('program-field');
+const schoolField = document.getElementById('school-field');
+
+function updateVisibility() {
+  const val = recipientsSelect.value;
+  programField.style.display = val === 'program' ? '' : 'none';
+  schoolField.style.display = val === 'school' ? '' : 'none';
+}
+recipientsSelect.addEventListener('change', updateVisibility);
+updateVisibility();
+</script>
+{% endblock %}

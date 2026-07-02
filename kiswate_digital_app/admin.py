@@ -1,3 +1,20 @@
 from django.contrib import admin
-
+from .models import *
 # Register your models here.
+admin.site.register(UserProfile)
+admin.site.register(Guardian)
+admin.site.register(Subject)
+admin.site.register(Program)
+admin.site.register(Enrollment)
+admin.site.register(VirtualClass)
+admin.site.register(ClassAttendance)
+admin.site.register(Lesson)
+admin.site.register(Assignment)
+admin.site.register(AssignmentSubmission)
+admin.site.register(Assessment)
+admin.site.register(Question)
+admin.site.register(Choice)
+admin.site.register(StudentAssessmentAttempt)
+admin.site.register(StudentAnswer)
+admin.site.register(NotificationTemplate)
+admin.site.register(NotificationLog)

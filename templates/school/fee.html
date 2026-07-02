@@ -1,0 +1,74 @@
+{% extends 'school/base.html' %}
+{% block title %}Fees & Payments | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h5 class="fw-bold mb-0">Fees & Payments</h5>
+      <small class="text-muted">{{ school.name }}</small>
+    </div>
+  </div>
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <!-- Search bar -->
+  <form method="get" class="mb-3">
+    <div class="input-group input-group-sm" style="max-width:360px">
+      <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search student or type…">
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+      {% if query %}<a href="?" class="btn btn-outline-danger"><i class="bi bi-x"></i></a>{% endif %}
+    </div>
+  </form>
+
+  <div class="card border-0 shadow-sm rounded-3">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size:.85rem">
+        <thead class="table-light">
+          <tr>
+            <th>Student</th>
+            <th>Type</th>
+            <th>Amount (KSh)</th>
+            <th>Status</th>
+            <th>Paid At</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td class="fw-semibold">{{ p.student.user.get_full_name|default:"—" }}</td>
+            <td>{{ p.get_payment_type_display }}</td>
+            <td>{{ p.amount|floatformat:2 }}</td>
+            <td>
+              {% if p.status == 'completed' %}
+                <span class="badge bg-success">Completed</span>
+              {% elif p.status == 'pending' %}
+                <span class="badge bg-warning text-dark">Pending</span>
+              {% else %}
+                <span class="badge bg-danger">{{ p.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td>{{ p.paid_at|date:"M d, Y"|default:"—" }}</td>
+            <td class="text-muted small">{{ p.transaction_id|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-cash-stack display-5 d-block mb-2 opacity-40"></i>
+              No payment records{% if query %} matching "{{ query }}"{% endif %}.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

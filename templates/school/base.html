@@ -173,7 +173,9 @@
         <a class="side-link" href="{% url 'school:attendance-dashboard' %}">Attendance</a>
         <a class="side-link" href="{% url 'school:school-assignments' %}">Assignments</a>
         <a class="side-link" href="{% url 'school:school-discipline' %}">Discipline</a>
-        <a class="side-link" href="">Payments</a>
+        <a class="side-link" href="{% url 'school:finance-dashboard' %}"><i class="bi bi-cash-stack me-1"></i>Finance</a>
+        <a class="side-link" href="{% url 'school:school-fees' %}">Payments</a>
+        <a class="side-link" href="{% url 'school:announcements' %}"><i class="bi bi-megaphone me-1"></i>Announcements</a>
         <a class="side-link" href="{% url 'school:school-settings' %}">Settings</a>
         <a class="side-link" href="{% url 'school:upload_excel_page' %}">Data Upload</a>
 

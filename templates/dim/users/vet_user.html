@@ -1,0 +1,65 @@
+{% extends "dim/base.html" %}
+{% block title %}Vet Profile — {{ profile.full_name }}{% endblock %}
+{% block page_title %}Vet Profile{% endblock %}
+{% block nav_users_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Vet Profile</h5>
+  <a href="{% url 'kiswate_digital_app:user_detail' profile.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+</div>
+
+<div class="row g-4 justify-content-center">
+  <div class="col-lg-5">
+    <!-- Summary of who is being vetted -->
+    <div class="module-card mb-4">
+      <div class="d-flex align-items-center gap-3">
+        <div class="rounded-circle bg-secondary-subtle d-flex align-items-center justify-content-center"
+             style="width:48px;height:48px;font-size:1.3rem;flex-shrink:0;">
+          <i class="bi bi-person text-secondary"></i>
+        </div>
+        <div>
+          <div class="fw-semibold">{{ profile.full_name }}</div>
+          <div class="text-muted" style="font-size:.83rem;">{{ profile.user.email }}</div>
+          <span class="badge rounded-pill badge-{{ profile.vetting_status }} mt-1" style="font-size:.7rem;">
+            Current: {{ profile.get_vetting_status_display }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h6 class="fw-semibold mb-3">Vetting Decision</h6>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Status <span class="text-danger">*</span></label>
+          {{ form.vetting_status }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Notes <small class="text-muted">(optional)</small></label>
+          {{ form.vetting_notes }}
+          <div class="form-text">Add any remarks about this profile review.</div>
+        </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger" style="font-size:.85rem;">
+          {% for field, errors in form.errors.items %}
+            {% for error in errors %}<div>{{ error }}</div>{% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-4">
+          <button type="submit" class="btn btn-brand">
+            <i class="bi bi-check-lg me-1"></i>Save Decision
+          </button>
+          <a href="{% url 'kiswate_digital_app:user_detail' profile.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

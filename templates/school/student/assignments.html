@@ -1,0 +1,150 @@
+{% extends 'school/student/base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}My Assignments{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="fw-bold mb-0"><i class="bi bi-clipboard-check me-1 text-success"></i>My Assignments</h5>
+</div>
+
+<!-- Filters -->
+<form method="get" class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search by title...">
+      </div>
+      <div class="col-md-3">
+        <select name="subject" class="form-select form-select-sm">
+          <option value="">All Subjects</option>
+          {% for s in subjects %}
+          <option value="{{ s.pk }}" {% if subject_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Status</option>
+          <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+          <option value="submitted" {% if status_filter == 'submitted' %}selected{% endif %}>Submitted</option>
+          <option value="overdue" {% if status_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button class="btn btn-sm btn-success flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <a href="{% url 'school:student-assignments' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x"></i></a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- Assignments List -->
+{% for item in assignment_data %}
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <h6 class="fw-bold mb-0">{{ item.assignment.title }}</h6>
+          {% if item.is_overdue %}
+          <span class="badge bg-danger">Overdue</span>
+          {% elif item.my_submission %}
+            {% if item.my_submission.score is not None %}
+            <span class="badge bg-success">Graded</span>
+            {% else %}
+            <span class="badge bg-info">Submitted</span>
+            {% endif %}
+          {% else %}
+          <span class="badge bg-warning text-dark">Pending</span>
+          {% endif %}
+        </div>
+        <div class="d-flex gap-3 flex-wrap" style="font-size:.8rem;">
+          <span class="text-muted"><i class="bi bi-book me-1"></i>{{ item.assignment.subject.name }}</span>
+          <span class="text-muted"><i class="bi bi-calendar3 me-1"></i>Due: <strong class="{% if item.is_overdue %}text-danger{% endif %}">{{ item.assignment.due_date|date:"d M Y, H:i" }}</strong></span>
+          <span class="text-muted"><i class="bi bi-star me-1"></i>Max Score: {{ item.assignment.max_score }}</span>
+          <span class="text-muted"><i class="bi bi-tag me-1"></i>{{ item.assignment.get_assignment_type_display }}</span>
+        </div>
+        {% if item.assignment.description %}
+        <p class="text-muted small mt-2 mb-2">{{ item.assignment.description|truncatechars:150 }}</p>
+        {% endif %}
+      </div>
+
+      <div class="d-flex gap-2 flex-shrink-0 align-items-start">
+        {% if item.assignment.file_attachment %}
+        <a href="{{ item.assignment.file_attachment.url }}" class="btn btn-sm btn-outline-primary" download>
+          <i class="bi bi-download me-1"></i>Download
+        </a>
+        {% endif %}
+
+        {% if not item.is_overdue or item.my_submission %}
+        <button class="btn btn-sm {% if item.my_submission %}btn-outline-success{% else %}btn-success{% endif %}"
+          data-bs-toggle="collapse" data-bs-target="#submit{{ item.assignment.pk }}">
+          <i class="bi bi-upload me-1"></i>{% if item.my_submission %}Update{% else %}Submit{% endif %}
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Submission details if exists -->
+    {% if item.my_submission %}
+    <div class="mt-2 p-2 bg-success-subtle rounded border border-success-subtle">
+      <div class="d-flex gap-3 flex-wrap" style="font-size:.8rem;">
+        <span><i class="bi bi-check-circle-fill text-success me-1"></i>Submitted: {{ item.my_submission.submitted_at|date:"d M Y, H:i" }}</span>
+        {% if item.my_submission.score is not None %}
+        <span class="fw-bold text-success"><i class="bi bi-star-fill me-1"></i>Score: {{ item.my_submission.score }} / {{ item.assignment.max_score }}</span>
+        {% else %}
+        <span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Awaiting grading</span>
+        {% endif %}
+        {% if item.my_submission.file_submission %}
+        <a href="{{ item.my_submission.file_submission.url }}" class="btn btn-xs btn-outline-secondary" style="font-size:.72rem;padding:.15rem .4rem;" download>
+          <i class="bi bi-file-earmark me-1"></i>My File
+        </a>
+        {% endif %}
+      </div>
+      {% if item.my_submission.feedback %}
+      <div class="mt-1 small"><strong>Feedback:</strong> {{ item.my_submission.feedback }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Upload form -->
+    <div class="collapse mt-2" id="submit{{ item.assignment.pk }}">
+      <form method="post" enctype="multipart/form-data" class="p-2 bg-light rounded">
+        {% csrf_token %}
+        <input type="hidden" name="assignment_id" value="{{ item.assignment.pk }}">
+        <div class="d-flex align-items-center gap-2">
+          <input type="file" name="file_submission" class="form-control form-control-sm flex-grow-1">
+          <button type="submit" class="btn btn-sm btn-success flex-shrink-0"><i class="bi bi-upload me-1"></i>Submit</button>
+        </div>
+        <small class="text-muted">Upload your completed assignment file (PDF, DOCX, etc.)</small>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% empty %}
+<div class="alert alert-info text-center py-5">
+  <i class="bi bi-clipboard display-4 d-block mb-2 opacity-50"></i>
+  No assignments found matching your filters.
+</div>
+{% endfor %}
+
+<!-- Pagination -->
+{% if assignment_data.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if assignment_data.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ assignment_data.previous_page_number }}&q={{ q }}&status={{ status_filter }}&subject={{ subject_filter }}">&laquo;</a></li>{% endif %}
+    {% for n in assignment_data.paginator.page_range %}
+      {% if assignment_data.number == n %}<li class="page-item active"><span class="page-link">{{ n }}</span></li>
+      {% elif n > assignment_data.number|add:-3 and n < assignment_data.number|add:3 %}<li class="page-item"><a class="page-link" href="?page={{ n }}&q={{ q }}&status={{ status_filter }}&subject={{ subject_filter }}">{{ n }}</a></li>{% endif %}
+    {% endfor %}
+    {% if assignment_data.has_next %}<li class="page-item"><a class="page-link" href="?page={{ assignment_data.next_page_number }}&q={{ q }}&status={{ status_filter }}&subject={{ subject_filter }}">&raquo;</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+</div>
+{% endblock %}

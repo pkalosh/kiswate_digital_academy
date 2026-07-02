@@ -1,0 +1,79 @@
+{% extends 'school/parent/base.html' %}
+{% block title %}Attendance{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h5 class="fw-bold mb-0">Attendance Records</h5>
+  {% if children|length > 1 %}
+  <form method="get" class="d-flex gap-2">
+    <select name="child" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="">All Children</option>
+      {% for child in children %}
+      <option value="{{ child.pk }}" {% if selected_child_id == child.pk|stringformat:"s" %}selected{% endif %}>
+        {{ child.user.get_full_name }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% for ad in attendance_data %}
+<div class="card k-card mb-4">
+  <div class="card-header py-2 d-flex align-items-center gap-2 flex-wrap">
+    <i class="bi bi-person-circle text-success"></i>
+    <strong>{{ ad.student.user.get_full_name }}</strong>
+    <span class="badge bg-secondary">{{ ad.student.grade_level.name }}</span>
+    <div class="ms-auto d-flex gap-3 text-center">
+      <div>
+        <div class="fw-bold text-success">{{ ad.rate }}%</div>
+        <small class="text-muted">Attendance Rate</small>
+      </div>
+      <div>
+        <div class="fw-bold">{{ ad.present }}/{{ ad.total }}</div>
+        <small class="text-muted">Present/Total</small>
+      </div>
+    </div>
+  </div>
+  <div class="px-3 pt-2 pb-1">
+    <div class="k-progress">
+      <span style="width:{{ ad.rate }}%"></span>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 k-tight">
+      <thead class="table-light">
+        <tr><th>Date</th><th>Subject</th><th>Time</th><th>Status</th><th>Remarks</th></tr>
+      </thead>
+      <tbody>
+        {% for rec in ad.records %}
+        <tr>
+          <td>{{ rec.date }}</td>
+          <td>{{ rec.enrollment.lesson.subject.name|default:"—" }}</td>
+          <td>
+            {% if rec.enrollment.lesson.time_slot %}
+              {{ rec.enrollment.lesson.time_slot.start_time|time:"H:i" }}–{{ rec.enrollment.lesson.time_slot.end_time|time:"H:i" }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if rec.status == 'P' %}bg-success{% elif rec.status in '18,20' %}bg-danger{% elif rec.status == 'UA' or rec.status == 'UT' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">
+              {{ rec.get_status_display }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ rec.remarks|default:"—"|truncatechars:40 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-3">No attendance records.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-person-x display-4 d-block mb-2 opacity-50"></i>
+  No attendance data available.
+</div>
+{% endfor %}
+{% endblock %}

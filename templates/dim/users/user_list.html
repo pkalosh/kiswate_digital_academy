@@ -1,0 +1,95 @@
+{% extends "dim/base.html" %}
+{% block title %}Users{% endblock %}
+{% block page_title %}Users{% endblock %}
+{% block nav_users_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-people me-2 text-success"></i>Users</h5>
+</div>
+
+<!-- Filters -->
+<div class="module-card mb-4">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Search</label>
+      <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Name or email…">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Role</label>
+      <select name="role" class="form-select form-select-sm">
+        <option value="">All Roles</option>
+        <option value="student" {% if role == "student" %}selected{% endif %}>Student</option>
+        <option value="teacher" {% if role == "teacher" %}selected{% endif %}>Teacher</option>
+        <option value="school_admin" {% if role == "school_admin" %}selected{% endif %}>School Admin</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Vetting Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">All</option>
+        <option value="pending" {% if status == "pending" %}selected{% endif %}>Pending</option>
+        <option value="approved" {% if status == "approved" %}selected{% endif %}>Approved</option>
+        <option value="rejected" {% if status == "rejected" %}selected{% endif %}>Rejected</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-brand btn-sm"><i class="bi bi-search me-1"></i>Filter</button>
+      <a href="{% url 'kiswate_digital_app:user_list' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+    </div>
+  </form>
+</div>
+
+<div class="table-card">
+  <table class="table table-hover align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>School</th>
+        <th>Vetting</th>
+        <th>Joined</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in profiles %}
+      <tr>
+        <td>
+          <div class="fw-semibold" style="font-size:.875rem;">{{ p.full_name }}</div>
+        </td>
+        <td style="font-size:.83rem;">{{ p.user.email }}</td>
+        <td>
+          <span class="badge rounded-pill
+            {% if p.role == 'student' %}badge-student
+            {% elif p.role == 'teacher' %}badge-teacher
+            {% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size:.7rem;">
+            {{ p.get_role_display }}
+          </span>
+        </td>
+        <td style="font-size:.83rem;">{{ p.school.name|default:"—" }}</td>
+        <td>
+          <span class="badge rounded-pill badge-{{ p.vetting_status }}" style="font-size:.7rem;">
+            {{ p.get_vetting_status_display }}
+          </span>
+        </td>
+        <td style="font-size:.8rem;">{{ p.created_at|date:"M d, Y" }}</td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{% url 'kiswate_digital_app:user_detail' p.pk %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">View</a>
+            {% if p.vetting_status == 'pending' %}
+            <a href="{% url 'kiswate_digital_app:vet_user' p.pk %}" class="btn btn-sm btn-outline-warning" style="font-size:.75rem;">Vet</a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">No users found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
