@@ -175,9 +175,29 @@
               </h2>
               <div id="col-timetable" class="accordion-collapse collapse" data-bs-parent="#colGuide">
                 <div class="accordion-body py-2 small">
-                  <code>grade</code>, <code>stream</code>, <code>subject_code</code>,
-                  <code>teacher_staff_id</code>, <code>day_of_week</code>,
-                  <code>start_time</code>, <code>end_time</code>, <code>room</code> <em>(opt)</em>
+                  <p class="mb-1"><code>grade</code>, <code>stream</code>, <code>subject_code</code>,
+                  <code>teacher_phone</code>, <code>weekdays</code>,
+                  <code>start_time</code>, <code>end_time</code>, <code>room</code> <em>(opt)</em>, <code>term</code>, <code>year</code></p>
+                  <p class="mb-1 fw-semibold">Valid <code>subject_code</code> values:</p>
+                  <table class="table table-sm table-bordered mb-0" style="font-size:11px;">
+                    <thead class="table-dark"><tr><th>Code</th><th>Subject</th><th>Code</th><th>Subject</th></tr></thead>
+                    <tbody>
+                      <tr><td>MAT</td><td>Mathematics</td><td>CMAT</td><td>Core Maths</td></tr>
+                      <tr><td>EMAT</td><td>Essential Maths</td><td>ENG</td><td>English</td></tr>
+                      <tr><td>KISW</td><td>Kiswahili</td><td>CHEM</td><td>Chemistry</td></tr>
+                      <tr><td>BIO</td><td>Biology</td><td>PHY</td><td>Physics</td></tr>
+                      <tr><td>CRE</td><td>Christian Religious Education</td><td>GEO</td><td>Geography</td></tr>
+                      <tr><td>HIST</td><td>History</td><td>BST</td><td>Business Studies</td></tr>
+                      <tr><td>AGRI</td><td>Agriculture</td><td>MUDA</td><td>Music &amp; Dance</td></tr>
+                      <tr><td>LIT</td><td>Literature</td><td>FAS</td><td>Fasihi</td></tr>
+                      <tr><td>TF</td><td>Theatre and Film</td><td>GENSCI</td><td>General Science</td></tr>
+                      <tr><td>CSL</td><td>Community Service Learning</td><td>HSCI</td><td>Home Science</td></tr>
+                      <tr><td>ICT</td><td>ICT</td><td>PPI</td><td>Pastoral Programme of Instruction</td></tr>
+                      <tr><td>GRPS</td><td>Guidance &amp; Pastoral Studies</td><td>PE</td><td>Physical Education</td></tr>
+                      <tr><td>LS</td><td>Life Skills</td><td>COMP</td><td>Computer Studies</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="mt-1 text-muted" style="font-size:11px;">Codes are case-insensitive. Use the exact codes above — e.g. <code>MAT</code> not <code>MATH</code>.</p>
                 </div>
               </div>
             </div>

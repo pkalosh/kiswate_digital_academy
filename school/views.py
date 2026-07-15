@@ -6962,7 +6962,7 @@ def _run_excel_processing(df, category, school, user, results):
                     with transaction.atomic():
                         admin_no = str(row.get("admin_no", "")).strip()
                         if not admin_no:
-                            raise ValueError("admin_no is required")
+                            continue  # blank row — skip silently
 
                         student_email = f"{admin_no}@student.school.local"
                         student_password = generate_password()
@@ -6988,8 +6988,10 @@ def _run_excel_processing(df, category, school, user, results):
                         grade = Grade.objects.filter(name__iexact=grade_name, school=school).first()
                         stream = Streams.objects.filter(name__iexact=stream_name, school=school).first()
 
-                        if not grade or not stream:
-                            raise ValueError(f"Grade '{grade_name}' or Stream '{stream_name}' not found")
+                        if not grade:
+                            raise ValueError(f"Grade '{grade_name}' not found for this school")
+                        if not stream:
+                            raise ValueError(f"Stream '{stream_name}' not found in {grade_name}")
 
                         pathway_obj = None
                         pathway_raw = str(row.get("pathway", "")).strip()
@@ -7088,6 +7090,8 @@ def _run_excel_processing(df, category, school, user, results):
 
             for idx, row in df.iterrows():
                 try:
+                    if not str(row.get("phone", "")).strip():
+                        continue  # blank row — skip silently
                     phone = normalize_phone(row["phone"])
                     email = safe_email(row["email"], f"{phone}@gmail.com")
                     password = generate_password()
@@ -7211,8 +7215,11 @@ def _run_excel_processing(df, category, school, user, results):
 
         # ====================== PARENTS ======================
         elif category == "parents":
-            required = ["first_name", "last_name", "mobile", "admin_no"]
+            phone_col = next((c for c in ["mobile", "phone", "phone_number", "contact", "telephone"] if c in df.columns), None)
+            required = ["first_name", "last_name", "admin_no"]
             missing = [c for c in required if c not in df.columns]
+            if not phone_col:
+                missing.append("mobile (or phone / phone_number)")
             if missing:
                 results["fatal"] = f"Missing columns: {missing}"
                 return
@@ -7221,23 +7228,21 @@ def _run_excel_processing(df, category, school, user, results):
                 row_num = idx + 2
                 try:
                     with transaction.atomic():
-                        phone = normalize_phone(row["mobile"])
+                        phone = normalize_phone(row[phone_col])
                         admin_no = str(row["admin_no"]).strip()
                         email = f"{phone}@parent.school.local"
                         password = generate_password()
 
-                        user_obj, created = User.objects.get_or_create(
-                            email=email,
-                            defaults={
-                                "phone_number": phone,
-                                "first_name": str(row["first_name"]).strip(),
-                                "last_name": str(row["last_name"]).strip(),
-                                "is_parent": True,
-                            }
-                        )
-                        if created:
-                            user_obj.set_password(password)
-                            user_obj.save()
+                        user_obj = User.objects.filter(phone_number=phone).first()
+                        if not user_obj:
+                            user_obj = User.objects.create_user(
+                                email=email,
+                                phone_number=phone,
+                                first_name=str(row["first_name"]).strip(),
+                                last_name=str(row["last_name"]).strip(),
+                                is_parent=True,
+                                password=password,
+                            )
 
                         parent, _ = Parent.objects.get_or_create(
                             user=user_obj,
@@ -7275,15 +7280,15 @@ def _run_excel_processing(df, category, school, user, results):
             term_name = str(first.get("term", "")).strip()
             excel_year_value = int(str(first.get("year")).strip())
 
-            year_obj = AcademicYear.objects.get(name=excel_year_value)
-            term = Term.objects.get(
-                name=term_name, school=school, year=year_obj, is_active=True
-            )
+            term = Term.objects.filter(name=term_name, school=school, is_active=True).first()
+            if not term:
+                results["fatal"] = f"No active term named '{term_name}' found for this school. Please activate the term first."
+                return
 
             grade_name = str(first.get("grade", "")).strip()
             stream_name = str(first.get("stream", "")).strip()
             grade = Grade.objects.get(name=grade_name, school=school)
-            stream = Streams.objects.get(name=stream_name, school=school)
+            stream = Streams.objects.get(name=stream_name, school=school, grade=grade)
 
             timetable, _ = Timetable.objects.get_or_create(
                 school=school, grade=grade, stream=stream, term=term, year=excel_year_value,
