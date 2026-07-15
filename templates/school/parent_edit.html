@@ -46,5 +46,37 @@
     </div>
   </div>
 
+  <!-- Reset Password -->
+  <div class="card shadow-sm border-0 rounded-3 mt-4 border-warning">
+    <div class="card-header bg-warning-subtle fw-semibold text-warning-emphasis">
+      <i class="bi bi-key me-1"></i> Reset Password
+    </div>
+    <div class="card-body">
+      <form method="post" action="{% url 'school:reset_user_password' 'parent' parent.pk %}">
+        {% csrf_token %}
+        <div class="row g-3 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label small fw-semibold mb-1">New Password</label>
+            <input type="text" name="new_password" class="form-control" placeholder="Min. 8 characters" minlength="8" required>
+            <div class="form-text">The parent will receive this exact password.</div>
+          </div>
+          <div class="col-md-4 d-flex align-items-center gap-2 pt-3">
+            <input type="checkbox" class="form-check-input mt-0" name="send_email" id="parent_send_email" value="1"
+              {% if parent.user.email %}checked{% endif %}>
+            <label class="form-check-label small" for="parent_send_email">
+              Email to <strong>{{ parent.user.email|default:"(no email)" }}</strong>
+            </label>
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-warning w-100"
+              onclick="return confirm('Reset password for {{ parent.user.get_full_name }}?')">
+              <i class="bi bi-key me-1"></i> Reset Password
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

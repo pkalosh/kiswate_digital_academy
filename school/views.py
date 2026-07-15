@@ -1129,6 +1129,70 @@ def update_staff(request, pk):
     context = {'form': form, 'staff': staff, 'school': school}
     return render(request, 'school/staff_edit.html', context)
 
+
+@login_required
+@require_POST
+def reset_user_password(request, user_type, pk):
+    """Admin resets a user's password and optionally emails it to them."""
+    from django.urls import reverse
+    admin = request.user
+    if not (admin.is_admin or admin.is_principal or admin.is_deputy_principal):
+        messages.error(request, "You do not have permission to perform this action.")
+        return redirect("userauths:sign-in")
+
+    school = get_user_school(admin)
+    if not school:
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    type_map = {
+        'staff':   (StaffProfile, 'update_staff'),
+        'student': (Student,      'update_student'),
+        'parent':  (Parent,       'update_parent'),
+    }
+    if user_type not in type_map:
+        messages.error(request, "Invalid user type.")
+        return redirect('school:school-users')
+
+    model_cls, edit_url_name = type_map[user_type]
+    obj = get_object_or_404(model_cls, pk=pk, school=school)
+    target_user = obj.user
+    edit_url = reverse(f'school:{edit_url_name}', args=[pk])
+
+    new_password = request.POST.get('new_password', '').strip()
+    send_email = request.POST.get('send_email') == '1'
+
+    if not new_password or len(new_password) < 8:
+        messages.error(request, "Password must be at least 8 characters.")
+        return redirect(edit_url)
+
+    target_user.set_password(new_password)
+    target_user.save()
+
+    if send_email and target_user.email:
+        try:
+            send_mail(
+                subject="Your password has been reset",
+                message=(
+                    f"Hello {target_user.get_full_name()},\n\n"
+                    f"Your account password at {school.name} has been reset by an administrator.\n\n"
+                    f"New password: {new_password}\n\n"
+                    f"Please log in and change your password as soon as possible.\n\n"
+                    f"— {school.name} Admin"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[target_user.email],
+                fail_silently=False,
+            )
+            messages.success(request, f"Password reset and emailed to {target_user.email}.")
+        except Exception as e:
+            messages.warning(request, f"Password reset but email failed: {e}")
+    else:
+        messages.success(request, f"Password reset successfully for {target_user.get_full_name()}."  )
+
+    return redirect(edit_url)
+
+
 # Delete Views
 @login_required
 def delete_student(request, pk):

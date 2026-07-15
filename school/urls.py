@@ -45,6 +45,9 @@ urlpatterns = [
     path("parent/<int:pk>/edit/", views.update_parent, name="update_parent"),
     path("parent/<int:pk>/delete/", views.delete_parent, name="delete_parent"),
 
+    # Password reset (staff / student / parent)
+    path("<str:user_type>/<int:pk>/reset-password/", views.reset_user_password, name="reset_user_password"),
+
     path("ajax/subcounties/", views.ajax_subcounties, name="ajax-subcounties"),
     path("ajax/schools/", views.ajax_schools, name="ajax-schools"),
     path("ajax/grades/", views.ajax_grades, name="ajax-grades"),
