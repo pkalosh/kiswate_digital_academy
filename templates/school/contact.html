@@ -1,0 +1,61 @@
+{% extends 'school/base.html' %}
+{% block title %}Contact Messages | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex gap-2 align-items-center">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Contact Messages</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active">Contact Messages</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-envelope me-2"></i> Contact Messages</h5>
+    </div>
+    <div class="card-body">
+      {% if messages_list %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>From</th>
+                <th>Subject</th>
+                <th>Message</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for msg in messages_list %}
+              <tr>
+                <td>{{ msg.name }} <br><small class="text-muted">{{ msg.email }}</small></td>
+                <td>{{ msg.subject }}</td>
+                <td>{{ msg.message|truncatechars:80 }}</td>
+                <td>{{ msg.created_at|date:"Y-m-d H:i" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted text-center py-5">No contact messages received.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

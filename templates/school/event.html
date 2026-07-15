@@ -1,0 +1,71 @@
+{% extends 'school/base.html' %}
+{% block title %}Events | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <h5 class="fw-bold mb-0"><i class="bi bi-calendar-event me-2 text-success"></i>School Events</h5>
+    <a href="{% url 'school:school-calendar' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-calendar3 me-1"></i>Calendar View
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body table-responsive p-0">
+      <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+        <thead class="table-light">
+          <tr>
+            <th>Title</th>
+            <th class="hide-xs">Subject</th>
+            <th class="hide-sm">Platform</th>
+            <th>Date / Time</th>
+            <th class="hide-sm">Teacher</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ event.title }}</div>
+              <div class="d-xs-block d-sm-none text-muted" style="font-size:.75rem;">
+                {{ event.subject.name }} &middot; {{ event.scheduled_at|date:"d M Y, H:i" }}
+              </div>
+            </td>
+            <td class="hide-xs">{{ event.subject.name }}</td>
+            <td class="hide-sm">
+              <span class="badge bg-secondary">{{ event.get_platform_display }}</span>
+            </td>
+            <td>{{ event.scheduled_at|date:"d M Y" }}<br><small class="text-muted">{{ event.scheduled_at|time:"H:i" }}</small></td>
+            <td class="hide-sm">{{ event.teacher.user.get_full_name|default:"—" }}</td>
+            <td>
+              {% if event.is_live %}
+                <span class="badge bg-danger">Live</span>
+              {% elif event.scheduled_at > now %}
+                <span class="badge bg-primary">Upcoming</span>
+              {% else %}
+                <span class="badge bg-secondary">Past</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-calendar-x fs-2 d-block mb-2"></i>No events scheduled.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

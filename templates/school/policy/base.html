@@ -175,11 +175,34 @@
 
     /* ── Responsive ── */
     @media (max-width: 991px) {
-      .sidebar { position: fixed; left: -100%; height: 100%; }
+      .sidebar { position: fixed; left: -100%; height: 100%; z-index: 100; }
       .sidebar.open { left: 0; }
       .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 99; display: none; }
       .scrim.show { display: block; }
+      .content-area { padding-bottom: 5rem !important; }
     }
+
+    /* Column-hide utilities */
+    @media (max-width: 575px) { .hide-xs { display: none !important; } }
+    @media (max-width: 767px) { .hide-sm { display: none !important; } .filter-bar { padding: .5rem .65rem; } }
+
+    /* Bottom mobile nav */
+    .mobile-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--k-black);
+      padding: .5rem 0 calc(.5rem + env(safe-area-inset-bottom));
+      z-index: 200; border-top: 1px solid #222;
+      display: none;
+    }
+    .mobile-nav a {
+      color: #888; text-decoration: none;
+      display: flex; flex-direction: column; align-items: center;
+      font-size: .58rem; gap: .06rem; padding: 0 .25rem; transition: color .15s;
+    }
+    .mobile-nav a i { font-size: 1.15rem; line-height: 1; }
+    .mobile-nav a:hover, .mobile-nav a.active { color: #fff; }
+    .mobile-nav a.active i { color: #4ddb7a; }
+    @media (max-width: 991px) { .mobile-nav { display: flex; justify-content: space-around; } }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -200,19 +223,19 @@
     </a>
 
     <div class="sidebar-section mt-2">Reports</div>
-    <a class="side-link" href="{% url 'school:policy-dashboard' %}?view=schools">
+    <a class="side-link {% if active_view == 'schools' %}active{% endif %}" href="{% url 'school:policy-dashboard' %}?view=schools">
       <i class="bi bi-building"></i> Schools
     </a>
-    <a class="side-link" href="{% url 'school:policy-dashboard' %}?view=teachers">
+    <a class="side-link {% if active_view == 'teachers' %}active{% endif %}" href="{% url 'school:policy-dashboard' %}?view=teachers">
       <i class="bi bi-person-badge"></i> Teachers
     </a>
-    <a class="side-link" href="{% url 'school:policy-dashboard' %}?view=grades">
+    <a class="side-link {% if active_view == 'grades' %}active{% endif %}" href="{% url 'school:policy-dashboard' %}?view=grades">
       <i class="bi bi-mortarboard"></i> Grades
     </a>
-    <a class="side-link" href="{% url 'school:policy-dashboard' %}?view=subjects">
+    <a class="side-link {% if active_view == 'subjects' %}active{% endif %}" href="{% url 'school:policy-dashboard' %}?view=subjects">
       <i class="bi bi-journal-bookmark"></i> Subjects
     </a>
-    <a class="side-link" href="{% url 'school:policy-dashboard' %}?view=discipline">
+    <a class="side-link {% if active_view == 'discipline' %}active{% endif %}" href="{% url 'school:policy-dashboard' %}?view=discipline">
       <i class="bi bi-exclamation-octagon"></i> Discipline
     </a>
 
@@ -237,6 +260,25 @@
 
   <!-- Scrim (mobile) -->
   <div class="scrim" id="scrim"></div>
+
+  <!-- Bottom mobile nav -->
+  <nav class="mobile-nav">
+    <a href="{% url 'school:policy-dashboard' %}" class="{% if not active_view %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i><span>Overview</span>
+    </a>
+    <a href="{% url 'school:policy-dashboard' %}?view=schools" class="{% if active_view == 'schools' %}active{% endif %}">
+      <i class="bi bi-building"></i><span>Schools</span>
+    </a>
+    <a href="{% url 'school:policy-dashboard' %}?view=teachers" class="{% if active_view == 'teachers' %}active{% endif %}">
+      <i class="bi bi-person-badge"></i><span>Teachers</span>
+    </a>
+    <a href="{% url 'school:policy-dashboard' %}?view=discipline" class="{% if active_view == 'discipline' %}active{% endif %}">
+      <i class="bi bi-exclamation-octagon"></i><span>Discipline</span>
+    </a>
+    <a href="{% url 'school:policy-dashboard' %}?view=subjects" class="{% if active_view == 'subjects' %}active{% endif %}">
+      <i class="bi bi-journal-bookmark"></i><span>Subjects</span>
+    </a>
+  </nav>
 
   <!-- ── Main ── -->
   <div class="main-wrap">

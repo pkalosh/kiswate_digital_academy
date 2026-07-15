@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}{{ action }} Template{% endblock %}
 {% block page_title %}{{ action }} Notification Template{% endblock %}
 {% block nav_notif_open %}show{% endblock %}
@@ -15,7 +15,7 @@
   <div class="col-lg-7">
     <div class="form-card">
       <div class="alert alert-light border mb-4" style="font-size:.82rem;">
-        <i class="bi bi-info-circle me-1 text-primary"></i>
+        <i class="bi bi-info-circle me-1 text-success"></i>
         Available placeholders: <code>{name}</code> <code>{class_title}</code> <code>{date}</code> <code>{link}</code>
       </div>
       <form method="post">

@@ -2,30 +2,23 @@
 {% block title %}Subjects | {{ school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
-  <div class="d-flex align-items-center gap-2">
-    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-    <div>
-      <h6 class="m-0 fw-bold">Subjects</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Subjects</li>
-        </ol>
-      </nav>
+<div class="d-flex align-items-center gap-2 px-1 py-2 flex-wrap">
+  <div class="flex-grow-1">
+    <h6 class="m-0 fw-bold">Subjects</h6>
+    <nav aria-label="breadcrumb" class="small">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Subjects</li>
+      </ol>
+    </nav>
+  </div>
+  <form method="get">
+    <div class="input-group input-group-sm">
+      <input type="text" name="q" class="form-control" placeholder="Search subjects..." value="{{ query }}" style="min-width:140px;">
+      <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
     </div>
-  </div>
-
-  <div class="d-flex align-items-center gap-2">
-    <form method="get" class="d-inline">
-      <div class="input-group input-group-sm" style="width:250px;">
-        <input type="text" name="q" class="form-control" placeholder="Search subjects..." value="{{ query }}">
-        <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
-      </div>
-    </form>
-    <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
-  </div>
-</header>
+  </form>
+</div>
 
 <section class="content container-fluid py-4">
 
@@ -47,11 +40,11 @@
           <thead class="table-light">
             <tr>
               <th>Name</th>
-              <th>Code</th>
-              <th>Teacher</th>
-              <th>Grade</th>
-              <th>Start</th>
-              <th>End</th>
+              <th class="hide-xs">Code</th>
+              <th class="hide-sm">Teacher</th>
+              <th class="hide-xs">Grade</th>
+              <th class="hide-sm">Start</th>
+              <th class="hide-sm">End</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -59,12 +52,17 @@
 
             {% for subject in subjects %}
             <tr>
-              <td><strong>{{ subject.name }}</strong></td>
-              <td><code>{{ subject.code }}</code></td>
-              <td>{{ subject.teacher.user.get_full_name }}</td>
-              <td>{{ subject.grade.name }}</td>
-              <td>{{ subject.start_date }}</td>
-              <td>{{ subject.end_date|default:"-" }}</td>
+              <td>
+                <strong>{{ subject.name }}</strong>
+                <div class="d-sm-none text-muted" style="font-size:.75rem;">
+                  <code>{{ subject.code }}</code>{% if subject.grade %} &middot; {{ subject.grade.name }}{% endif %}
+                </div>
+              </td>
+              <td class="hide-xs"><code>{{ subject.code }}</code></td>
+              <td class="hide-sm">{{ subject.teacher.user.get_full_name }}</td>
+              <td class="hide-xs">{{ subject.grade.name }}</td>
+              <td class="hide-sm">{{ subject.start_date }}</td>
+              <td class="hide-sm">{{ subject.end_date|default:"—" }}</td>
 
               <td>
                 {% if subject.is_active %}

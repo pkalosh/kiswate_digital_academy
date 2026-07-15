@@ -6,25 +6,17 @@
 {% block content %}
 <div class="container-fluid py-3">
 
-{% if messages %}
-{% for message in messages %}
-<div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3">
-  {{ message }}<button class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endfor %}
-{% endif %}
-
 <!-- Header -->
 <div class="mb-4">
   <h4 class="fw-bold mb-0">Kiswate Platform Overview</h4>
-  <small class="text-muted">Real-time SaaS metrics across all schools</small>
+  <small class="text-muted">Real-time metrics across all schools</small>
 </div>
 
 <!-- Top KPI Row -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-4 col-lg-2">
     <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
-      <i class="bi bi-building fs-2 text-primary mb-1"></i>
+      <i class="bi bi-building fs-2 text-success mb-1"></i>
       <div class="small text-muted">Total Schools</div>
       <div class="h4 fw-bold mb-0">{{ total_schools|intcomma }}</div>
       <small class="text-success">{{ active_schools }} active</small>
@@ -40,7 +32,7 @@
   </div>
   <div class="col-6 col-md-4 col-lg-2">
     <div class="card border-0 shadow-sm text-center p-3 h-100" style="border-radius:12px;">
-      <i class="bi bi-person-badge fs-2 text-info mb-1"></i>
+      <i class="bi bi-person-badge fs-2 text-success mb-1"></i>
       <div class="small text-muted">Teachers</div>
       <div class="h4 fw-bold mb-0">{{ total_teachers|intcomma }}</div>
     </div>
@@ -82,7 +74,6 @@
         <div class="d-flex justify-content-around mt-2" style="font-size:.78rem;">
           <span><span class="badge bg-success">Active</span> {{ active_students }}</span>
           <span><span class="badge bg-warning text-dark">Suspended</span> {{ suspended_students }}</span>
-          <span><span class="badge bg-secondary">Other</span> {{ total_students|add:"-"|add:active_students|add:"-"|add:suspended_students|default:0 }}</span>
         </div>
       </div>
     </div>
@@ -92,13 +83,13 @@
   <div class="col-md-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white border-0 py-2">
-        <h6 class="fw-semibold mb-0"><i class="bi bi-shield-check me-1 text-primary"></i>Subscription Health</h6>
+        <h6 class="fw-semibold mb-0"><i class="bi bi-shield-check me-1 text-success"></i>Subscription Health</h6>
       </div>
       <div class="card-body">
         <canvas id="subChart" height="180"></canvas>
         <div class="d-flex justify-content-around mt-2" style="font-size:.78rem;">
           <span><span class="badge bg-success">Active</span> {{ active_subs }}</span>
-          <span><span class="badge bg-info">Trial</span> {{ trial_subs }}</span>
+          <span><span class="badge bg-warning text-dark">Trial</span> {{ trial_subs }}</span>
           <span><span class="badge bg-danger">Expired</span> {{ expired_subs }}</span>
         </div>
       </div>
@@ -123,9 +114,9 @@
           </span>
           <div class="d-flex align-items-center gap-2">
             <div class="progress" style="width:80px;height:6px;">
-              <div class="progress-bar bg-primary" style="width:{% widthratio cls.n total_schools 100 %}%"></div>
+              <div class="progress-bar bg-success" style="width:{% widthratio cls.n total_schools 100 %}%"></div>
             </div>
-            <span class="badge bg-primary-subtle text-primary border border-primary">{{ cls.n }}</span>
+            <span class="badge text-dark" style="background:#d1fae5;border:1px solid #6ee7b7;">{{ cls.n }}</span>
           </div>
         </div>
         {% empty %}
@@ -154,7 +145,9 @@
         <h6 class="fw-semibold mb-0"><i class="bi bi-building me-1 text-success"></i>Recent Schools</h6>
         <a href="{% url 'kiswate_digital_app:school_list' %}" class="btn btn-xs btn-outline-success" style="font-size:.72rem;padding:.2rem .5rem;">View All</a>
       </div>
-      <div class="table-responsive">
+
+      <!-- Desktop table -->
+      <div class="table-responsive d-none d-md-block">
         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
           <thead class="table-light">
             <tr><th>School</th><th>Code</th><th>Type</th><th>Status</th><th>Joined</th></tr>
@@ -180,6 +173,25 @@
           </tbody>
         </table>
       </div>
+
+      <!-- Mobile cards -->
+      <div class="d-md-none p-2">
+        {% for s in recent_schools %}
+        <div class="d-flex justify-content-between align-items-start border-bottom py-2">
+          <div>
+            <div class="fw-semibold small">{{ s.name }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ s.code }} &bull; {{ s.county.name|default:"—" }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ s.created_at|date:"d M Y" }}</div>
+          </div>
+          <div class="text-end">
+            {% if s.is_active %}<span class="badge bg-success">Active</span>
+            {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-muted text-center py-3 small">No schools yet.</p>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </div>
@@ -190,7 +202,9 @@
     <h6 class="fw-semibold mb-0"><i class="bi bi-envelope-paper me-1 text-danger"></i>Recent Demo Requests</h6>
     <a href="{% url 'kiswate_digital_app:demo_request_list' %}" class="btn btn-xs btn-outline-danger" style="font-size:.72rem;padding:.2rem .5rem;">View All</a>
   </div>
-  <div class="table-responsive">
+
+  <!-- Desktop table -->
+  <div class="table-responsive d-none d-md-block">
     <table class="table table-sm table-hover align-middle mb-0" style="font-size:.82rem;">
       <thead class="table-light">
         <tr><th>Name</th><th>School</th><th>County</th><th>Phone</th><th>Status</th><th>Date</th></tr>
@@ -204,7 +218,7 @@
           <td>{{ d.contact_phone|default:"—" }}</td>
           <td>
             {% if d.lead_status == 'new' %}<span class="badge bg-danger">New</span>
-            {% elif d.lead_status == 'contacted' %}<span class="badge bg-info">Contacted</span>
+            {% elif d.lead_status == 'contacted' %}<span class="badge bg-warning text-dark">Contacted</span>
             {% elif d.lead_status == 'converted' %}<span class="badge bg-success">Converted</span>
             {% else %}<span class="badge bg-secondary">{{ d.lead_status }}</span>{% endif %}
           </td>
@@ -216,13 +230,33 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Mobile cards -->
+  <div class="d-md-none p-2">
+    {% for d in recent_demos %}
+    <div class="d-flex justify-content-between align-items-start border-bottom py-2">
+      <div>
+        <div class="fw-semibold small">{{ d.first_name }} {{ d.last_name }}</div>
+        <div class="text-muted" style="font-size:.75rem;">{{ d.school_name|default:"—" }} &bull; {{ d.county|default:"—" }}</div>
+        <div class="text-muted" style="font-size:.75rem;">{{ d.contact_phone|default:"—" }} &bull; {{ d.created_at|date:"d M Y" }}</div>
+      </div>
+      <div>
+        {% if d.lead_status == 'new' %}<span class="badge bg-danger">New</span>
+        {% elif d.lead_status == 'contacted' %}<span class="badge bg-warning text-dark">Contacted</span>
+        {% elif d.lead_status == 'converted' %}<span class="badge bg-success">Converted</span>
+        {% else %}<span class="badge bg-secondary">{{ d.lead_status }}</span>{% endif %}
+      </div>
+    </div>
+    {% empty %}
+    <p class="text-muted text-center py-3 small">No demo requests.</p>
+    {% endfor %}
+  </div>
 </div>
 
 </div><!-- /container-fluid -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Student Status
 new Chart(document.getElementById('studentStatusChart'), {
   type: 'doughnut',
   data: {
@@ -232,7 +266,6 @@ new Chart(document.getElementById('studentStatusChart'), {
   options: { responsive:true, plugins:{ legend:{ display:false } } }
 });
 
-// Subscription Health
 new Chart(document.getElementById('subChart'), {
   type: 'doughnut',
   data: {
@@ -242,12 +275,11 @@ new Chart(document.getElementById('subChart'), {
   options: { responsive:true, plugins:{ legend:{ display:false } } }
 });
 
-// Schools by County
 new Chart(document.getElementById('countyChart'), {
   type: 'bar',
   data: {
     labels: [{% for c in schools_by_county %}'{{ c.county_name|default:"Unknown" }}',{% endfor %}],
-    datasets: [{ label:'Schools', data:[{% for c in schools_by_county %}{{ c.n }},{% endfor %}], backgroundColor:'rgba(13,110,253,.7)', borderRadius:4 }]
+    datasets: [{ label:'Schools', data:[{% for c in schools_by_county %}{{ c.n }},{% endfor %}], backgroundColor:'rgba(11,122,42,.75)', borderRadius:4 }]
   },
   options: { indexAxis:'y', responsive:true, plugins:{ legend:{ display:false } }, scales:{ x:{ beginAtZero:true, ticks:{ precision:0 } } } }
 });

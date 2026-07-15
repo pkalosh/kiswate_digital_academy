@@ -1,0 +1,213 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}Browse DIL Programs{% endblock %}
+
+{% block extra_css %}
+<style>
+  .browse-hero {
+    background: linear-gradient(135deg, #0b7a2a 0%, #065f20 60%, #034012 100%);
+    border-radius: 16px;
+    padding: 2rem 2rem 1.75rem 2.5rem;
+    color: #fff;
+    margin-bottom: 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .browse-hero::after {
+    content: '';
+    position: absolute;
+    right: -50px; top: -50px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+  }
+  .browse-hero h4 { font-weight: 700; margin-bottom: .3rem; font-size: 1.3rem; }
+  .browse-hero p { opacity: .8; font-size: .9rem; margin: 0; }
+
+  .filter-bar {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .prog-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: box-shadow .2s, transform .2s;
+  }
+  .prog-card:hover {
+    box-shadow: 0 6px 24px rgba(0,0,0,.1);
+    transform: translateY(-2px);
+  }
+  .prog-card-accent {
+    height: 4px;
+    background: linear-gradient(90deg, #0b7a2a, #22c55e);
+  }
+  .prog-card-body { padding: 1.1rem 1.25rem; flex: 1; display: flex; flex-direction: column; }
+  .prog-icon-wrap {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: #f0fdf4;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; color: #0b7a2a; flex-shrink: 0;
+  }
+  .prog-title { font-weight: 700; font-size: .9rem; line-height: 1.3; margin-bottom: .1rem; }
+  .prog-subject { font-size: .78rem; color: #6b7280; }
+  .prog-desc { font-size: .8rem; color: #6b7280; margin: .6rem 0 .5rem; line-height: 1.5; flex: 1; }
+  .prog-teacher { font-size: .78rem; color: #374151; display: flex; align-items: center; gap: .3rem; margin-bottom: .6rem; }
+  .prog-footer {
+    border-top: 1px solid #f3f4f6;
+    padding: .75rem 1.25rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .price-tag { font-size: .95rem; font-weight: 700; color: #0b7a2a; }
+  .price-free { background: #d1fae5; color: #065f46; font-size: .75rem; font-weight: 700; padding: .2rem .6rem; border-radius: 20px; }
+  .enroll-count { font-size: .75rem; color: #9ca3af; margin-top: .15rem; }
+
+  .empty-browse { text-align: center; padding: 4rem 1rem; color: #9ca3af; }
+  .empty-browse i { font-size: 3rem; display: block; margin-bottom: 1rem; opacity: .3; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="browse-hero">
+  <h4><i class="bi bi-mortarboard me-2"></i>Browse DIL Programs</h4>
+  <p>Discover tutoring programs from verified teachers across Kenya.</p>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-12 col-md-5">
+      <label class="form-label mb-1" style="font-size:.78rem;font-weight:600;color:#374151;">Search</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Programs, subjects, teachers…">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label mb-1" style="font-size:.78rem;font-weight:600;color:#374151;">Level</label>
+      <select name="level" class="form-select form-select-sm">
+        <option value="">All Levels</option>
+        {% for lv in levels %}
+        <option value="{{ lv }}" {% if level == lv %}selected{% endif %}>{{ lv|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label mb-1" style="font-size:.78rem;font-weight:600;color:#374151;">Category</label>
+      <select name="category" class="form-select form-select-sm">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if category == cat %}selected{% endif %}>{{ cat|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-3 d-flex gap-2">
+      <button class="btn btn-brand btn-sm px-3 flex-shrink-0"><i class="bi bi-search me-1"></i>Search</button>
+      {% if q or level or category %}
+      <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-outline-danger btn-sm flex-shrink-0">
+        <i class="bi bi-x-lg"></i> Clear
+      </a>
+      {% endif %}
+      {% if request.user.is_authenticated %}
+      <a href="{% url 'kiswate_digital_app:student_tuition_dashboard' %}" class="btn btn-outline-secondary btn-sm ms-auto flex-shrink-0 d-none d-md-inline-flex">
+        <i class="bi bi-person-check me-1"></i>My DIL
+      </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if programs %}
+<div class="row g-3">
+  {% for p in programs %}
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="prog-card">
+      <div class="prog-card-accent"></div>
+      <div class="prog-card-body">
+        <div class="d-flex align-items-start gap-2 mb-2">
+          <div class="prog-icon-wrap"><i class="bi bi-book-half"></i></div>
+          <div class="min-w-0">
+            <div class="prog-title text-truncate">{{ p.name }}</div>
+            <div class="prog-subject">{{ p.subject.name }}</div>
+          </div>
+        </div>
+
+        {% if p.description %}
+        <p class="prog-desc">{{ p.description|truncatechars:90 }}</p>
+        {% else %}
+        <p class="prog-desc" style="opacity:.4;font-style:italic;">No description provided.</p>
+        {% endif %}
+
+        <div class="d-flex flex-wrap gap-1 mb-2">
+          {% if p.level %}<span class="badge rounded-pill" style="background:#d1fae5;color:#0b7a2a;font-size:.7rem;">{{ p.get_level_display }}</span>{% endif %}
+          {% if p.category %}<span class="badge rounded-pill" style="background:#f3e8ff;color:#6b21a8;font-size:.7rem;">{{ p.get_category_display }}</span>{% endif %}
+        </div>
+
+        {% if p.teacher %}
+        <div class="prog-teacher">
+          <i class="bi bi-person-badge text-muted"></i>
+          <span>{{ p.teacher.full_name }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="prog-footer">
+        <div>
+          {% if p.price > 0 %}
+            <div class="price-tag">KES {{ p.price }}</div>
+          {% else %}
+            <span class="price-free">Free</span>
+          {% endif %}
+          <div class="enroll-count"><i class="bi bi-people me-1"></i>{{ p.enrollments.count }} enrolled</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:tuition_program_detail' p.pk %}" class="btn btn-brand btn-sm px-3">
+          View <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-4">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&level={{ level }}&category={{ category }}">
+        <i class="bi bi-chevron-left"></i>
+      </a></li>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ q }}&level={{ level }}&category={{ category }}">{{ num }}</a></li>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&level={{ level }}&category={{ category }}">
+        <i class="bi bi-chevron-right"></i>
+      </a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="empty-browse">
+  <i class="bi bi-search"></i>
+  <h5 class="text-muted">No programs found</h5>
+  <p class="small">Try adjusting your filters or search terms.</p>
+  {% if q or level or category %}
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-outline-secondary btn-sm mt-2">Clear filters</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

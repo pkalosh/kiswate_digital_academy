@@ -1,0 +1,98 @@
+{% extends base_template|default:"Dashboard/base.html" %}
+{% block title %}Virtual Classes{% endblock %}
+{% block page_title %}Virtual Classes{% endblock %}
+{% block nav_classes_open %}show{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-camera-video me-2 text-success"></i>Virtual Classes</h5>
+  {% if profile and profile.role != 'student' %}
+  <a href="{% url 'kiswate_digital_app:virtual_class_create' %}" class="btn btn-brand btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Schedule Class
+  </a>
+  {% endif %}
+</div>
+
+<!-- Upcoming Classes -->
+<h6 class="fw-semibold mb-2 mt-1"><i class="bi bi-clock me-1 text-success"></i>Upcoming</h6>
+{% if upcoming_classes %}
+<div class="table-card mb-4">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Title</th><th>Program</th><th>Platform</th><th>Scheduled</th><th>Duration</th><th>Teacher</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for vc in upcoming_classes %}
+      <tr>
+        <td class="fw-semibold" style="font-size:.875rem;">{{ vc.title }}</td>
+        <td style="font-size:.83rem;">{{ vc.program.name }}</td>
+        <td>
+          <span class="badge pill-{{ vc.platform }} rounded-pill" style="font-size:.72rem;text-transform:capitalize;">
+            {{ vc.platform }}
+          </span>
+        </td>
+        <td style="font-size:.8rem;">{{ vc.scheduled_at|date:"D, d M Y H:i" }}</td>
+        <td style="font-size:.83rem;">{{ vc.duration_minutes }} min</td>
+        <td style="font-size:.83rem;">{{ vc.teacher.user.get_full_name|default:"—" }}</td>
+        <td>
+          <div class="d-flex gap-1">
+            <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">View</a>
+            {% if vc.meeting_link %}
+            <a href="{{ vc.meeting_link }}" target="_blank" rel="noopener" class="btn btn-sm btn-brand" style="font-size:.75rem;">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Join
+            </a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="module-card text-center py-4 text-muted mb-4">
+  <i class="bi bi-camera-video" style="font-size:2rem;"></i>
+  <p class="mt-2 mb-0 small">No upcoming classes scheduled.</p>
+</div>
+{% endif %}
+
+<!-- Past Classes -->
+<h6 class="fw-semibold mb-2"><i class="bi bi-clock-history me-1 text-muted"></i>Past Classes</h6>
+{% if past_classes %}
+<div class="table-card">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Title</th><th>Program</th><th>Platform</th><th>Held On</th><th>Duration</th><th>Teacher</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for vc in past_classes %}
+      <tr>
+        <td class="fw-semibold" style="font-size:.875rem;">{{ vc.title }}</td>
+        <td style="font-size:.83rem;">{{ vc.program.name }}</td>
+        <td>
+          <span class="badge bg-secondary-subtle text-secondary rounded-pill" style="font-size:.72rem;text-transform:capitalize;">
+            {{ vc.platform }}
+          </span>
+        </td>
+        <td style="font-size:.8rem;" class="text-muted">{{ vc.scheduled_at|date:"D, d M Y H:i" }}</td>
+        <td style="font-size:.83rem;">{{ vc.duration_minutes }} min</td>
+        <td style="font-size:.83rem;">{{ vc.teacher.user.get_full_name|default:"—" }}</td>
+        <td>
+          <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="module-card text-center py-4 text-muted">
+  <i class="bi bi-archive" style="font-size:2rem;"></i>
+  <p class="mt-2 mb-0 small">No past classes yet.</p>
+</div>
+{% endif %}
+{% endblock %}

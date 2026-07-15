@@ -2,12 +2,9 @@
 {% block title %}My Lessons | {{ teacher.user.get_full_name }}{% endblock %}
 
 {% block content %}
-<header class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h6 class="m-0 fw-bold">My Lessons</h6>
-  <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#lessonModal" data-mode="create">
-    <i class="bi bi-plus"></i> Add Lesson
-  </button>
-</header>
+</div>
 
 <section class="content container-fluid py-2">
 
@@ -18,9 +15,9 @@
   {% endfor %}
 
   <!-- Search -->
-  <form method="get" class="mb-3 d-flex gap-2">
-    <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm"
-           placeholder="Search subject, stream, day…" style="max-width:280px">
+  <form method="get" class="mb-3 d-flex gap-2 flex-wrap">
+    <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm flex-grow-1"
+           placeholder="Search subject, stream, day…" style="min-width:160px; max-width:320px;">
     <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-search"></i></button>
     {% if query %}<a href="?" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></a>{% endif %}
   </form>
@@ -30,32 +27,38 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th>Day</th>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Subject</th>
-            <th>Class / Stream</th>
-            <th>Room</th>
+            <th>Day / Subject</th>
+            <th class="hide-xs">Date</th>
+            <th class="hide-sm">Time</th>
+            <th class="hide-xs">Class</th>
+            <th class="hide-sm">Room</th>
             <th>Status</th>
-            <th width="110">Actions</th>
+            <th width="100">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for lesson in lessons %}
           <tr class="{% if lesson.is_canceled %}table-danger{% endif %}">
-            <td class="text-capitalize">{{ lesson.day_of_week|default:"—" }}</td>
-            <td>{{ lesson.lesson_date|date:"d M Y"|default:"—" }}</td>
             <td>
+              <span class="text-capitalize fw-semibold">{{ lesson.day_of_week|default:"—" }}</span>
+              <div class="fw-semibold">{{ lesson.subject.name }}</div>
+              <div class="d-xs-block d-sm-none text-muted" style="font-size:.75rem;">
+                {{ lesson.lesson_date|date:"d M Y"|default:"—" }}
+                {% if lesson.timetable %} &middot; {{ lesson.timetable.grade.name }}{% endif %}
+                {% if lesson.stream %} {{ lesson.stream.name }}{% endif %}
+              </div>
+            </td>
+            <td class="hide-xs">{{ lesson.lesson_date|date:"d M Y"|default:"—" }}</td>
+            <td class="hide-sm">
               {% if lesson.time_slot %}
                 {{ lesson.time_slot.start_time|time:"H:i" }}–{{ lesson.time_slot.end_time|time:"H:i" }}
               {% else %}—{% endif %}
             </td>
-            <td>{{ lesson.subject.name }}</td>
-            <td>
+            <td class="hide-xs">
               {% if lesson.timetable %}{{ lesson.timetable.grade.name }}{% endif %}
               {% if lesson.stream %} · {{ lesson.stream.name }}{% endif %}
             </td>
-            <td>{{ lesson.room|default:"—" }}</td>
+            <td class="hide-sm">{{ lesson.room|default:"—" }}</td>
             <td>
               {% if lesson.is_canceled %}
                 <span class="badge bg-danger">Canceled</span>
@@ -64,35 +67,14 @@
               {% endif %}
             </td>
             <td>
-              <button class="btn btn-xs btn-outline-primary"
-                      data-bs-toggle="modal" data-bs-target="#lessonModal"
-                      data-mode="edit"
-                      data-id="{{ lesson.id }}"
-                      data-timetable="{{ lesson.timetable_id }}"
-                      data-stream="{{ lesson.stream_id }}"
-                      data-subject="{{ lesson.subject_id }}"
-                      data-teacher="{{ lesson.teacher_id }}"
-                      data-day="{{ lesson.day_of_week }}"
-                      data-timeslot="{{ lesson.time_slot_id }}"
-                      data-room="{{ lesson.room }}"
-                      data-iscanceled="{{ lesson.is_canceled|yesno:'true,false' }}"
-                      data-notes="{{ lesson.notes|escapejs }}"
-                      title="Edit">
-                <i class="bi bi-pencil"></i>
-              </button>
-              {% if not lesson.is_canceled %}
+              {% if not lesson.is_canceled and lesson.lesson_date >= today %}
               <a href="{% url 'school:teacher-attendance-mark' lesson.id %}"
                  class="btn btn-xs btn-outline-info" title="Mark Attendance">
                 <i class="bi bi-clipboard-check"></i>
               </a>
+              {% elif not lesson.is_canceled %}
+              <span class="badge bg-secondary" title="Past lesson — attendance closed">Past</span>
               {% endif %}
-              <button class="btn btn-xs btn-outline-danger"
-                      data-bs-toggle="modal" data-bs-target="#deleteModal"
-                      data-id="{{ lesson.id }}"
-                      data-name="{{ lesson.subject.name }} ({{ lesson.day_of_week }})"
-                      title="Delete">
-                <i class="bi bi-trash"></i>
-              </button>
             </td>
           </tr>
           {% empty %}

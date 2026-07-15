@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}Notification Templates{% endblock %}
 {% block page_title %}Notification Templates{% endblock %}
 {% block nav_notif_open %}show{% endblock %}
@@ -19,7 +19,7 @@
       <div class="d-flex align-items-start justify-content-between mb-2">
         <span class="badge rounded-pill
           {% if t.notification_type == 'sms' %}bg-warning-subtle text-warning
-          {% elif t.notification_type == 'email' %}bg-primary-subtle text-primary
+          {% elif t.notification_type == 'email' %}bg-success-subtle text-success
           {% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size:.72rem;">
           {{ t.get_notification_type_display }}
         </span>

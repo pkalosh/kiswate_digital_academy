@@ -1,0 +1,50 @@
+{% extends 'school/base.html' %}
+{% block title %}Calendar | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex gap-2 align-items-center">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">School Calendar</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active">Calendar</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i> School Calendar</h5>
+    </div>
+    <div class="card-body">
+      <div id="calendar"></div>
+    </div>
+  </div>
+</section>
+
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var calendarEl = document.getElementById('calendar');
+  var calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    events: JSON.parse('{{ events_json|escapejs }}'),
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' }
+  });
+  calendar.render();
+});
+</script>
+{% endblock %}

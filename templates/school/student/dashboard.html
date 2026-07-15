@@ -40,9 +40,11 @@ html, body { overflow-x: hidden; }
 .heatmap-day.late     { background: #ffc107; color: #212529; }
 .heatmap-day.absent   { background: #dc3545; }
 
-.filter-form .form-control,
-.filter-form .form-select,
-.filter-form .btn { height: 42px; }
+@media (min-width: 768px) {
+  .filter-form .form-control,
+  .filter-form .form-select,
+  .filter-form .btn { height: 42px; }
+}
 
 .lesson-card {
   border-radius: 8px;
@@ -91,20 +93,22 @@ html, body { overflow-x: hidden; }
   </div>
   {% endif %}
 
-  <!-- Announcements -->
+  <!-- Announcements (active/non-expired only) -->
   {% if announcements %}
   <div class="mb-3">
     {% for ann in announcements %}
-    <div class="alert alert-info d-flex gap-2 align-items-start py-2 mb-2" role="alert">
-      <i class="bi {% if ann.is_pinned %}bi-pin-angle-fill text-danger{% else %}bi-megaphone text-primary{% endif %} mt-1 flex-shrink-0"></i>
+    {% if ann.is_active %}
+    <div class="alert alert-success d-flex gap-2 align-items-start py-2 mb-2" role="alert">
+      <i class="bi {% if ann.is_pinned %}bi-pin-angle-fill text-danger{% else %}bi-megaphone text-success{% endif %} mt-1 flex-shrink-0"></i>
       <div>
         <strong>{{ ann.title }}</strong>
         <div class="small">{{ ann.body|truncatechars:100 }}</div>
       </div>
       <span class="ms-auto small text-muted text-nowrap">{{ ann.created_at|date:"d M" }}</span>
     </div>
+    {% endif %}
     {% endfor %}
-    <a href="{% url 'school:student-announcements' %}" class="btn btn-sm btn-outline-primary mb-2">View all announcements</a>
+    <a href="{% url 'school:student-announcements' %}" class="btn btn-sm btn-outline-success mb-2">View all announcements</a>
   </div>
   {% endif %}
 

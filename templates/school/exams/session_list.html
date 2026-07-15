@@ -1,0 +1,99 @@
+{% extends base_template|default:"school/base.html" %}
+{% block title %}Exam Sessions{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="fw-bold mb-0"><i class="bi bi-journal-check me-2 text-success"></i>Exam Sessions</h4>
+      <small class="text-muted">Manage exam periods and results for {{ school.name }}</small>
+    </div>
+    {% if request.user.is_principal or request.user.is_admin or request.user.is_deputy_principal %}
+    <a href="{% url 'school:exam-session-create' %}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Session
+    </a>
+    {% endif %}
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      {% if page_obj %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Session Name</th>
+              <th>Grade</th>
+              <th>Term</th>
+              <th>Year</th>
+              <th>Max Marks</th>
+              <th>Status</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in page_obj %}
+            <tr>
+              <td class="fw-semibold">{{ session.name }}</td>
+              <td>{{ session.grade.name }}</td>
+              <td>{{ session.term.name|default:"—" }}</td>
+              <td>{{ session.year }}</td>
+              <td>{{ session.total_marks|floatformat:0 }}</td>
+              <td>
+                {% if session.is_published %}
+                  <span class="badge bg-success">Published</span>
+                {% else %}
+                  <span class="badge bg-secondary">Draft</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{% url 'school:exam-ranking-grade' session.pk %}" class="btn btn-sm btn-outline-success" title="Grade Ranking">
+                  <i class="bi bi-bar-chart-line"></i>
+                </a>
+                <a href="{% url 'school:exam-subject-performance' session.pk %}" class="btn btn-sm btn-outline-info" title="Subject Performance">
+                  <i class="bi bi-graph-up"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+              <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">«</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+              <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">»</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-journal-x fs-1 d-block mb-2"></i>
+        No exam sessions yet.
+        {% if request.user.is_principal or request.user.is_admin or request.user.is_deputy_principal %}
+          <a href="{% url 'school:exam-session-create' %}">Create one</a>.
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

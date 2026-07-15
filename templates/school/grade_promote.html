@@ -1,0 +1,336 @@
+{% extends 'school/base.html' %}
+{% block title %}Promote Students | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:1060px">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+    <h5 class="fw-bold mb-0"><i class="bi bi-arrow-up-circle me-2 text-success"></i>Grade Promotion</h5>
+    {% if is_class_teacher and class_teacher_stream %}
+    <span class="badge bg-success-subtle text-success border border-success">
+      <i class="bi bi-person-check me-1"></i>{{ class_teacher_stream.grade.name }} – {{ class_teacher_stream.name }}
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <!-- ── LEFT: filter panel ── -->
+    <div class="col-lg-3">
+      <div class="card border-0 shadow-sm rounded-4 sticky-top" style="top:1rem;">
+        <div class="card-header bg-white border-0 fw-semibold pt-3 pb-1 small text-uppercase text-muted">
+          Step 1 — Filter students
+        </div>
+        <div class="card-body pb-3">
+          <form method="get" id="filterForm">
+            {% if not is_class_teacher %}
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">From Grade</label>
+              <select name="from_grade" class="form-select form-select-sm" id="fromGrade" onchange="this.form.submit()">
+                <option value="">— all grades —</option>
+                {% for g in grades %}
+                <option value="{{ g.id }}" {% if g.id|stringformat:"s" == from_grade_id %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">From Stream <span class="text-muted fw-normal">(optional)</span></label>
+              <select name="from_stream" class="form-select form-select-sm" id="fromStream" onchange="this.form.submit()">
+                <option value="">— all streams —</option>
+                {% for s in streams %}
+                {% if not from_grade_id or s.grade_id|stringformat:"s" == from_grade_id %}
+                <option value="{{ s.id }}" {% if s.id|stringformat:"s" == from_stream_id %}selected{% endif %}>
+                  {% if not from_grade_id %}{{ s.grade.name }} / {% endif %}{{ s.name }}
+                </option>
+                {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            {% else %}
+            <input type="hidden" name="from_grade" value="{{ from_grade_id }}">
+            <input type="hidden" name="from_stream" value="{{ from_stream_id }}">
+            <div class="alert alert-success-subtle border border-success rounded-3 py-2 px-3 mb-2" style="font-size:.8rem;">
+              <i class="bi bi-person-check me-1"></i>
+              <strong>{{ class_teacher_stream.grade.name }} – {{ class_teacher_stream.name }}</strong>
+            </div>
+            {% endif %}
+
+            <hr class="my-2">
+
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">To Grade <span class="text-danger">*</span></label>
+              <select name="to_grade" class="form-select form-select-sm" id="toGrade" onchange="filterToStreams()">
+                <option value="">— select —</option>
+                {% for g in grades %}
+                <option value="{{ g.id }}" {% if g.id|stringformat:"s" == to_grade_id %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">To Stream <span class="text-muted fw-normal">(optional)</span></label>
+              <select name="to_stream" class="form-select form-select-sm" id="toStream">
+                <option value="">— no stream change —</option>
+                {% for s in streams %}
+                <option value="{{ s.id }}" data-grade="{{ s.grade_id }}"
+                        {% if s.id|stringformat:"s" == to_stream_id %}selected{% endif %}>
+                  {{ s.grade.name }} / {{ s.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-sm btn-outline-success w-100">
+              <i class="bi bi-search me-1"></i>Load Students
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT: student selection + promote ── -->
+    <div class="col-lg-9">
+      {% if preview_students %}
+
+      <form method="post" id="promoteForm">
+        {% csrf_token %}
+        <input type="hidden" name="from_grade" value="{{ from_grade_id }}">
+        <input type="hidden" name="from_stream" value="{{ from_stream_id }}">
+        <input type="hidden" name="confirm" value="1">
+
+        <!-- To-grade/stream carried from GET into POST -->
+        <input type="hidden" name="to_grade" id="postToGrade" value="{{ to_grade_id }}">
+        <input type="hidden" name="to_stream" id="postToStream" value="{{ to_stream_id }}">
+
+        <div class="card border-0 shadow-sm rounded-4">
+
+          <!-- Card header: selection controls + promote button -->
+          <div class="card-header bg-white border-0 pt-3 pb-2">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div class="fw-semibold">
+                Step 2 — Select students &amp; promote
+                <span class="badge bg-secondary ms-1" id="selectedCount">0</span> selected
+                of <span class="badge bg-light text-dark border">{{ preview_students|length }}</span> total
+              </div>
+              <button type="submit" class="btn btn-success btn-sm px-3" id="promoteBtn" disabled
+                      onclick="return confirmPromote()">
+                <i class="bi bi-arrow-up-circle me-1"></i>Promote Selected
+              </button>
+            </div>
+
+            <!-- Bulk-select toolbar -->
+            <div class="d-flex gap-2 mt-2 flex-wrap align-items-center">
+              <span class="small text-muted fw-semibold">Select:</span>
+              <button type="button" class="btn btn-xs btn-outline-success" onclick="selectAll()">
+                <i class="bi bi-check-all me-1"></i>All ({{ preview_students|length }})
+              </button>
+              {% if not from_stream_id %}
+              <!-- Per-stream quick-select buttons -->
+              {% regroup preview_students by stream as stream_groups %}
+              {% for sg in stream_groups %}
+              <button type="button" class="btn btn-xs btn-outline-secondary"
+                      onclick="selectStream('{{ sg.grouper.id|default:"none" }}')">
+                <i class="bi bi-people me-1"></i>{{ sg.grouper.name|default:"No Stream" }} ({{ sg.list|length }})
+              </button>
+              {% endfor %}
+              {% endif %}
+              <button type="button" class="btn btn-xs btn-outline-danger ms-auto" onclick="selectNone()">
+                <i class="bi bi-x me-1"></i>None
+              </button>
+            </div>
+          </div>
+
+          <!-- Student table with checkboxes -->
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height:520px; overflow-y:auto;">
+              <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+                <thead class="table-light sticky-top" style="top:0;">
+                  <tr>
+                    <th width="36">
+                      <input type="checkbox" class="form-check-input" id="checkAll"
+                             title="Select / deselect all" onchange="toggleAll(this)">
+                    </th>
+                    <th>#</th>
+                    <th>Name</th>
+                    <th class="hide-xs">Adm No</th>
+                    <th class="hide-sm">Grade</th>
+                    <th>Stream</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% regroup preview_students by stream as stream_groups %}
+                  {% for sg in stream_groups %}
+                  {% if not from_stream_id and stream_groups|length > 1 %}
+                  <!-- Stream group header row -->
+                  <tr class="table-secondary">
+                    <td colspan="6" class="py-1 px-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <input type="checkbox" class="form-check-input stream-check"
+                               data-stream="{{ sg.grouper.id|default:'none' }}"
+                               onchange="toggleStream(this)"
+                               title="Select all in {{ sg.grouper.name|default:'No Stream' }}">
+                        <span class="fw-semibold small">
+                          <i class="bi bi-people me-1 text-muted"></i>
+                          {{ sg.grouper.name|default:"No Stream" }}
+                          <span class="badge bg-secondary ms-1" style="font-size:.68rem;">{{ sg.list|length }}</span>
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endif %}
+                  {% for s in sg.list %}
+                  <tr class="student-row" data-stream="{{ s.stream.id|default:'none' }}">
+                    <td>
+                      <input type="checkbox" class="form-check-input student-check"
+                             name="student_ids" value="{{ s.id }}"
+                             data-stream="{{ s.stream.id|default:'none' }}"
+                             onchange="updateCount()">
+                    </td>
+                    <td class="text-muted">{{ forloop.parentloop.counter0|add:forloop.counter }}</td>
+                    <td class="fw-semibold">{{ s.user.get_full_name }}</td>
+                    <td class="hide-xs text-muted">{{ s.student_id }}</td>
+                    <td class="hide-sm text-muted">{{ s.grade_level.name }}</td>
+                    <td>
+                      {% if s.stream %}
+                      <span class="badge bg-light text-dark border" style="font-size:.72rem;">{{ s.stream.name }}</span>
+                      {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Footer: destination summary -->
+          <div class="card-footer bg-light border-0 rounded-bottom-4 py-2 px-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:.82rem;">
+              <i class="bi bi-arrow-right-circle text-success"></i>
+              <span class="text-muted">Destination:</span>
+              {% if to_grade_id %}
+                <span class="fw-semibold">
+                  {% for g in grades %}{% if g.id|stringformat:"s" == to_grade_id %}{{ g.name }}{% endif %}{% endfor %}
+                  {% if to_stream_id %} /
+                    {% for s in streams %}{% if s.id|stringformat:"s" == to_stream_id %}{{ s.name }}{% endif %}{% endfor %}
+                  {% endif %}
+                </span>
+              {% else %}
+                <span class="text-danger">No destination grade selected — choose "To Grade" in the filter panel.</span>
+              {% endif %}
+            </div>
+          </div>
+
+        </div><!-- /card -->
+      </form>
+
+      {% elif from_grade_id %}
+      <div class="alert alert-info rounded-4">
+        <i class="bi bi-info-circle me-2"></i>No active students found in the selected grade{% if from_stream_id %}/stream{% endif %}.
+      </div>
+      {% else %}
+      <div class="card border-0 shadow-sm rounded-4 d-flex align-items-center justify-content-center" style="min-height:260px;">
+        <div class="text-center text-muted p-5">
+          <i class="bi bi-arrow-up-circle display-3 text-success opacity-40 d-block mb-3"></i>
+          <p class="mb-0">Choose a <strong>From Grade</strong> in the panel on the left to load students.</p>
+        </div>
+      </div>
+      {% endif %}
+    </div><!-- /col -->
+
+  </div><!-- /row -->
+</div>
+
+<script>
+/* ── helpers ── */
+function allChecks() { return document.querySelectorAll('.student-check'); }
+function checkedChecks() { return document.querySelectorAll('.student-check:checked'); }
+
+function updateCount() {
+  const n = checkedChecks().length;
+  document.getElementById('selectedCount').textContent = n;
+  const btn = document.getElementById('promoteBtn');
+  const hasTarget = document.getElementById('postToGrade').value;
+  btn.disabled = n === 0 || !hasTarget;
+
+  // Sync header checkbox state
+  const all = allChecks();
+  const hdr = document.getElementById('checkAll');
+  if (hdr) {
+    hdr.indeterminate = n > 0 && n < all.length;
+    hdr.checked = all.length > 0 && n === all.length;
+  }
+
+  // Sync stream-group checkboxes
+  document.querySelectorAll('.stream-check').forEach(sc => {
+    const sid = sc.dataset.stream;
+    const inStream = document.querySelectorAll(`.student-check[data-stream="${sid}"]`);
+    const checkedInStream = document.querySelectorAll(`.student-check[data-stream="${sid}"]:checked`);
+    sc.indeterminate = checkedInStream.length > 0 && checkedInStream.length < inStream.length;
+    sc.checked = inStream.length > 0 && checkedInStream.length === inStream.length;
+  });
+}
+
+function toggleAll(src) {
+  allChecks().forEach(c => c.checked = src.checked);
+  updateCount();
+}
+
+function toggleStream(src) {
+  const sid = src.dataset.stream;
+  document.querySelectorAll(`.student-check[data-stream="${sid}"]`).forEach(c => c.checked = src.checked);
+  updateCount();
+}
+
+function selectAll()  { allChecks().forEach(c => c.checked = true);  updateCount(); }
+function selectNone() { allChecks().forEach(c => c.checked = false); updateCount(); }
+
+function selectStream(sid) {
+  allChecks().forEach(c => { if (c.dataset.stream === sid) c.checked = true; });
+  updateCount();
+}
+
+/* ── keep to_grade/to_stream in sync with the filter form values ── */
+function filterToStreams() {
+  const toGrade = document.getElementById('toGrade').value;
+  const toStream = document.getElementById('toStream');
+  Array.from(toStream.options).forEach(opt => {
+    opt.hidden = opt.value !== '' && opt.dataset.grade !== toGrade;
+  });
+  if (toStream.options[toStream.selectedIndex] && toStream.options[toStream.selectedIndex].hidden) {
+    toStream.value = '';
+  }
+  // sync hidden inputs in the POST form
+  const pg = document.getElementById('postToGrade');
+  const ps = document.getElementById('postToStream');
+  if (pg) pg.value = toGrade;
+  if (ps) ps.value = '';
+  updateCount();
+}
+
+/* ── confirm dialog ── */
+function confirmPromote() {
+  const n = checkedChecks().length;
+  const dest = document.getElementById('postToGrade').value;
+  if (!dest) { alert('Please select a destination grade first.'); return false; }
+  if (n === 0) { alert('No students selected.'); return false; }
+  return confirm(`Promote ${n} student(s) to the selected grade? This cannot be undone automatically.`);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  filterToStreams();
+  updateCount();
+});
+</script>
+
+<style>
+.btn-xs { padding:.2rem .45rem; font-size:.73rem; }
+.opacity-40 { opacity:.4; }
+thead.sticky-top th { position:sticky; top:0; z-index:2; background:#f8f9fa; }
+</style>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "school/base.html" %}
+{% block title %}Fee Collection Report{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-warning"></i>Fee Collection Report</h4>
+      <small class="text-muted">Summary by grade and stream</small>
+    </div>
+    <div class="d-flex gap-2">
+      {% if term %}
+      <a href="{% url 'school:finance-collection-report-csv' %}?term={{ term.pk }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv me-1"></i>Export CSV
+      </a>
+      {% endif %}
+      <a href="{% url 'school:finance-dashboard' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="row g-2 mb-4 align-items-end">
+    <div class="col-auto">
+      <label class="form-label form-label-sm mb-1">Term</label>
+      <select name="term" class="form-select form-select-sm">
+        <option value="">Select Term</option>
+        {% for t in terms %}<option value="{{ t.pk }}" {% if term and term.pk == t.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Generate</button></div>
+    <div class="col-auto"><a href="{% url 'school:finance-collection-report' %}" class="btn btn-sm btn-outline-secondary">Clear</a></div>
+  </form>
+
+  {% if term %}
+  <!-- Overall summary -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-4 fw-bold text-primary">KES {{ school_expected|floatformat:0 }}</div>
+          <div class="small text-muted">Total Expected</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-4 fw-bold text-success">KES {{ school_collected|floatformat:0 }}</div>
+          <div class="small text-muted">Total Collected</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-4 fw-bold text-danger">KES {{ school_balance|floatformat:0 }}</div>
+          <div class="small text-muted">Outstanding</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-4 fw-bold text-info">{{ school_rate }}%</div>
+          <div class="small text-muted">Collection Rate</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-grade breakdown -->
+  {% for row in report %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <h6 class="mb-0 fw-bold">{{ row.grade.name }}</h6>
+      <div class="small text-muted">
+        Expected: <strong>KES {{ row.expected|floatformat:0 }}</strong> &nbsp;|&nbsp;
+        Paid: <strong class="text-success">KES {{ row.collected|floatformat:0 }}</strong> &nbsp;|&nbsp;
+        Balance: <strong class="text-danger">KES {{ row.balance|floatformat:0 }}</strong> &nbsp;|&nbsp;
+        Rate: <strong class="text-info">{{ row.rate }}%</strong>
+      </div>
+    </div>
+    {% if row.streams %}
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size:.88rem;">
+          <thead class="table-secondary">
+            <tr><th>Stream</th><th class="text-end">Invoices</th><th class="text-end">Expected</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th class="text-end">Rate</th></tr>
+          </thead>
+          <tbody>
+            {% for sr in row.streams %}
+            <tr>
+              <td class="fw-semibold">{{ sr.stream.name }}</td>
+              <td class="text-end">{{ sr.students }}</td>
+              <td class="text-end">{{ sr.expected|floatformat:0 }}</td>
+              <td class="text-end text-success">{{ sr.collected|floatformat:0 }}</td>
+              <td class="text-end text-danger">{{ sr.balance|floatformat:0 }}</td>
+              <td class="text-end">
+                <div class="d-flex align-items-center gap-1 justify-content-end">
+                  <div class="progress" style="height:6px;width:50px;">
+                    <div class="progress-bar bg-success" style="width:{{ sr.rate }}%"></div>
+                  </div>
+                  <small>{{ sr.rate }}%</small>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-bar-chart fs-1 d-block mb-2"></i>No invoice data for {{ term.name }}. Generate invoices first.
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-funnel fs-1 d-block mb-2"></i>Select a term above to view the collection report.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

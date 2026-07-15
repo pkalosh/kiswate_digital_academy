@@ -1,83 +1,130 @@
-{% extends 'Dashboard/admindash-base.html' %}
-{% block title %}Demo Requests | {{ school.name }}{% endblock %}
+{% extends 'Dashboard/base.html' %}
+{% block title %}Demo Requests{% endblock %}
 
 {% block content %}
-<section class="py-5">
-  <div class="container">
-    <h2 class="fw-bold mb-4 text-center">Demo Requests</h2>
+<div class="container-fluid py-3">
 
-    {% if messages %}
-      {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" style="background-color: #e4fcdb; border-color: transparent;" role="alert">
-          {{ message }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      {% endfor %}
-    {% endif %}
-
-    <div class="card shadow-sm border-0 rounded-4">
-      <div class="card-body">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead class="table-light">
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>School Name</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Submitted At</th>
-                <th class="text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for lead in demo_requests %}
-              <tr class="{% if not lead.is_verified %}table-warning{% endif %}">
-                <td>{{ forloop.counter }}</td>
-                <td>{{ lead.first_name }} {{ lead.last_name }}</td>
-                <td>{{ lead.email_address }}</td>
-                <td>{{ lead.contact_phone }}</td>
-                <td>{{ lead.school_name|default:"-" }}</td>
-                <td>{{ lead.school_category|default:"-" }}</td>
-                <td>
-                  {% if lead.is_verified %}
-                    <span class="badge bg-success">Verified</span>
-                  {% else %}
-                    <span class="badge bg-warning text-dark">New</span>
-                  {% endif %}
-                </td>
-                <td>{{ lead.created_at|date:"M d, Y H:i" }}</td>
-                <td class="text-center">
-                  {% if not lead.is_verified %}
-                  <form method="POST" action="{% url 'kiswate_digital_app:mark_verified' lead.id %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-success mb-1">
-                      <i class="bi bi-check-circle"></i> Verify
-                    </button>
-                  </form>
-                  {% endif %}
-                  {% if lead.is_verified %}
-                  <form method="POST" action="{% url 'kiswate_digital_app:convert_to_school' lead.id %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-primary mb-1">
-                      <i class="bi bi-building"></i> Convert
-                    </button>
-                  </form>
-                  {% endif %}
-                </td>
-              </tr>
-              {% empty %}
-              <tr>
-                <td colspan="9" class="text-center text-muted">No demo requests found.</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="fw-bold mb-0"><i class="bi bi-envelope-paper me-2 text-danger"></i>Demo Requests</h4>
+      <small class="text-muted">Incoming school demo & onboarding requests</small>
     </div>
   </div>
-</section>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card border-0 shadow-sm">
+
+    <!-- Mobile cards (xs/sm) -->
+    <div class="d-md-none p-2">
+      {% for lead in demo_requests %}
+      <div class="card border mb-2 {% if not lead.is_verified %}border-warning{% endif %}" style="border-radius:10px;">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold small">{{ lead.first_name }} {{ lead.last_name }}</div>
+              <div class="text-muted" style="font-size:.75rem;">{{ lead.email_address }}</div>
+              <div class="text-muted" style="font-size:.75rem;">{{ lead.contact_phone|default:"—" }}</div>
+              <div class="text-muted" style="font-size:.75rem;">{{ lead.school_name|default:"—" }} &bull; {{ lead.school_category|default:"—" }}</div>
+              <div class="text-muted" style="font-size:.72rem;">{{ lead.created_at|date:"d M Y, H:i" }}</div>
+            </div>
+            <div class="d-flex flex-column align-items-end gap-1">
+              {% if lead.is_verified %}
+                <span class="badge bg-success">Verified</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">New</span>
+              {% endif %}
+              <div class="d-flex gap-1 mt-1">
+                {% if not lead.is_verified %}
+                <form method="POST" action="{% url 'kiswate_digital_app:mark_verified' lead.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-circle"></i></button>
+                </form>
+                {% endif %}
+                {% if lead.is_verified %}
+                <form method="POST" action="{% url 'kiswate_digital_app:convert_to_school' lead.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-building"></i></button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-center text-muted py-4">No demo requests found.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Desktop table (md+) -->
+    <div class="table-responsive d-none d-md-block">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>School Name</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Submitted At</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in demo_requests %}
+          <tr class="{% if not lead.is_verified %}table-warning{% endif %}">
+            <td>{{ forloop.counter }}</td>
+            <td>{{ lead.first_name }} {{ lead.last_name }}</td>
+            <td>{{ lead.email_address }}</td>
+            <td>{{ lead.contact_phone }}</td>
+            <td>{{ lead.school_name|default:"—" }}</td>
+            <td>{{ lead.school_category|default:"—" }}</td>
+            <td>
+              {% if lead.is_verified %}
+                <span class="badge bg-success">Verified</span>
+              {% else %}
+                <span class="badge bg-warning text-dark">New</span>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ lead.created_at|date:"d M Y, H:i" }}</td>
+            <td class="text-center">
+              {% if not lead.is_verified %}
+              <form method="POST" action="{% url 'kiswate_digital_app:mark_verified' lead.id %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-success mb-1">
+                  <i class="bi bi-check-circle"></i> Verify
+                </button>
+              </form>
+              {% endif %}
+              {% if lead.is_verified %}
+              <form method="POST" action="{% url 'kiswate_digital_app:convert_to_school' lead.id %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-primary mb-1">
+                  <i class="bi bi-building"></i> Convert
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">No demo requests found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
 {% endblock %}

@@ -102,38 +102,85 @@
     .badge-red   { background: rgba(187,10,33,.12); color: var(--kenya-red); }
     .badge-dark  { background: rgba(17,17,17,.12); color: var(--kenya-black); }
 
+    .main { min-width: 0; overflow-x: hidden; }
+
     /* Responsive sidebar */
     @media (max-width: 992px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar { position: fixed; left: -100%; width: 260px; transition: left .25s ease; z-index: 1050; }
+      .sidebar { position: fixed; left: -100%; width: 260px; transition: left .25s ease; z-index: 1050; overflow-y: auto; }
       .sidebar.open { left: 0; }
       .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
       .scrim.show { display: block; backdrop-filter: blur(1px); }
     }
-  
-/* Apply to all tables with .table, or target specific table with an ID */
-.table {
-  font-size: 0.85rem;              /* Reduce font size */
-}
 
-.table td, .table th {
-  padding: 0.3rem 0.4rem;          /* Reduce vertical and horizontal padding */
-  vertical-align: middle;          /* Keep content centered vertically */
-}
+    @media (max-width: 767px) {
+      .content { padding: .5rem !important; padding-bottom: 5rem !important; }
+      .header { padding: .4rem .6rem; }
+      .header .badge { display: none; }
+    }
 
-/* Optional: Make header bold and compact */
-.table thead th {
-  font-weight: 500;
-  background-color: #f8f9fa;       /* Light grey */
-}
+    /* Bottom mobile navigation */
+    .mobile-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--kenya-black);
+      padding: .5rem 0 calc(.5rem + env(safe-area-inset-bottom));
+      z-index: 1040;
+      border-top: 1px solid #2a2a2a;
+      display: none;
+    }
+    .mobile-nav a {
+      color: #888; text-decoration: none;
+      display: flex; flex-direction: column; align-items: center;
+      font-size: .58rem; gap: .08rem; padding: 0 .2rem; transition: color .15s;
+    }
+    .mobile-nav a i { font-size: 1.1rem; line-height: 1; }
+    .mobile-nav a.active, .mobile-nav a:hover { color: #fff; }
+    .mobile-nav a.active i { color: #0aa84a; }
+    @media (max-width: 992px) {
+      .mobile-nav { display: flex; justify-content: space-around; }
+    }
 
-/* Optional: Narrow row height further */
-.table-sm td, .table-sm th {
-  padding: 0.25rem 0.5rem;
-}
+    /* Column-hide utilities */
+    @media (max-width: 575px) { .hide-xs { display: none !important; } }
+    @media (max-width: 767px) { .hide-sm { display: none !important; } }
+    @media (max-width: 767px) { .card-header .btn { font-size: .75rem; padding: .2rem .45rem; } }
 
+/* Tables */
+.table { font-size: 0.85rem; }
+.table td, .table th { padding: 0.3rem 0.4rem; vertical-align: middle; }
+.table thead th { font-weight: 500; background-color: #f8f9fa; }
+.table-sm td, .table-sm th { padding: 0.25rem 0.5rem; }
+
+/* Shared DIL utilities */
+.btn-brand { background: #0b7a2a; color: #fff; border: none; }
+.btn-brand:hover { background: #096822; color: #fff; }
+.btn-xs { padding: .2rem .55rem; font-size: .75rem; line-height: 1.4; border-radius: 6px; }
+.module-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.25rem; transition: box-shadow .2s; }
+.module-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+.page-header h5 { margin: 0; font-weight: 700; }
+.table-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+.table-card .table { margin: 0; }
+.table-card .table th { background: #f9fafb; font-size: .78rem; font-weight: 600; color: #374151; }
+.form-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.75rem; }
+.stat-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.25rem 1.5rem; }
+.stat-card .stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+.stat-card .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.stat-card .stat-label { font-size: .78rem; color: #6b7280; margin-top: .15rem; }
+.rate-bar { height: 6px; border-radius: 3px; background: #e5e7eb; }
+.rate-fill { height: 100%; border-radius: 3px; background: #0b7a2a; }
+.badge-approved { background: #d1fae5; color: #065f46; }
+.badge-rejected { background: #fee2e2; color: #991b1b; }
+.badge-pending  { background: #fef3c7; color: #92400e; }
+.badge-teacher  { background: #d1fae5; color: #065f46; }
+.badge-student  { background: #f3e8ff; color: #6b21a8; }
+.pill-gmeet { background: #e8f5e9; color: #1b5e20; }
+.pill-teams { background: #e3f2fd; color: #0d47a1; }
+.pill-zoom  { background: #e8eaf6; color: #283593; }
 
   </style>
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
   <div class="app">
@@ -145,7 +192,7 @@
       </div>
       <nav class="d-flex flex-column gap-1">
 
-      <a class="side-link {% block nav_dashboard %}{% endblock %}" href="{% url 'school:parent-portal' %}">
+      <a class="side-link {% block nav_dashboard %}{% endblock %}" href="{% url 'school:parent-dashboard' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
       <a class="side-link {% block nav_notifications %}{% endblock %}" href="{% url 'school:parent-notifications' %}">
@@ -171,6 +218,26 @@
         <i class="bi bi-megaphone"></i> Announcements
       </a>
       <hr class="border-secondary my-1">
+      <div class="side-section">DIL</div>
+      <a class="side-link {% block nav_tuition %}{% endblock %}" href="{% url 'kiswate_digital_app:parent_tuition_view' %}">
+        <i class="bi bi-mortarboard"></i> Child's DIL
+      </a>
+      <a class="side-link" href="{% url 'kiswate_digital_app:tuition_browse' %}">
+        <i class="bi bi-search"></i> Browse Programs
+      </a>
+      <a class="side-link" href="{% url 'kiswate_digital_app:virtual_class_list' %}">
+        <i class="bi bi-camera-video me-1"></i> Live Classes
+      </a>
+      <a class="side-link" href="{% url 'kiswate_digital_app:assignment_list' %}">
+        <i class="bi bi-file-earmark-text me-1"></i> Assignments
+      </a>
+      <a class="side-link" href="{% url 'kiswate_digital_app:assessment_list' %}">
+        <i class="bi bi-clipboard-check me-1"></i> Assessments
+      </a>
+      <hr class="border-secondary my-1">
+      <a class="side-link" href="{% url 'userauths:change-password' %}">
+        <i class="bi bi-shield-lock"></i> Change Password
+      </a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
         <i class="bi bi-box-arrow-right"></i> Sign Out
       </a>
@@ -243,6 +310,25 @@
 
   <div class="scrim" id="scrim"></div>
 
+  <!-- Bottom mobile nav -->
+  <nav class="mobile-nav">
+    <a href="{% url 'school:parent-dashboard' %}">
+      <i class="bi bi-house-fill"></i><span>Home</span>
+    </a>
+    <a href="{% url 'school:parent-attendance' %}">
+      <i class="bi bi-person-check-fill"></i><span>Attendance</span>
+    </a>
+    <a href="{% url 'school:parent-notifications' %}">
+      <i class="bi bi-bell-fill"></i><span>Alerts</span>
+    </a>
+    <a href="{% url 'school:parent-fees' %}">
+      <i class="bi bi-cash-stack"></i><span>Fees</span>
+    </a>
+    <a href="{% url 'school:parent-complaints' %}">
+      <i class="bi bi-chat-square-text"></i><span>Complaints</span>
+    </a>
+  </nav>
+
   <!-- JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
@@ -266,5 +352,6 @@
     const options = { weekday:'short', year:'numeric', month:'short', day:'numeric' };
     document.getElementById('today').textContent = today.toLocaleDateString(undefined, options);
   </script>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

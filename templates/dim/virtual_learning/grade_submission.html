@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}Grade Submission{% endblock %}
 {% block page_title %}Grade Submission{% endblock %}
 {% block nav_asgn_open %}show{% endblock %}
@@ -16,9 +16,9 @@
     <!-- Student submission summary -->
     <div class="module-card mb-4">
       <div class="d-flex align-items-center gap-3 mb-3">
-        <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center"
+        <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center"
              style="width:44px;height:44px;font-size:1.1rem;flex-shrink:0;">
-          <i class="bi bi-person text-primary"></i>
+          <i class="bi bi-person text-success"></i>
         </div>
         <div>
           <div class="fw-semibold">{{ submission.student.full_name }}</div>

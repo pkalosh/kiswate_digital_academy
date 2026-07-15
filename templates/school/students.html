@@ -8,12 +8,7 @@
       <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
       <div>
         <h6 class="m-0 fw-bold">Student Management</h6>
-        <nav aria-label="breadcrumb" class="small">
-          <ol class="breadcrumb mb-0">
-            <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Students</li>
-          </ol>
-        </nav>
+     
       </div>
     </div>
     <div class="d-flex align-items-center gap-2">
@@ -153,7 +148,7 @@
                       </h5>
                       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form method="post" action="{% url 'school:student-edit' student.pk %}" enctype="multipart/form-data">
+                    <form method="post" action="{% url 'school:update_student' student.pk %}" enctype="multipart/form-data">
                       {% csrf_token %}
                       <div class="modal-body">
                         <div class="row g-3">
@@ -280,7 +275,7 @@
                       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                         <i class="bi bi-x-circle me-1"></i>Cancel
                       </button>
-                      <form method="post" action="{% url 'school:student-delete' student.pk %}" class="d-inline">
+                      <form method="post" action="{% url 'school:delete_student' student.pk %}" class="d-inline">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger">
                           <i class="bi bi-trash me-1"></i>Delete Permanently

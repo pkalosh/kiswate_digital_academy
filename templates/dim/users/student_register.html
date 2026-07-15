@@ -17,9 +17,15 @@
     </div>
 
     <div class="form-card">
+      {% if logged_in_flow %}
+      <div class="alert alert-info mb-3" style="font-size:.85rem;">
+        <i class="bi bi-person-check me-1"></i>You're already signed in. Just confirm a few details to complete your tuition profile.
+      </div>
+      {% endif %}
       <form method="post">
         {% csrf_token %}
         <div class="row g-3">
+          {% if not logged_in_flow %}
           <div class="col-md-6">
             <label class="form-label">First Name <span class="text-danger">*</span></label>
             {{ form.first_name }}
@@ -40,10 +46,7 @@
             <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
             {{ form.confirm_password }}
           </div>
-          <div class="col-md-6">
-            <label class="form-label">School <span class="text-danger">*</span></label>
-            {{ form.school }}
-          </div>
+          {% endif %}
           <div class="col-md-6">
             <label class="form-label">Phone Number</label>
             {{ form.phone }}
@@ -67,14 +70,16 @@
         {% endif %}
 
         <button type="submit" class="btn btn-brand w-100 mt-4">
-          <i class="bi bi-person-plus me-1"></i>Register as Student
+          <i class="bi bi-person-plus me-1"></i>{% if logged_in_flow %}Set Up DIL Profile{% else %}Register as Student{% endif %}
         </button>
       </form>
 
+      {% if not logged_in_flow %}
       <hr class="my-3">
       <p class="text-center text-muted mb-0" style="font-size:.83rem;">
         Are you a teacher? <a href="{% url 'kiswate_digital_app:teacher_register' %}">Register here</a>
       </p>
+      {% endif %}
     </div>
   </div>
 </div>

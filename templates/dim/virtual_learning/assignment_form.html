@@ -1,7 +1,7 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ action }} Assignment{% endblock %}
 {% block page_title %}{{ action }} Assignment{% endblock %}
-{% block nav_asgn_open %}show{% endblock %}
+{% block nav_asgn_open %}{% if not portal_role %}show{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">

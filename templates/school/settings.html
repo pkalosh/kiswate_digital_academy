@@ -1,4 +1,5 @@
 {% extends 'school/base.html' %}
+{% load static %}
 {% block title %}Settings | {{ school.name }}{% endblock %}
 
 {% block content %}
@@ -7,53 +8,197 @@
     <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
     <div>
       <h6 class="m-0 fw-bold">School Settings</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Settings</li>
-        </ol>
-      </nav>
+      <small class="text-muted" style="font-size:.75rem">{{ school.name }}</small>
     </div>
   </div>
 </header>
 
-<section class="content container-fluid py-4">
+<section class="content container-fluid py-4" style="max-width:780px">
 
   {% if messages %}
-  <div class="row">
     {% for message in messages %}
-    <div class="col-12">
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
-        {{ message }}
-        <button class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
+    <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show d-flex align-items-center gap-2 mb-3" style="border-radius:10px;border:none">
+      <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'error' %}bi-x-circle-fill{% else %}bi-exclamation-triangle-fill{% endif %}"></i>
+      {{ message }}
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
     </div>
     {% endfor %}
-  </div>
   {% endif %}
 
-  <div class="card shadow-sm rounded-4 border-0 mx-auto" style="max-width:600px;">
-    <div class="card-header">
-      <h5 class="mb-0"><i class="bi bi-gear me-2"></i> Update School Information</h5>
+  <!-- ══════════════════════════════════
+       SECTION 1 — School Information
+  ══════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
+    <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+      <div class="d-flex align-items-center gap-2">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(11,122,42,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi bi-building-fill" style="color:#0b7a2a;font-size:.95rem"></i>
+        </div>
+        <div>
+          <div class="fw-bold" style="font-size:.95rem">School Information</div>
+          <div class="text-muted" style="font-size:.75rem">Name, contact details and logo</div>
+        </div>
+      </div>
     </div>
 
-    <div class="card-body">
-      <form method="post" class="needs-validation" novalidate>
+    <div class="card-body px-4 pb-4">
+      <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
+        <input type="hidden" name="action" value="school_info">
 
-        <div class="mb-3">
-          <label for="id_name" class="form-label">School Name</label>
-          <input type="text" name="name" class="form-control" id="id_name" value="{{ school.name }}" required>
+        <!-- Logo -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold" style="font-size:.84rem">School Logo</label>
+          <div class="d-flex align-items-center gap-3">
+            <div id="logo-preview-wrap" style="width:72px;height:72px;border-radius:10px;border:1.5px dashed #d1d5db;background:#f9fafb;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+              {% if school.logo %}
+              <img id="logo-preview" src="{{ school.logo.url }}" alt="Logo" style="width:100%;height:100%;object-fit:contain">
+              {% else %}
+              <i class="bi bi-image" id="logo-placeholder" style="font-size:1.4rem;color:#9ca3af"></i>
+              {% endif %}
+            </div>
+            <div class="flex-grow-1">
+              <input type="file" name="logo" id="logoInput" accept="image/*" class="form-control form-control-sm">
+              <div class="text-muted mt-1" style="font-size:.73rem">PNG or JPG, recommended 200×200 px</div>
+              {% if school.logo %}
+              <div style="font-size:.73rem;color:#0b7a2a;margin-top:2px"><i class="bi bi-check-circle me-1"></i>Logo uploaded</div>
+              {% endif %}
+            </div>
+          </div>
         </div>
 
+        <!-- School Name -->
         <div class="mb-3">
-          <label for="id_email" class="form-label">Contact Email</label>
-          <input type="email" name="email" class="form-control" id="id_email" value="{{ school.contact_email }}" required>
+          <label class="form-label fw-semibold" style="font-size:.84rem">School Name</label>
+          <input type="text" name="name" class="form-control" value="{{ school.name }}" required>
         </div>
 
-        <div class="d-flex justify-content-end gap-2">
-          <a href="{% url 'school:dashboard' %}" class="btn btn-secondary">Cancel</a>
-          <button type="submit" class="btn btn-success">Save Changes</button>
+        <!-- Contact Email + Phone (2-col) -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Contact Email</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="email" name="contact_email" class="form-control border-start-0" value="{{ school.contact_email }}">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Contact Phone</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-phone" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="text" name="contact_phone" class="form-control border-start-0" value="{{ school.contact_phone }}">
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-success px-4" style="border-radius:8px">
+            <i class="bi bi-check-lg me-1"></i>Save School Info
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       SECTION 2 — Admin Account
+  ══════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
+    <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+      <div class="d-flex align-items-center gap-2">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(99,102,241,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi bi-person-gear" style="color:#4f46e5;font-size:.95rem"></i>
+        </div>
+        <div>
+          <div class="fw-bold" style="font-size:.95rem">Admin Account</div>
+          <div class="text-muted" style="font-size:.75rem">Login email and phone for <strong>{{ school.school_admin.get_full_name }}</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body px-4 pb-4">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="admin_account">
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Admin Email</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-envelope-fill" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="email" name="admin_email" class="form-control border-start-0" value="{{ school.school_admin.email }}">
+            </div>
+            <div class="text-muted mt-1" style="font-size:.73rem">This is the login email for the school admin account.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Admin Mobile</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-phone-fill" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="text" name="admin_phone" class="form-control border-start-0" value="{{ school.school_admin.phone_number }}">
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-success px-4" style="border-radius:8px">
+            <i class="bi bi-check-lg me-1"></i>Update Account
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       SECTION 3 — Change Password
+  ══════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4" style="border-radius:12px">
+    <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+      <div class="d-flex align-items-center gap-2">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi bi-shield-lock-fill" style="color:#dc2626;font-size:.95rem"></i>
+        </div>
+        <div>
+          <div class="fw-bold" style="font-size:.95rem">Change Password</div>
+          <div class="text-muted" style="font-size:.75rem">Update your login password</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-body px-4 pb-4">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="change_password">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.84rem">Current Password</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock" style="font-size:.85rem;color:#6b7280"></i></span>
+            <input type="password" name="current_password" class="form-control border-start-0" placeholder="Enter current password" required>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">New Password</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock-fill" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="password" name="new_password" id="newPw" class="form-control border-start-0" placeholder="Min. 8 characters" required>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Confirm New Password</label>
+            <div class="input-group">
+              <span class="input-group-text bg-light border-end-0"><i class="bi bi-lock-fill" style="font-size:.85rem;color:#6b7280"></i></span>
+              <input type="password" name="confirm_password" id="confirmPw" class="form-control border-start-0" placeholder="Repeat new password" required>
+            </div>
+            <div id="pw-match-msg" class="mt-1" style="font-size:.73rem;display:none"></div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end">
+          <button type="submit" class="btn btn-danger px-4" style="border-radius:8px">
+            <i class="bi bi-shield-check me-1"></i>Change Password
+          </button>
         </div>
       </form>
     </div>
@@ -62,20 +207,43 @@
 </section>
 
 <script>
-  // Simple client-side validation for bootstrap
-  (() => {
-    'use strict';
-    const forms = document.querySelectorAll('.needs-validation');
-    Array.from(forms).forEach(form => {
-      form.addEventListener('submit', event => {
-        if (!form.checkValidity()) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        form.classList.add('was-validated');
-      }, false);
-    });
-  })();
-</script>
+// Live logo preview
+document.getElementById('logoInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wrap = document.getElementById('logo-preview-wrap');
+    const placeholder = document.getElementById('logo-placeholder');
+    if (placeholder) placeholder.remove();
+    let img = document.getElementById('logo-preview');
+    if (!img) {
+      img = document.createElement('img');
+      img.id = 'logo-preview';
+      img.style = 'width:100%;height:100%;object-fit:contain';
+      wrap.appendChild(img);
+    }
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
 
+// Live password match indicator
+const newPw = document.getElementById('newPw');
+const confirmPw = document.getElementById('confirmPw');
+const msg = document.getElementById('pw-match-msg');
+function checkMatch() {
+  if (!confirmPw.value) { msg.style.display = 'none'; return; }
+  msg.style.display = 'block';
+  if (newPw.value === confirmPw.value) {
+    msg.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i>Passwords match';
+    msg.style.color = '#16a34a';
+  } else {
+    msg.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Passwords do not match';
+    msg.style.color = '#dc2626';
+  }
+}
+newPw.addEventListener('input', checkMatch);
+confirmPw.addEventListener('input', checkMatch);
+</script>
 {% endblock %}

@@ -219,11 +219,28 @@ urlpatterns = [
     path('mpesa/stk-callback/', views.mpesa_stk_callback, name='mpesa-stk-callback'),
     path('mpesa/payment-callback/', views.mpesa_payment_callback, name='mpesa-payment-callback'),
     
+    # Exam Module
     path('exams/', views.school_exams, name='school-exams'),
+    path('exams/create/', views.exam_session_create, name='exam-session-create'),
+    path('exams/<int:pk>/', views.exam_session_detail, name='exam-session-detail'),
+    path('exams/<int:session_pk>/publish/', views.exam_publish, name='exam-publish'),
+    path('exams/<int:session_pk>/upload/', views.exam_result_upload, name='exam-result-upload'),
+    path('exams/upload/job/<uuid:job_pk>/', views.exam_upload_progress, name='exam-upload-progress'),
+    path('exams/upload/job/<uuid:job_pk>/status/', views.exam_upload_status, name='exam-upload-status'),
+    path('exams/<int:session_pk>/ranking/grade/', views.exam_ranking_grade, name='exam-ranking-grade'),
+    path('exams/<int:session_pk>/ranking/grade/pdf/', views.exam_ranking_grade_pdf, name='exam-ranking-grade-pdf'),
+    path('exams/<int:session_pk>/ranking/stream/<int:stream_pk>/', views.exam_ranking_stream, name='exam-ranking-stream'),
+    path('exams/<int:session_pk>/ranking/stream/<int:stream_pk>/pdf/', views.exam_ranking_stream_pdf, name='exam-ranking-stream-pdf'),
+    path('exams/<int:session_pk>/subjects/', views.exam_subject_performance, name='exam-subject-performance'),
+    path('exams/<int:session_pk>/entry/<int:stream_pk>/<int:subject_pk>/', views.exam_result_entry, name='exam-result-entry'),
+    path('exams/<int:session_pk>/slip/<int:student_pk>/', views.report_slip_html, name='report-slip-html'),
+    path('exams/<int:session_pk>/slip/<int:student_pk>/pdf/', views.report_slip_pdf, name='report-slip-pdf'),
+    path('student/exam-results/', views.student_exam_results, name='student-exam-results'),
     path("teacher/attendance/<int:lesson_id>/smart/", views.teacher_attendance_smart, name="teacher-attendance-smart"),
     path("teacher/discipline/create/ajax/", views.teacher_discipline_create_ajax, name="teacher-discipline-create-ajax"),
     path('upload-excel/', views.universal_excel_upload, name='universal_excel_upload'),
     path('upload-page/', views.upload_excel_page, name='upload_excel_page'),
+    path('upload-status/<int:pk>/', views.upload_job_status, name='upload_job_status'),
 
     # Subject Catalog (Kiswate admin)
     path('catalog/subjects/', views.catalog_subject_list, name='catalog-subject-list'),
@@ -237,6 +254,7 @@ urlpatterns = [
     path('subjects/from-catalog/', views.subject_activate_from_catalog, name='subject-activate-catalog'),
 
     # Parent Self-Service Portal
+    path('parent-dashboard/', views.parent_dashboard, name='parent-dashboard'),
     path('parent/portal/', views.parent_portal, name='parent-portal'),
     path('parent/notifications/', views.parent_notifications, name='parent-notifications'),
     path('parent/complaints/', views.parent_complaints, name='parent-complaints'),
@@ -263,6 +281,7 @@ urlpatterns = [
     path('announcements/', views.announcement_list, name='announcements'),
     path('announcements/create/', views.announcement_create, name='announcement-create'),
     path('announcements/<int:pk>/delete/', views.announcement_delete, name='announcement-delete'),
+    path('announcements/<int:pk>/disable/', views.announcement_disable, name='announcement-disable'),
     path('parent/announcements/', views.parent_announcements, name='parent-announcements'),
     path('student/announcements/', views.student_announcements, name='student-announcements'),
 
@@ -272,4 +291,36 @@ urlpatterns = [
     path('finance/invoice/<int:invoice_id>/payment/', views.finance_record_payment, name='finance-record-payment'),
     path('finance/invoice/<int:invoice_id>/receipt/', views.finance_receipt, name='finance-receipt'),
     path('finance/invoice/<int:invoice_id>/stk-push/', views.finance_stk_push, name='finance-stk-push'),
+    path('finance/invoice/<int:invoice_id>/delete/', views.fee_invoice_delete, name='fee-invoice-delete'),
+
+    # Fee Structures & Fee Types
+    path('fee-types/create/', views.fee_type_create_ajax, name='fee-type-create-ajax'),
+    path('fee-structures/', views.fee_structure_list, name='fee-structure-list'),
+    path('fee-structures/create/', views.fee_structure_create, name='fee-structure-create'),
+    path('fee-structures/<int:pk>/edit/', views.fee_structure_edit, name='fee-structure-edit'),
+    path('fee-structures/<int:pk>/delete/', views.fee_structure_delete, name='fee-structure-delete'),
+    path('fee-structures/generate/<int:term_id>/', views.bulk_generate_invoices, name='bulk-generate-invoices'),
+
+    # Payment upload & reports
+    path('finance/payment-upload/', views.fee_payment_upload, name='fee-payment-upload'),
+    path('finance/statement/<int:student_pk>/', views.student_fee_statement, name='student-fee-statement'),
+    path('finance/statement/<int:student_pk>/pdf/', views.student_fee_statement_pdf, name='student-fee-statement-pdf'),
+    path('finance/payment-statement/', views.finance_payment_statement, name='finance-payment-statement'),
+    path('finance/payment-statement/csv/', views.finance_payment_statement_csv, name='finance-payment-statement-csv'),
+    path('finance/collection-report/', views.finance_collection_report, name='finance-collection-report'),
+    path('finance/collection-report/csv/', views.finance_collection_report_csv, name='finance-collection-report-csv'),
+
+    # Student fee portal
+    path('student/fees/', views.student_fees_portal, name='student-fees'),
+
+    # Grade Promotion (principals, deputy, class teachers)
+    path('grades/promote/', views.grade_promote_view, name='grade-promote'),
+
+    # Class Teacher Portal
+    path('class/teachers/', views.manage_class_teachers, name='manage-class-teachers'),
+    path('class/roster/', views.class_teacher_roster, name='class-teacher-roster'),
+    path('class/roll-call/', views.class_teacher_roll_call, name='class-teacher-roll-call'),
+    path('class/attendance-summary/', views.class_teacher_attendance_summary, name='class-teacher-attendance-summary'),
+    path('class/subject-summary/', views.class_teacher_subject_summary, name='class-teacher-subject-summary'),
+    path('class/discipline/', views.class_teacher_discipline, name='class-teacher-discipline'),
 ]

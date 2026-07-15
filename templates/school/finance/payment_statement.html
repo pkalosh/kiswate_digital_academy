@@ -1,0 +1,101 @@
+{% extends "school/base.html" %}
+{% block title %}Payment Statement{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-0"><i class="bi bi-receipt me-2 text-primary"></i>Payment Statement</h4>
+      <small class="text-muted">All fee payments received</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'school:finance-payment-statement-csv' %}?term={{ term_id|default:'' }}&from_date={{ from_date|default:'' }}&to_date={{ to_date|default:'' }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv me-1"></i>Export CSV
+      </a>
+      <a href="{% url 'school:finance-dashboard' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="row g-2 mb-3 align-items-end">
+    <div class="col-auto">
+      <label class="form-label form-label-sm mb-1">Term</label>
+      <select name="term" class="form-select form-select-sm">
+        <option value="">All Terms</option>
+        {% for t in terms %}<option value="{{ t.pk }}" {% if term_id == t.pk|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label form-label-sm mb-1">From</label>
+      <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date|default:'' }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label form-label-sm mb-1">To</label>
+      <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date|default:'' }}">
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Filter</button></div>
+    <div class="col-auto"><a href="{% url 'school:finance-payment-statement' %}" class="btn btn-sm btn-outline-secondary">Clear</a></div>
+  </form>
+
+  <!-- Summary -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-4 fw-bold text-success">KES {{ total|floatformat:2 }}</div>
+          <div class="small text-muted">Total Collected</div>
+        </div>
+      </div>
+    </div>
+    {% for mt in method_totals %}
+    <div class="col-md-2">
+      <div class="card border-0 shadow-sm text-center">
+        <div class="card-body py-3">
+          <div class="fs-5 fw-bold">{{ mt.total|floatformat:0 }}</div>
+          <div class="small text-muted">{{ mt.payment_method|default:"cash"|title }}</div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Payments table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+          <thead class="table-dark">
+            <tr><th>Student</th><th>Grade</th><th>Type</th><th>Description</th><th class="text-end">Amount</th><th>Date</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for pay in page_obj %}
+            <tr>
+              <td>
+                {% if pay.student %}<a href="{% url 'school:student-fee-statement' pay.student.pk %}">{{ pay.student.user.get_full_name }}</a>
+                {% else %}–{% endif %}
+              </td>
+              <td>{% if pay.student %}{{ pay.student.grade_level.name }}{% else %}–{% endif %}</td>
+              <td><span class="badge bg-secondary">{{ pay.get_payment_type_display }}</span></td>
+              <td>{{ pay.description|truncatechars:40 }}</td>
+              <td class="text-end fw-bold text-success">{{ pay.amount|floatformat:2 }}</td>
+              <td>{% if pay.paid_at %}{{ pay.paid_at|date:"d M Y" }}{% else %}–{% endif %}</td>
+              <td><span class="badge {% if pay.status == 'paid' %}bg-success{% elif pay.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ pay.status|title }}</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No payment records found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav><ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&term={{ term_id }}">«</a></li>{% endif %}
+          <li class="page-item active"><span class="page-link">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span></li>
+          {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&term={{ term_id }}">»</a></li>{% endif %}
+        </ul></nav>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

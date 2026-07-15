@@ -1,0 +1,98 @@
+{% extends 'school/base.html' %}
+{% load dict_extras %}
+{% block title %}My Timetable{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <!-- Week nav -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="?date={{ week_days.0|date:'Y-m-d'|add:'-7' }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-chevron-left"></i> Prev
+    </a>
+    <h6 class="mb-0 fw-semibold">
+      {{ week_days.0|date:"d M" }} – {{ week_days.6|date:"d M Y" }}
+    </h6>
+    <a href="?date={{ week_days.6|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary">
+      Next <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+
+  <!-- Desktop grid -->
+  <div class="table-responsive d-none d-md-block">
+    <table class="table table-bordered text-center small">
+      <thead class="table-light">
+        <tr>
+          <th style="min-width:90px;">Time Slot</th>
+          {% for day in week_days %}
+          <th class="{% if day == focus_date %}table-success{% endif %}" style="min-width:110px;">
+            {{ day|date:"D" }}<br><small class="fw-normal">{{ day|date:"d M" }}</small>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for slot in time_slots %}
+        <tr>
+          <td class="fw-semibold text-nowrap" style="font-size:.75rem;">
+            {{ slot.start_time|time:"H:i" }} – {{ slot.end_time|time:"H:i" }}
+          </td>
+          {% for day in week_days %}
+          <td class="{% if day == focus_date %}bg-light{% endif %}" style="vertical-align:top; padding:.35rem .4rem;">
+              {% with day_lessons=lessons_by_date|get_item:day %}
+              {% for lesson in day_lessons %}
+                {% if lesson.time_slot == slot %}
+                <div class="badge bg-success text-wrap text-start w-100 mb-1 py-1" style="font-size:.72rem; white-space:normal; line-height:1.3;">
+                  <strong>{{ lesson.subject.name }}</strong><br>
+                  {% if lesson.stream %}{{ lesson.stream.name }}{% endif %}
+                  {% if lesson.room %}<br><span class="opacity-75">{{ lesson.room }}</span>{% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            {% endwith %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-muted py-4">No time slots defined.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Mobile day cards -->
+  <div class="d-md-none">
+    {% for day, lessons in lessons_by_date.items %}
+    <div class="mb-3">
+      <div class="fw-semibold text-uppercase small text-muted mb-1">
+        {{ day|date:"l, d M Y" }}
+        {% if day == focus_date %}<span class="badge bg-success ms-1">Today</span>{% endif %}
+      </div>
+      {% if lessons %}
+        {% for lesson in lessons %}
+        <div class="card border-0 shadow-sm mb-2 rounded-3">
+          <div class="card-body py-2 px-3" style="font-size:.85rem;">
+            <div class="fw-bold">{{ lesson.subject.name }}</div>
+            <div class="text-muted">
+              {% if lesson.time_slot %}{{ lesson.time_slot.start_time|time:"H:i" }} – {{ lesson.time_slot.end_time|time:"H:i" }}{% endif %}
+              {% if lesson.stream %} &middot; {{ lesson.stream.name }}{% endif %}
+              {% if lesson.room %} &middot; {{ lesson.room }}{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small ms-1">No lessons</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "school/base.html" %}
+{% block title %}Generate Invoices – {{ term.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="mb-3"><a href="{% url 'school:fee-structure-list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a></div>
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Bulk Generate Invoices — {{ term.name }}</h5>
+        </div>
+        <div class="card-body">
+          {% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} py-2">{{ msg }}</div>{% endfor %}{% endif %}
+          {% if structures %}
+          <p class="text-muted small mb-3">Select which fee structures to invoice. An invoice will be created for every active student in the matching grade (and stream, if specified).</p>
+          <form method="post">{% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Fee Structures</label>
+              <div class="border rounded p-2" style="max-height:300px;overflow-y:auto;">
+                {{ form.fee_structures }}
+              </div>
+              {% if form.fee_structures.errors %}<div class="text-danger small mt-1">{{ form.fee_structures.errors }}</div>{% endif %}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">{{ form.due_date.label }}</label>
+              {{ form.due_date }}
+            </div>
+            <div class="form-check mb-3">
+              {{ form.overwrite_existing }}
+              <label class="form-check-label" for="{{ form.overwrite_existing.id_for_label }}">{{ form.overwrite_existing.label }}</label>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-warning fw-bold"><i class="bi bi-lightning-charge me-1"></i>Generate Invoices</button>
+              <a href="{% url 'school:fee-structure-list' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+          {% else %}
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-exclamation-circle fs-2 d-block mb-2"></i>No active fee structures for <strong>{{ term.name }}</strong>.
+            <br><a href="{% url 'school:fee-structure-create' %}">Create fee structures first</a>.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

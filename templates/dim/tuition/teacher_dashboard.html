@@ -1,0 +1,409 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}Teacher Dashboard — Kiswate Digital{% endblock %}
+{% block nav_t_dash %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hero-banner {
+    background: linear-gradient(135deg, #0b7a2a 0%, #065f20 60%, #034012 100%);
+    border-radius: 16px;
+    padding: 2rem 2rem 2rem 2.5rem;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .hero-banner::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+  }
+  .hero-banner::before {
+    content: '';
+    position: absolute;
+    right: 60px; bottom: -60px;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.04);
+  }
+  .hero-banner .hero-title { font-size: 1.35rem; font-weight: 700; margin-bottom: .3rem; }
+  .hero-banner .hero-sub { opacity: .8; font-size: .9rem; }
+  .hero-actions { display: flex; gap: .75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  .btn-hero { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: .5rem 1rem; font-size: .85rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: .4rem; transition: background .2s; }
+  .btn-hero:hover { background: rgba(255,255,255,.25); color: #fff; }
+  .btn-hero-primary { background: #fff; color: #0b7a2a; border-color: #fff; }
+  .btn-hero-primary:hover { background: #e9f7ec; color: #0b7a2a; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+
+  .kpi-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+  }
+  .kpi-card.kpi-green2::before { background: #0b7a2a; }
+  .kpi-card.kpi-green::before { background: #10b981; }
+  .kpi-card.kpi-amber::before { background: #f59e0b; }
+  .kpi-card.kpi-purple::before { background: #8b5cf6; }
+  .kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: .75rem; }
+  .kpi-value { font-size: 2rem; font-weight: 800; line-height: 1; color: #111; }
+  .kpi-label { font-size: .78rem; color: #6b7280; margin-top: .2rem; font-weight: 500; }
+
+  .section-card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 1.35rem; margin-bottom: 1rem; }
+  .section-card .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .section-card .section-title { font-weight: 700; font-size: .95rem; color: #111; margin: 0; }
+
+  .program-row { display: flex; align-items: center; gap: .75rem; padding: .75rem 0; border-bottom: 1px solid #f3f4f6; }
+  .program-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .program-icon { width: 38px; height: 38px; border-radius: 10px; background: #f0fdf4; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #0b7a2a; }
+  .program-name { font-weight: 600; font-size: .875rem; color: #111; }
+  .program-meta { font-size: .76rem; color: #9ca3af; }
+
+  .class-item { padding: .65rem 0; border-bottom: 1px solid #f3f4f6; }
+  .class-item:last-child { border-bottom: none; }
+  .class-date-badge { background: #d1fae5; color: #065f46; border-radius: 8px; padding: .25rem .6rem; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+
+  .sub-item { display: flex; align-items: center; justify-content: space-between; padding: .6rem 0; border-bottom: 1px solid #f3f4f6; font-size: .85rem; }
+  .sub-item:last-child { border-bottom: none; }
+
+  .empty-state { text-align: center; padding: 2.5rem 1rem; color: #9ca3af; }
+  .empty-state i { font-size: 2.5rem; display: block; margin-bottom: .75rem; opacity: .4; }
+  .empty-state p { margin: 0; font-size: .875rem; }
+
+  .pending-alert {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .pending-alert .alert-icon { width: 44px; height: 44px; border-radius: 12px; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+  .rejected-alert {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .rejected-alert .alert-icon { width: 44px; height: 44px; border-radius: 12px; background: #fee2e2; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if not_registered %}
+<!-- Not registered -->
+<div class="hero-banner">
+  <div class="hero-title"><i class="bi bi-person-badge me-2"></i>Start Teaching on Kiswate</div>
+  <div class="hero-sub">Register your teaching profile. Our team will review and approve your application within 24 hours.</div>
+  <div class="hero-actions">
+    <a href="{% url 'kiswate_digital_app:teacher_register' %}" class="btn-hero btn-hero-primary">
+      <i class="bi bi-person-plus"></i>Register as Teacher
+    </a>
+    <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn-hero">
+      <i class="bi bi-search"></i>Browse Programs
+    </a>
+  </div>
+</div>
+
+<div class="section-card text-center py-4">
+  <i class="bi bi-mortarboard fs-1 text-success d-block mb-3" style="opacity:.5;"></i>
+  <h5 class="fw-bold">Join the Kiswate Teaching Community</h5>
+  <p class="text-muted mb-4" style="max-width:480px;margin:0 auto .5rem;">
+    Create programs, schedule live classes, publish lessons and assignments, and earn from your expertise — all in one platform.
+  </p>
+  <div class="row g-3 justify-content-center mt-3">
+    <div class="col-md-3">
+      <div class="p-3 rounded-3" style="background:#f0fdf4;">
+        <i class="bi bi-book text-success fs-4 d-block mb-1"></i>
+        <div class="fw-semibold small">Create Programs</div>
+        <div class="text-muted" style="font-size:.78rem;">Design structured DIL programs</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="p-3 rounded-3" style="background:#f0fdf4;">
+        <i class="bi bi-camera-video text-success fs-4 d-block mb-1"></i>
+        <div class="fw-semibold small">Live Classes</div>
+        <div class="text-muted" style="font-size:.78rem;">Schedule and run virtual classes</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="p-3 rounded-3" style="background:#fdf4ff;">
+        <i class="bi bi-people text-purple fs-4 d-block mb-1"></i>
+        <div class="fw-semibold small">Reach Students</div>
+        <div class="text-muted" style="font-size:.78rem;">Teach students from any school</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% elif profile.vetting_status == 'pending' %}
+<!-- Pending approval -->
+<div class="pending-alert">
+  <div class="alert-icon"><i class="bi bi-hourglass-split text-warning"></i></div>
+  <div>
+    <div class="fw-bold" style="font-size:.95rem;">Profile Under Review</div>
+    <div class="text-muted small mt-1">Your teaching profile has been submitted and is being reviewed by the Kiswate team. You'll receive a notification once it's approved — usually within 24 hours.</div>
+    <span class="badge rounded-pill mt-2 d-inline-flex align-items-center gap-1" style="background:#fef3c7;color:#92400e;font-size:.75rem;padding:.35rem .75rem;">
+      <i class="bi bi-clock"></i> Pending Approval
+    </span>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-header">
+    <h6 class="section-title"><i class="bi bi-info-circle me-2 text-success"></i>While you wait…</h6>
+  </div>
+  <ul class="list-unstyled mb-0" style="font-size:.875rem;">
+    <li class="py-2 border-bottom"><i class="bi bi-search text-muted me-2"></i>Browse available DIL programs for inspiration</li>
+    <li class="py-2 border-bottom"><i class="bi bi-book text-muted me-2"></i>Plan the subjects and levels you'll teach</li>
+    <li class="py-2"><i class="bi bi-people text-muted me-2"></i>Connect with students once your profile is approved</li>
+  </ul>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-outline-secondary btn-sm mt-3">
+    <i class="bi bi-search me-1"></i>Browse Programs
+  </a>
+</div>
+
+{% elif profile.vetting_status == 'rejected' %}
+<!-- Rejected -->
+<div class="rejected-alert">
+  <div class="alert-icon"><i class="bi bi-x-circle text-danger"></i></div>
+  <div>
+    <div class="fw-bold" style="font-size:.95rem;">Profile Not Approved</div>
+    <div class="text-muted small mt-1">Your teaching profile was not approved at this time. Please contact the Kiswate team for more information or to re-apply.</div>
+    <span class="badge rounded-pill mt-2 d-inline-flex align-items-center gap-1" style="background:#fee2e2;color:#991b1b;font-size:.75rem;padding:.35rem .75rem;">
+      <i class="bi bi-x-circle"></i> Not Approved
+    </span>
+  </div>
+</div>
+
+{% else %}
+<!-- ── Approved teacher dashboard ─────────────────────────────────────── -->
+
+<!-- Hero Banner -->
+<div class="hero-banner">
+  <div class="hero-title">Welcome back, {{ profile.full_name|default:"Teacher" }} 👋</div>
+  <div class="hero-sub">Here's an overview of your teaching activity today.</div>
+  <div class="hero-actions">
+    <a href="{% url 'kiswate_digital_app:teacher_program_create' %}" class="btn-hero btn-hero-primary">
+      <i class="bi bi-plus-circle"></i>New Program
+    </a>
+    <a href="{% url 'kiswate_digital_app:lesson_create' %}" class="btn-hero">
+      <i class="bi bi-journal-plus"></i>Add Lesson
+    </a>
+    <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn-hero">
+      <i class="bi bi-file-earmark-plus"></i>Assignment
+    </a>
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card kpi-green2">
+    <div class="kpi-icon" style="background:#d1fae5;color:#0b7a2a;"><i class="bi bi-journal-text"></i></div>
+    <div class="kpi-value">{{ my_lessons|length }}</div>
+    <div class="kpi-label">Assigned Lessons</div>
+  </div>
+  <div class="kpi-card kpi-green">
+    <div class="kpi-icon" style="background:#f0fdf4;color:#10b981;"><i class="bi bi-people"></i></div>
+    <div class="kpi-value">{{ total_students }}</div>
+    <div class="kpi-label">Enrolled Students</div>
+  </div>
+  <div class="kpi-card kpi-amber">
+    <div class="kpi-icon" style="background:#fffbeb;color:#f59e0b;"><i class="bi bi-hourglass"></i></div>
+    <div class="kpi-value">{{ pending_grading }}</div>
+    <div class="kpi-label">Pending Grading</div>
+  </div>
+  <div class="kpi-card kpi-purple">
+    <div class="kpi-icon" style="background:#faf5ff;color:#8b5cf6;"><i class="bi bi-camera-video"></i></div>
+    <div class="kpi-value">{{ upcoming_classes|length }}</div>
+    <div class="kpi-label">Upcoming Classes</div>
+  </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row g-3">
+
+  <!-- Left: Programs + Upcoming Classes -->
+  <div class="col-12 col-lg-7">
+
+    <!-- My Programs -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-book me-2 text-success"></i>My Programs</h6>
+        <a href="{% url 'kiswate_digital_app:teacher_program_create' %}" class="btn btn-sm btn-brand" style="font-size:.78rem;padding:.3rem .75rem;">
+          <i class="bi bi-plus-lg"></i> New
+        </a>
+      </div>
+
+      {% for p in programs %}
+      <div class="program-row">
+        <div class="program-icon"><i class="bi bi-book-half"></i></div>
+        <div class="flex-grow-1 min-w-0">
+          <div class="program-name text-truncate">{{ p.name }}</div>
+          <div class="program-meta">
+            {{ p.subject.name }}
+            &bull; {{ p.enrollments.count }} student{{ p.enrollments.count|pluralize }}
+            {% if p.level %}&bull; {{ p.get_level_display }}{% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0">
+          <a href="{% url 'kiswate_digital_app:tuition_program_detail' p.pk %}" class="btn btn-xs btn-outline-secondary" title="View">
+            <i class="bi bi-eye"></i>
+          </a>
+          <a href="{% url 'kiswate_digital_app:teacher_program_edit' p.pk %}" class="btn btn-xs btn-outline-success" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-book"></i>
+        <p>No programs yet.<br>
+        <a href="{% url 'kiswate_digital_app:teacher_program_create' %}">Create your first program</a></p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- My Lessons (mapped by admin) -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-journal-text me-2 text-success"></i>My Lessons</h6>
+        <a href="{% url 'kiswate_digital_app:lesson_list' %}" class="btn btn-xs btn-outline-secondary">View all</a>
+      </div>
+      {% for lesson in my_lessons %}
+      <div class="program-row">
+        <div class="program-icon"><i class="bi bi-journal-text"></i></div>
+        <div class="flex-grow-1 min-w-0">
+          <div class="program-name text-truncate">{{ lesson.title }}</div>
+          <div class="program-meta">
+            {{ lesson.program.name }}
+            {% if lesson.topic %}&bull; {{ lesson.topic }}{% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0 align-items-center">
+          {% if lesson.is_published %}
+          <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.68rem;">Published</span>
+          {% else %}
+          <span class="badge rounded-pill bg-secondary-subtle text-secondary" style="font-size:.68rem;">Draft</span>
+          {% endif %}
+          <a href="{% url 'kiswate_digital_app:lesson_detail' lesson.pk %}" class="btn btn-xs btn-outline-secondary" title="Open">
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-journal-x"></i>
+        <p>No lessons assigned yet.<br><span class="text-muted small">A Kiswate admin will map lessons to you after approval.</span></p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Upcoming Classes -->
+    {% if upcoming_classes %}
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-camera-video me-2 text-success"></i>Upcoming Classes</h6>
+      </div>
+      {% for vc in upcoming_classes %}
+      <div class="class-item">
+        <div class="d-flex align-items-center justify-content-between gap-2">
+          <div class="min-w-0">
+            <div class="fw-semibold small text-truncate">{{ vc.title }}</div>
+            <div class="text-muted" style="font-size:.76rem;">{{ vc.program.name }}</div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <span class="class-date-badge"><i class="bi bi-calendar3 me-1"></i>{{ vc.scheduled_at|date:"d M · H:i" }}</span>
+            <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-xs btn-outline-success">Manage</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Right: Recent Submissions + Quick Links -->
+  <div class="col-12 col-lg-5">
+
+    <!-- Recent Submissions -->
+    <div class="section-card mb-3">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-inbox me-2 text-warning"></i>Recent Submissions</h6>
+        {% if pending_grading > 0 %}
+        <span class="badge rounded-pill" style="background:#fef3c7;color:#92400e;font-size:.72rem;">
+          {{ pending_grading }} ungraded
+        </span>
+        {% endif %}
+      </div>
+
+      {% for sub in recent_submissions %}
+      <div class="sub-item">
+        <div class="min-w-0">
+          <div class="fw-semibold text-truncate" style="font-size:.875rem;">{{ sub.student.full_name }}</div>
+          <div class="text-muted text-truncate" style="font-size:.76rem;">{{ sub.assignment.title }}</div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          {% if sub.marks_obtained is None %}
+          <a href="{% url 'kiswate_digital_app:grade_submission' sub.pk %}" class="btn btn-xs btn-warning">Grade</a>
+          {% else %}
+          <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.72rem;">
+            {{ sub.marks_obtained }}/{{ sub.assignment.total_marks }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state" style="padding: 1.5rem 1rem;">
+        <i class="bi bi-inbox" style="font-size:1.8rem;"></i>
+        <p>No submissions yet.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="section-card">
+      <h6 class="section-title mb-3"><i class="bi bi-lightning me-2 text-amber"></i>Quick Actions</h6>
+      <div class="d-grid gap-2">
+        <a href="{% url 'kiswate_digital_app:lesson_create' %}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
+          <i class="bi bi-journal-plus text-success"></i> Add New Lesson
+        </a>
+        <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-plus text-success"></i> Create Assignment
+        </a>
+        <a href="{% url 'kiswate_digital_app:assessment_create' %}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
+          <i class="bi bi-clipboard-plus text-purple"></i> New Assessment
+        </a>
+        <a href="{% url 'kiswate_digital_app:notification_list' %}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2">
+          <i class="bi bi-bell text-warning"></i> View Notifications
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+{% endblock %}

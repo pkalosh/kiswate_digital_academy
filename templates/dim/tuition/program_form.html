@@ -1,0 +1,46 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}{{ action }} DIL Program{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5>
+    <i class="bi bi-mortarboard me-2"></i>
+    {% if for_teacher %}{{ action }} My Program{% else %}{{ action }} DIL Program{% endif %}
+  </h5>
+  {% if for_teacher %}
+  <a href="{% url 'kiswate_digital_app:teacher_tuition_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  {% else %}
+  <a href="{% url 'kiswate_digital_app:tuition_program_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Programs
+  </a>
+  {% endif %}
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="form-card">
+      <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="d-flex gap-2 justify-content-end">
+          {% if for_teacher %}
+          <a href="{% url 'kiswate_digital_app:teacher_tuition_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+          {% else %}
+          <a href="{% url 'kiswate_digital_app:tuition_program_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          {% endif %}
+          <button type="submit" class="btn btn-brand">{{ action }} Program</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

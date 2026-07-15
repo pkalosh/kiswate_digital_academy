@@ -1,7 +1,9 @@
-{% extends 'school/base.html' %}
+{% extends base_template|default:'school/base.html' %}
 {% load static %}
 
 {% block title %}Subject Catalog | Kiswate Platform{% endblock %}
+{% block page_title %}School Subject Catalog{% endblock %}
+{% block nav_subject_catalog %}active{% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-3">

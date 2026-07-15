@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}{% if question %}Edit{% else %}Add{% endif %} Question{% endblock %}
 {% block page_title %}{% if question %}Edit{% else %}Add{% endif %} Question{% endblock %}
 {% block nav_assess_open %}show{% endblock %}
@@ -48,7 +48,7 @@
         <!-- Choices (MCQ/True-False) -->
         <h6 class="fw-semibold mb-2">Answer Choices <small class="text-muted">(for MCQ / True-False)</small></h6>
         <div class="alert alert-light border mb-3" style="font-size:.8rem;">
-          <i class="bi bi-info-circle me-1 text-primary"></i>
+          <i class="bi bi-info-circle me-1 text-success"></i>
           Tick <strong>Correct</strong> on the right answer(s). Leave blank for short-answer / essay questions.
         </div>
 

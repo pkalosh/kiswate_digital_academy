@@ -3,7 +3,18 @@
 {% block nav_fees %}active{% endblock %}
 
 {% block content %}
-<h5 class="fw-bold mb-3">Fee Updates</h5>
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h5 class="fw-bold mb-0">Fee Updates</h5>
+  {% if terms %}
+  <form method="get" class="d-flex gap-2">
+    <select name="term" class="form-select form-select-sm">
+      <option value="">All Terms</option>
+      {% for t in terms %}<option value="{{ t.pk }}" {% if term_id == t.pk|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+  </form>
+  {% endif %}
+</div>
 
 {% for fd in fee_data %}
 <div class="card k-card mb-4">
@@ -11,40 +22,53 @@
     <i class="bi bi-person-circle text-success"></i>
     <strong>{{ fd.student.user.get_full_name }}</strong>
     <span class="badge bg-secondary">{{ fd.student.grade_level.name }}</span>
+    {% if fd.student.stream %}<span class="badge bg-light text-dark border">{{ fd.student.stream.name }}</span>{% endif %}
     <div class="ms-auto d-flex gap-3">
       <div class="text-center">
-        <div class="fw-bold text-success">KES {{ fd.total_paid|floatformat:2 }}</div>
-        <small class="text-muted">Total Paid</small>
+        <div class="fw-bold text-primary">KES {{ fd.total_required|floatformat:2 }}</div>
+        <small class="text-muted">Billed</small>
       </div>
-      {% if fd.pending_count %}
       <div class="text-center">
-        <div class="fw-bold text-danger">{{ fd.pending_count }}</div>
-        <small class="text-muted">Pending</small>
+        <div class="fw-bold text-success">KES {{ fd.total_paid|floatformat:2 }}</div>
+        <small class="text-muted">Paid</small>
       </div>
-      {% endif %}
+      <div class="text-center">
+        <div class="fw-bold {% if fd.total_balance > 0 %}text-danger{% else %}text-success{% endif %}">KES {{ fd.total_balance|floatformat:2 }}</div>
+        <small class="text-muted">Balance</small>
+      </div>
     </div>
   </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 k-tight">
       <thead class="table-light">
-        <tr><th>Date</th><th>Type</th><th>Amount (KES)</th><th>Transaction ID</th><th>Status</th><th>Description</th></tr>
+        <tr>
+          <th>Term</th>
+          <th>Description</th>
+          <th class="text-end">Amount</th>
+          <th class="text-end">Paid</th>
+          <th class="text-end hide-sm">Balance</th>
+          <th>Status</th>
+          <th class="hide-sm">Due Date</th>
+        </tr>
       </thead>
       <tbody>
-        {% for pay in fd.payments %}
+        {% for inv in fd.invoices %}
         <tr>
-          <td>{{ pay.paid_at|date:"M d, Y"|default:"—" }}</td>
-          <td>{{ pay.get_payment_type_display }}</td>
-          <td class="fw-semibold">{{ pay.amount|floatformat:2 }}</td>
-          <td><code class="small">{{ pay.transaction_id|default:"—" }}</code></td>
+          <td>{{ inv.term.name|default:"—" }}</td>
+          <td>{{ inv.description }}</td>
+          <td class="text-end fw-semibold">{{ inv.amount_required|floatformat:2 }}</td>
+          <td class="text-end text-success">{{ inv.amount_paid|floatformat:2 }}</td>
+          <td class="text-end hide-sm {% if inv.balance > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">{{ inv.balance|floatformat:2 }}</td>
           <td>
-            <span class="badge {% if pay.status == 'completed' %}bg-success{% elif pay.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
-              {{ pay.status|title }}
-            </span>
+            {% if inv.status == 'paid' %}<span class="badge bg-success">Paid</span>
+            {% elif inv.status == 'partial' %}<span class="badge bg-warning text-dark">Partial</span>
+            {% elif inv.status == 'waived' %}<span class="badge bg-info">Waived</span>
+            {% else %}<span class="badge bg-danger">Pending</span>{% endif %}
           </td>
-          <td class="text-muted small">{{ pay.description|truncatechars:40|default:"—" }}</td>
+          <td class="hide-sm text-muted small">{% if inv.due_date %}{{ inv.due_date|date:"d M Y" }}{% else %}–{% endif %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-center text-muted py-3">No payment records yet.</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-3">No fee records for this term.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -1,0 +1,92 @@
+{% extends 'school/base.html' %}
+{% block title %}Subscription | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:780px">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="fw-bold mb-0"><i class="bi bi-credit-card me-2 text-success"></i>Subscription</h5>
+  </div>
+
+  <!-- Current subscription card -->
+  {% if subscription %}
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-white border-0 pt-3 pb-0 fw-semibold">Current Plan</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="text-muted small">Plan</div>
+          <div class="fw-bold">{{ subscription.plan.name|default:"—" }}</div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted small">Status</div>
+          {% if subscription.is_active %}
+            <span class="badge bg-success">Active</span>
+          {% else %}
+            <span class="badge bg-danger">Inactive</span>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted small">Renewal Date</div>
+          <div class="fw-bold">{{ subscription.end_date|date:"d M Y"|default:"—" }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit form -->
+  <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card-header bg-white border-0 pt-3 pb-0 fw-semibold">Update Subscription</div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+          {% for field in form %}
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+            <div class="text-danger small mt-1">{{ field.errors }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-check-lg me-1"></i>Update
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info">No active subscription found for this school.</div>
+  {% endif %}
+
+  <!-- Available plans -->
+  {% if plans %}
+  <h6 class="fw-bold mb-3">Available Plans</h6>
+  <div class="row g-3">
+    {% for plan in plans %}
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card-body text-center py-4">
+          <div class="fw-bold fs-5">{{ plan.name }}</div>
+          <div class="text-muted small mb-2">{{ plan.description|default:"" }}</div>
+          <div class="fw-bold fs-4 text-success">KES {{ plan.price|floatformat:0 }}</div>
+          <small class="text-muted">/ month</small>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

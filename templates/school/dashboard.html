@@ -40,9 +40,7 @@
     <a href="{% url 'school:generate_timetable' %}" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-calendar-week me-1"></i> Timetable
     </a>
-    <a href="{% url 'school:attendance-export-csv' %}" class="btn btn-sm btn-outline-dark">
-      <i class="bi bi-download me-1"></i> Export
-    </a>
+    
   </div>
 </div>
 
@@ -219,23 +217,52 @@
   <!-- ── Attendance trend chart ─────────────────────────────── -->
   <div class="col-12 col-xl-8">
     <div class="card border-0 shadow-sm h-100" style="border-radius:.7rem">
-      <div class="card-header bg-white border-0 pt-3 pb-0 px-3 d-flex align-items-center justify-content-between">
+
+      <!-- Header -->
+      <div class="card-header bg-white border-0 px-3 pt-3 pb-2 d-flex align-items-center justify-content-between">
         <div>
-          <span class="fw-semibold" style="font-size:.9rem">Weekly Attendance</span>
-          <span class="ms-2 text-muted" style="font-size:.75rem">
-            {{ week_days.0|date:"M d" }} – {{ week_days.6|date:"M d, Y" }}
-          </span>
+          <span class="fw-bold" style="font-size:.95rem">Weekly Attendance</span>
+          <div class="text-muted" style="font-size:.75rem;margin-top:1px">
+            <i class="bi bi-calendar3 me-1"></i>{{ week_days.0|date:"M d" }} – {{ week_days.6|date:"M d, Y" }}
+          </div>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <a href="?date={{ prev_week }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">‹</a>
+        <div class="d-flex align-items-center gap-1">
+          <a href="?date={{ prev_week }}" class="btn btn-sm btn-outline-secondary px-2 py-1" style="font-size:.78rem">
+            <i class="bi bi-chevron-left"></i>
+          </a>
           {% if not is_current_week %}
-          <a href="{% url 'school:dashboard' %}" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.75rem">Today</a>
+          <a href="{% url 'school:dashboard' %}" class="btn btn-sm btn-outline-success px-2 py-1" style="font-size:.78rem">
+            <i class="bi bi-calendar-check me-1"></i>Today
+          </a>
           {% endif %}
-          <a href="?date={{ next_week }}" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75rem">›</a>
+          <a href="?date={{ next_week }}" class="btn btn-sm btn-outline-secondary px-2 py-1" style="font-size:.78rem">
+            <i class="bi bi-chevron-right"></i>
+          </a>
         </div>
       </div>
-      <div class="card-body px-3 pt-2 pb-3">
-        <canvas id="weeklyChart" style="max-height:230px"></canvas>
+
+      <!-- Weekly summary pills -->
+      <div class="px-3 pb-2 d-flex flex-wrap gap-2">
+        <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-2" style="background:#f0fdf4;font-size:.78rem">
+          <span style="width:9px;height:9px;border-radius:2px;background:#27ae60;display:inline-block;flex-shrink:0"></span>
+          <span class="text-muted">Present</span>
+          <strong id="wk-present" class="ms-1" style="color:#27ae60">—</strong>
+        </span>
+        <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-2" style="background:#fff5f5;font-size:.78rem">
+          <span style="width:9px;height:9px;border-radius:2px;background:#e74c3c;display:inline-block;flex-shrink:0"></span>
+          <span class="text-muted">Absent</span>
+          <strong id="wk-absent" class="ms-1" style="color:#e74c3c">—</strong>
+        </span>
+        <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-2" style="background:#fffbeb;font-size:.78rem">
+          <span style="width:9px;height:9px;border-radius:2px;background:#f39c12;display:inline-block;flex-shrink:0"></span>
+          <span class="text-muted">Tardy</span>
+          <strong id="wk-tardy" class="ms-1" style="color:#f39c12">—</strong>
+        </span>
+      </div>
+
+      <!-- Chart -->
+      <div class="card-body px-3 pt-0 pb-3" style="position:relative;height:220px">
+        <canvas id="weeklyChart"></canvas>
       </div>
     </div>
   </div>
@@ -492,50 +519,83 @@
 </div><!-- /container -->
 
 <!-- ═══════ SCRIPTS ═══════ -->
+{{ chart_labels_json|json_script:"chart-labels" }}
+{{ chart_present_json|json_script:"chart-present" }}
+{{ chart_absent_json|json_script:"chart-absent" }}
+{{ chart_tardy_json|json_script:"chart-tardy" }}
+{{ donut_data_json|json_script:"chart-donut" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 // ── Weekly Attendance Bar Chart ──────────────────────────────────────────────
+const _chartLabels  = JSON.parse(document.getElementById('chart-labels').textContent);
+const _chartPresent = JSON.parse(document.getElementById('chart-present').textContent);
+const _chartAbsent  = JSON.parse(document.getElementById('chart-absent').textContent);
+const _chartTardy   = JSON.parse(document.getElementById('chart-tardy').textContent);
+
+// Populate weekly summary pills
+const _sum = arr => arr.reduce((a, b) => a + b, 0);
+document.getElementById('wk-present').textContent = _sum(_chartPresent);
+document.getElementById('wk-absent').textContent  = _sum(_chartAbsent);
+document.getElementById('wk-tardy').textContent   = _sum(_chartTardy);
+
+// Build two-line x-axis labels: ["Mon", "13"] per day
+// _chartLabels arrive as "Mon 13", "Tue 14", etc.
+const _axisLabels = _chartLabels.map(l => {
+  const [day, date] = l.split(' ');
+  return [day, date || ''];
+});
+
 const wCtx = document.getElementById('weeklyChart').getContext('2d');
 new Chart(wCtx, {
   type: 'bar',
   data: {
-    labels: {{ chart_labels_json|safe }},
+    labels: _axisLabels,
     datasets: [
-      {
-        label: 'Present',
-        data: {{ chart_present_json|safe }},
-        backgroundColor: 'rgba(39,174,96,.75)',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-      {
-        label: 'Absent',
-        data: {{ chart_absent_json|safe }},
-        backgroundColor: 'rgba(231,76,60,.65)',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-      {
-        label: 'Tardy',
-        data: {{ chart_tardy_json|safe }},
-        backgroundColor: 'rgba(243,156,18,.65)',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
+      { label: 'Present', data: _chartPresent, backgroundColor: 'rgba(39,174,96,.8)',  borderRadius: 5, borderSkipped: false },
+      { label: 'Absent',  data: _chartAbsent,  backgroundColor: 'rgba(231,76,60,.75)', borderRadius: 5, borderSkipped: false },
+      { label: 'Tardy',   data: _chartTardy,   backgroundColor: 'rgba(243,156,18,.8)', borderRadius: 5, borderSkipped: false },
     ]
   },
   options: {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 10 } },
-      tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}` } }
+      legend: { display: false },   /* we use the custom pills above */
+      tooltip: {
+        backgroundColor: '#1a1a2e',
+        padding: 10,
+        cornerRadius: 8,
+        titleFont: { size: 12, weight: '700' },
+        bodyFont:  { size: 11 },
+        callbacks: {
+          title: items => _chartLabels[items[0].dataIndex],
+          label: ctx  => `  ${ctx.dataset.label}: ${ctx.raw}`
+        }
+      }
     },
     scales: {
-      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-      y: { beginAtZero: true, ticks: { font: { size: 10 }, precision: 0 }, grid: { color: '#f0f0f0' } }
-    }
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: {
+          font: (ctx) => ctx.tick && ctx.tick.label && ctx.tick.label[1] !== undefined
+            ? { size: ctx.index === 0 ? 10 : 10 }
+            : { size: 10 },
+          color: (ctx) => '#555',
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 4,
+        }
+      },
+      y: {
+        beginAtZero: true,
+        border: { display: false },
+        grid: { color: '#f0f2f5' },
+        ticks: { font: { size: 10 }, precision: 0, color: '#888' }
+      }
+    },
+    layout: { padding: { top: 8 } }
   }
 });
 
@@ -547,7 +607,7 @@ new Chart(dCtx, {
   data: {
     labels: ['Present','Absent','Tardy','Action'],
     datasets: [{
-      data: {{ donut_data_json|safe }},
+      data: JSON.parse(document.getElementById('chart-donut').textContent),
       backgroundColor: [
         'rgba(39,174,96,.8)',
         'rgba(231,76,60,.8)',

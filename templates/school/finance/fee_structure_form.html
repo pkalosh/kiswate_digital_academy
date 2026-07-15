@@ -1,0 +1,333 @@
+{% extends "school/base.html" %}
+{% load static %}
+{% block title %}{% if edit %}Edit Fee Structure{% else %}Create Fee Structures{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:900px">
+
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{% url 'school:fee-structure-list' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    <div>
+      <h5 class="mb-0 fw-bold">{% if edit %}Edit Fee Structure{% else %}Create Fee Structures{% endif %}</h5>
+      <small class="text-muted">{% if edit %}Update a single fee entry{% else %}Set the header then add multiple fee items in one go{% endif %}</small>
+    </div>
+  </div>
+
+  {% if messages %}{% for msg in messages %}
+    <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show py-2">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}{% endif %}
+
+{% if edit %}
+  <!-- ── Single-record edit ─────────────────────────────── -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-success text-white"><h5 class="mb-0"><i class="bi bi-pencil me-2"></i>Edit</h5></div>
+    <div class="card-body">
+      <form method="post">{% csrf_token %}
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><label class="form-label fw-semibold">Grade</label>{{ form.grade }}</div>
+          <div class="col-md-6"><label class="form-label fw-semibold">Stream <small class="text-muted">(optional)</small></label>{{ form.stream }}</div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><label class="form-label fw-semibold">Term</label>{{ form.term }}</div>
+          <div class="col-md-6"><label class="form-label fw-semibold">Academic Year</label>{{ form.academic_year }}</div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><label class="form-label fw-semibold">Fee Type</label>{{ form.fee_type }}</div>
+          <div class="col-md-6"><label class="form-label fw-semibold">Amount (KES)</label>{{ form.amount }}</div>
+        </div>
+        <div class="mb-3"><label class="form-label fw-semibold">Description</label>{{ form.description }}</div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Update</button>
+          <a href="{% url 'school:fee-structure-list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+{% else %}
+  <!-- ── Bulk create ────────────────────────────────────── -->
+  <form method="post" id="bulkForm">
+    {% csrf_token %}
+
+    <!-- SECTION 1: Header -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom px-4 pt-3 pb-2">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(11,122,42,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-funnel-fill" style="color:#0b7a2a;font-size:.85rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:.9rem">Step 1 — Select Grade, Stream & Term</div>
+            <div class="text-muted" style="font-size:.75rem">All fee items below will be created for this combination</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body px-4 pb-4">
+        <div class="row g-3">
+          <div class="col-sm-6 col-md-3">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Grade <span class="text-danger">*</span></label>
+            <select name="grade" class="form-select" required>
+              <option value="">— Select —</option>
+              {% for g in grades %}<option value="{{ g.pk }}">{{ g.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Stream <small class="text-muted fw-normal">(optional)</small></label>
+            <select name="stream" class="form-select">
+              <option value="">All Streams</option>
+              {% for s in streams %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Term <span class="text-danger">*</span></label>
+            <select name="term" class="form-select" required>
+              <option value="">— Select —</option>
+              {% for t in terms %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6 col-md-3">
+            <label class="form-label fw-semibold" style="font-size:.84rem">Academic Year</label>
+            <select name="academic_year" class="form-select">
+              <option value="">— None —</option>
+              {% for y in years %}<option value="{{ y.pk }}">{{ y.name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: Fee items table -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom px-4 pt-3 pb-2 d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:32px;height:32px;border-radius:8px;background:rgba(11,122,42,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi bi-list-ul" style="color:#0b7a2a;font-size:.85rem"></i>
+          </div>
+          <div>
+            <div class="fw-bold" style="font-size:.9rem">Step 2 — Add Fee Items</div>
+            <div class="text-muted" style="font-size:.75rem">Each row is one fee line for the grade/term above</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-success" id="addRowBtn">
+          <i class="bi bi-plus-lg me-1"></i>Add Row
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0" style="font-size:.875rem" id="itemsTable">
+            <thead class="table-light">
+              <tr>
+                <th style="width:32%">Fee Type</th>
+                <th style="width:38%">Description</th>
+                <th style="width:22%">Amount (KES)</th>
+                <th style="width:8%" class="text-center">Remove</th>
+              </tr>
+            </thead>
+            <tbody id="itemsBody">
+              <!-- rows injected by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div id="emptyMsg" class="text-center py-4 text-muted" style="font-size:.875rem">
+          <i class="bi bi-plus-circle me-1"></i>Click <strong>Add Row</strong> to start adding fee items
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-end">
+      <a href="{% url 'school:fee-structure-list' %}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-success px-4" id="submitBtn" disabled>
+        <i class="bi bi-check-lg me-1"></i>Create Fee Structures
+      </button>
+    </div>
+  </form>
+{% endif %}
+</div>
+
+<!-- ── Fee Type Manager Modal ─────────────────────────── -->
+<div class="modal fade" id="feeTypeModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-tag me-2 text-success"></i>Add Fee Type</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <label class="form-label fw-semibold" style="font-size:.84rem">Fee Type Name</label>
+        <input type="text" id="newFeeTypeName" class="form-control" placeholder="e.g. Library Fee">
+        <div id="feeTypeError" class="text-danger mt-1" style="font-size:.8rem;display:none"></div>
+        <div class="text-muted mt-1" style="font-size:.75rem">Existing types for this school:</div>
+        <ul id="existingTypesList" class="list-unstyled mt-1 mb-0" style="font-size:.82rem;max-height:120px;overflow-y:auto">
+          {% for ft in fee_types %}
+          <li class="d-flex align-items-center gap-1 py-1 border-bottom">
+            <i class="bi bi-tag-fill text-success" style="font-size:.7rem"></i>
+            <span>{{ ft.name }}</span>
+          </li>
+          {% empty %}
+          <li class="text-muted">No types yet — create your first one.</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-success btn-sm" id="saveFeeTypeBtn"><i class="bi bi-plus-lg me-1"></i>Add Type</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not edit %}
+<script>
+const FEE_TYPE_URL = "{% url 'school:fee-type-create-ajax' %}";
+const CSRF = "{{ csrf_token }}";
+
+// Initial fee types from server
+let feeTypes = [
+  {% for ft in fee_types %}{"id": {{ ft.pk }}, "name": "{{ ft.name|escapejs }}"},{% endfor %}
+];
+
+function buildSelect(selectedId) {
+  let opts = '<option value="">— Choose —</option>';
+  feeTypes.forEach(ft => {
+    opts += `<option value="${ft.id}" ${selectedId == ft.id ? 'selected' : ''}>${ft.name}</option>`;
+  });
+  opts += '<option value="__new__">+ Add new fee type...</option>';
+  return opts;
+}
+
+function addRow(ftId, desc, amt) {
+  const body = document.getElementById('itemsBody');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const idx = body.children.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>
+      <select name="fee_type_id" class="form-select form-select-sm ft-select" required>
+        ${buildSelect(ftId)}
+      </select>
+    </td>
+    <td>
+      <input type="text" name="description" class="form-control form-control-sm" value="${desc || ''}" placeholder="e.g. Term 1 Tuition">
+    </td>
+    <td>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text">KES</span>
+        <input type="number" name="amount" class="form-control" value="${amt || ''}" min="0" step="0.01" required placeholder="0.00">
+      </div>
+    </td>
+    <td class="text-center">
+      <button type="button" class="btn btn-sm btn-outline-danger remove-row" title="Remove">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>`;
+  body.appendChild(tr);
+  emptyMsg.style.display = 'none';
+  updateSubmitBtn();
+
+  // Handle "Add new fee type" option
+  tr.querySelector('.ft-select').addEventListener('change', function() {
+    if (this.value === '__new__') {
+      this.value = '';
+      openFeeTypeModal(this);
+    }
+  });
+  tr.querySelector('.remove-row').addEventListener('click', function() {
+    tr.remove();
+    if (!document.getElementById('itemsBody').children.length) {
+      emptyMsg.style.display = '';
+    }
+    updateSubmitBtn();
+  });
+}
+
+function updateSubmitBtn() {
+  const rows = document.getElementById('itemsBody').children.length;
+  document.getElementById('submitBtn').disabled = rows === 0;
+}
+
+document.getElementById('addRowBtn').addEventListener('click', () => addRow());
+
+// Form validation before submit
+document.getElementById('bulkForm').addEventListener('submit', function(e) {
+  const selects = document.querySelectorAll('.ft-select');
+  for (const s of selects) {
+    if (!s.value) {
+      e.preventDefault();
+      s.classList.add('is-invalid');
+      s.focus();
+      return;
+    }
+  }
+});
+
+// ── Fee Type Modal ────────────────────────────────────
+let pendingSelect = null;
+
+function openFeeTypeModal(selectEl) {
+  pendingSelect = selectEl;
+  document.getElementById('newFeeTypeName').value = '';
+  document.getElementById('feeTypeError').style.display = 'none';
+  new bootstrap.Modal(document.getElementById('feeTypeModal')).show();
+  setTimeout(() => document.getElementById('newFeeTypeName').focus(), 300);
+}
+
+document.getElementById('saveFeeTypeBtn').addEventListener('click', async function() {
+  const name = document.getElementById('newFeeTypeName').value.trim();
+  const errEl = document.getElementById('feeTypeError');
+  if (!name) { errEl.textContent = 'Name is required.'; errEl.style.display = ''; return; }
+
+  this.disabled = true;
+  try {
+    const res = await fetch(FEE_TYPE_URL, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded'},
+      body: `name=${encodeURIComponent(name)}`,
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Error'; errEl.style.display = ''; return; }
+
+    // Add to local list
+    if (!feeTypes.find(f => f.id === data.id)) {
+      feeTypes.push({id: data.id, name: data.name});
+      feeTypes.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    // Refresh all selects in the table
+    document.querySelectorAll('.ft-select').forEach(s => {
+      const cur = s.value;
+      s.innerHTML = buildSelect(cur);
+      s.addEventListener('change', function() {
+        if (this.value === '__new__') { this.value = ''; openFeeTypeModal(this); }
+      });
+    });
+
+    // Select the new type on the triggering select
+    if (pendingSelect) pendingSelect.value = data.id;
+
+    // Add to existing list in modal
+    const li = document.createElement('li');
+    li.className = 'd-flex align-items-center gap-1 py-1 border-bottom';
+    li.innerHTML = `<i class="bi bi-tag-fill text-success" style="font-size:.7rem"></i><span>${data.name}</span>`;
+    const list = document.getElementById('existingTypesList');
+    const emptyLi = list.querySelector('li.text-muted');
+    if (emptyLi) emptyLi.remove();
+    list.insertBefore(li, list.firstChild);
+
+    bootstrap.Modal.getInstance(document.getElementById('feeTypeModal')).hide();
+    updateSubmitBtn();
+  } catch(err) {
+    errEl.textContent = 'Network error. Try again.';
+    errEl.style.display = '';
+  } finally {
+    this.disabled = false;
+  }
+});
+
+// Also wire existing selects if any (page reload with errors case)
+document.querySelectorAll('.ft-select').forEach(s => {
+  s.addEventListener('change', function() {
+    if (this.value === '__new__') { this.value = ''; openFeeTypeModal(this); }
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

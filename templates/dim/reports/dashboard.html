@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}Reports{% endblock %}
 {% block page_title %}Reports & Analytics{% endblock %}
 {% block nav_reports_open %}show{% endblock %}
@@ -12,7 +12,7 @@
   <div class="col-sm-6 col-lg-3" data-aos="fade-up">
     <a href="{% url 'kiswate_digital_app:student_performance_report' %}" class="text-decoration-none">
       <div class="module-card h-100 text-center py-4">
-        <div class="stat-icon bg-primary-subtle text-primary mx-auto mb-3" style="width:52px;height:52px;border-radius:14px;font-size:1.4rem;">
+        <div class="stat-icon bg-success-subtle text-success mx-auto mb-3" style="width:52px;height:52px;border-radius:14px;font-size:1.4rem;">
           <i class="bi bi-graph-up"></i>
         </div>
         <div class="fw-semibold">Student Performance</div>

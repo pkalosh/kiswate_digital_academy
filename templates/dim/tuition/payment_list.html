@@ -1,0 +1,312 @@
+{% extends base_template|default:"Dashboard/base.html" %}
+{% block title %}{% if is_school_admin %}DIL Enrollments — {{ school.name }}{% else %}DIL Payments{% endif %}{% endblock %}
+{% block page_title %}{% if is_school_admin %}DIL — Student Enrollments{% else %}DIL Payments{% endif %}{% endblock %}
+{% block nav_tuition %}show{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pay-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: .75rem;
+  }
+  .pay-card .student-name { font-weight: 700; font-size: .9rem; color: #111; }
+  .pay-card .sub-line { font-size: .75rem; color: #6b7280; }
+  .pay-card .amount { font-weight: 800; font-size: 1rem; color: #111; }
+  .status-pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 600; padding: .25rem .65rem; border-radius: 20px; }
+  .status-paid   { background: #d1fae5; color: #065f46; }
+  .status-pending{ background: #fef3c7; color: #92400e; }
+  .status-failed { background: #fee2e2; color: #991b1b; }
+  .status-free   { background: #f0fdf4; color: #065f46; }
+  .status-other  { background: #f3f4f6; color: #374151; }
+  .sponsor-tag { display: inline-flex; align-items: center; gap: .25rem; background: #d1fae5; color: #065f46; font-size: .68rem; padding: .15rem .5rem; border-radius: 20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h5 class="mb-0 fw-bold">
+        <i class="bi bi-credit-card me-2 text-success"></i>
+        {% if is_school_admin %}DIL Enrollments — {{ school.name }}{% else %}DIL Payments{% endif %}
+      </h5>
+      <small class="text-muted">
+        {% if is_school_admin %}Students from your school enrolled in DIL programs{% else %}All DIL enrollment payment records{% endif %}
+      </small>
+    </div>
+    {% if is_school_admin %}
+    <a href="{% url 'kiswate_digital_app:principal_enroll_tuition' %}" class="btn btn-success btn-sm">
+      <i class="bi bi-person-plus me-1"></i>Enroll Students
+    </a>
+    {% endif %}
+  </div>
+
+  {% if messages %}{% for msg in messages %}
+    <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}{{ msg.tags }}{% endif %} alert-dismissible fade show py-2">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}{% endif %}
+
+  <!-- Summary Cards (school admin) -->
+  {% if is_school_admin and school_summary %}
+  <div class="row g-2 g-md-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3 px-2">
+        <div class="fw-bold fs-4 lh-1">{{ page_obj.paginator.count }}</div>
+        <div class="text-muted mt-1" style="font-size:.75rem">Total Enrolled</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3 px-2">
+        <div class="fw-bold fs-4 lh-1 text-success">{{ school_summary.count_paid|default:0 }}</div>
+        <div class="text-muted mt-1" style="font-size:.75rem">Paid</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3 px-2">
+        <div class="fw-bold fs-4 lh-1 text-warning">{{ school_summary.count_pending|default:0 }}</div>
+        <div class="text-muted mt-1" style="font-size:.75rem">Pending</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3 px-2">
+        <div class="fw-bold lh-1" style="font-size:1.1rem;color:#0b7a2a">KES {{ school_summary.total_sponsored|default:0|floatformat:0 }}</div>
+        <div class="text-muted mt-1" style="font-size:.75rem">Sponsored Total</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Filters -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+      <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+          <label class="form-label mb-1" style="font-size:.78rem;font-weight:600;">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">All Statuses</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label mb-1" style="font-size:.78rem;font-weight:600;">Method</label>
+          <select name="method" class="form-select form-select-sm">
+            <option value="">All Methods</option>
+            {% for val, label in method_choices %}
+            <option value="{{ val }}" {% if method_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-success btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
+        {% if status_filter or method_filter %}
+        <a href="{% url 'kiswate_digital_app:tuition_payment_list' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg me-1"></i>Clear</a>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  {% if is_school_admin %}
+  {# ═══════════════════ SCHOOL ADMIN VIEW ═══════════════════ #}
+
+  {# ── Desktop table (md+) ── #}
+  <div class="card border-0 shadow-sm d-none d-md-block">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.875rem">
+          <thead style="background:#f3f4f6;color:#111;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em">
+            <tr>
+              <th style="width:30%">Student</th>
+              <th style="width:28%">Program</th>
+              <th class="text-end" style="width:13%">Amount (KES)</th>
+              <th style="width:14%">Method</th>
+              <th style="width:10%">Status</th>
+              <th style="width:11%">Enrolled</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for en in enrollments %}
+            <tr>
+              <td>
+                <div class="fw-semibold" style="font-size:.85rem">{{ en.student.full_name }}</div>
+                <div class="text-muted" style="font-size:.73rem">{{ en.student.user.email }}</div>
+              </td>
+              <td style="font-size:.82rem">
+                {{ en.program.name }}
+                {% if en.program.subject %}<div class="text-muted" style="font-size:.72rem">{{ en.program.subject.name }}</div>{% endif %}
+              </td>
+              {% if en.payment %}
+              <td class="text-end fw-bold">{{ en.payment.amount|floatformat:2 }}</td>
+              <td style="font-size:.8rem">
+                {{ en.payment.get_payment_method_display }}
+                {% if en.payment.payment_method == 'school' %}<span class="sponsor-tag ms-1"><i class="bi bi-building"></i>Sponsored</span>{% endif %}
+              </td>
+              <td>
+                {% if en.payment.status == 'paid' %}<span class="status-pill status-paid">Paid</span>
+                {% elif en.payment.status == 'pending' %}<span class="status-pill status-pending">Pending</span>
+                {% elif en.payment.status == 'failed' %}<span class="status-pill status-failed">Failed</span>
+                {% else %}<span class="status-pill status-other">{{ en.payment.get_status_display }}</span>{% endif %}
+              </td>
+              {% else %}
+              <td class="text-end text-muted">—</td>
+              <td class="text-muted" style="font-size:.8rem">—</td>
+              <td><span class="status-pill status-free">Free</span></td>
+              {% endif %}
+              <td class="text-muted" style="font-size:.75rem">{{ en.enrolled_at|date:"d M Y" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-5">
+              <i class="bi bi-people fs-1 d-block mb-2" style="opacity:.25"></i>
+              No enrolled students found{% if status_filter or method_filter %} for this filter{% endif %}.
+              <div class="mt-2"><a href="{% url 'kiswate_digital_app:principal_enroll_tuition' %}" class="btn btn-sm btn-success">Enroll Students in DIL</a></div>
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "dim/tuition/_payment_pagination.html" %}
+    </div>
+  </div>
+
+  {# ── Mobile cards (< md) ── #}
+  <div class="d-md-none">
+    {% for en in enrollments %}
+    <div class="pay-card">
+      <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+        <div>
+          <div class="student-name">{{ en.student.full_name }}</div>
+          <div class="sub-line">{{ en.student.user.email }}</div>
+        </div>
+        {% if en.payment %}
+          {% if en.payment.status == 'paid' %}<span class="status-pill status-paid">Paid</span>
+          {% elif en.payment.status == 'pending' %}<span class="status-pill status-pending">Pending</span>
+          {% elif en.payment.status == 'failed' %}<span class="status-pill status-failed">Failed</span>
+          {% else %}<span class="status-pill status-other">{{ en.payment.get_status_display }}</span>{% endif %}
+        {% else %}
+          <span class="status-pill status-free">Free</span>
+        {% endif %}
+      </div>
+      <div class="sub-line mb-2"><i class="bi bi-journal-richtext me-1 text-success"></i>{{ en.program.name }}{% if en.program.subject %} &bull; {{ en.program.subject.name }}{% endif %}</div>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          {% if en.payment %}
+          <div class="amount">KES {{ en.payment.amount|floatformat:2 }}</div>
+          <div class="sub-line">
+            {{ en.payment.get_payment_method_display }}
+            {% if en.payment.payment_method == 'school' %}<span class="sponsor-tag ms-1"><i class="bi bi-building"></i>Sponsored</span>{% endif %}
+          </div>
+          {% else %}
+          <div class="sub-line">No payment required</div>
+          {% endif %}
+        </div>
+        <div class="sub-line text-end"><i class="bi bi-calendar3 me-1"></i>{{ en.enrolled_at|date:"d M Y" }}</div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-people fs-1 d-block mb-2" style="opacity:.25"></i>
+      No enrolled students found{% if status_filter or method_filter %} for this filter{% endif %}.
+      <div class="mt-2"><a href="{% url 'kiswate_digital_app:principal_enroll_tuition' %}" class="btn btn-sm btn-success">Enroll Students in DIL</a></div>
+    </div>
+    {% endfor %}
+    {% include "dim/tuition/_payment_pagination.html" %}
+  </div>
+
+  {% else %}
+  {# ═══════════════════ KISWATE ADMIN VIEW ═══════════════════ #}
+
+  {# ── Desktop table (md+) ── #}
+  <div class="card border-0 shadow-sm d-none d-md-block">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.875rem">
+          <thead style="background:#f3f4f6;color:#111;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em">
+            <tr>
+              <th>#</th>
+              <th style="width:28%">Student</th>
+              <th style="width:25%">Program</th>
+              <th class="text-end">Amount (KES)</th>
+              <th>Method</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in payments %}
+            <tr>
+              <td class="text-muted" style="font-size:.75rem">{{ p.pk }}</td>
+              <td>
+                <div class="fw-semibold" style="font-size:.85rem">{{ p.enrollment.student.full_name }}</div>
+                <div class="text-muted" style="font-size:.73rem">{{ p.enrollment.student.user.email }}</div>
+                {% if p.payment_method == 'school' %}<span class="sponsor-tag"><i class="bi bi-building"></i>School Sponsored</span>{% endif %}
+              </td>
+              <td style="font-size:.82rem">
+                {{ p.enrollment.program.name }}
+                {% if p.enrollment.program.subject %}<div class="text-muted" style="font-size:.72rem">{{ p.enrollment.program.subject.name }}</div>{% endif %}
+              </td>
+              <td class="text-end fw-bold">{{ p.amount|floatformat:2 }}</td>
+              <td style="font-size:.8rem">{{ p.get_payment_method_display }}</td>
+              <td>
+                {% if p.status == 'paid' %}<span class="status-pill status-paid">Paid</span>
+                {% elif p.status == 'pending' %}<span class="status-pill status-pending">Pending</span>
+                {% elif p.status == 'failed' %}<span class="status-pill status-failed">Failed</span>
+                {% else %}<span class="status-pill status-other">{{ p.get_status_display }}</span>{% endif %}
+              </td>
+              <td class="text-muted" style="font-size:.75rem">
+                {{ p.created_at|date:"d M Y" }}
+                {% if p.paid_at and p.status == 'paid' %}<div style="font-size:.7rem;color:#16a34a"><i class="bi bi-check-circle me-1"></i>{{ p.paid_at|date:"d M Y" }}</div>{% endif %}
+              </td>
+              <td><a href="{% url 'kiswate_digital_app:tuition_payment_detail' p.pk %}" class="btn btn-xs btn-outline-secondary" style="font-size:.73rem;padding:.15rem .5rem">View</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-credit-card fs-1 d-block mb-2" style="opacity:.25"></i>No payments found.
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "dim/tuition/_payment_pagination.html" %}
+    </div>
+  </div>
+
+  {# ── Mobile cards (< md) ── #}
+  <div class="d-md-none">
+    {% for p in payments %}
+    <div class="pay-card">
+      <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+        <div>
+          <div class="student-name">{{ p.enrollment.student.full_name }}</div>
+          <div class="sub-line">{{ p.enrollment.student.user.email }}</div>
+          {% if p.payment_method == 'school' %}<span class="sponsor-tag mt-1"><i class="bi bi-building"></i>School Sponsored</span>{% endif %}
+        </div>
+        {% if p.status == 'paid' %}<span class="status-pill status-paid">Paid</span>
+        {% elif p.status == 'pending' %}<span class="status-pill status-pending">Pending</span>
+        {% elif p.status == 'failed' %}<span class="status-pill status-failed">Failed</span>
+        {% else %}<span class="status-pill status-other">{{ p.get_status_display }}</span>{% endif %}
+      </div>
+      <div class="sub-line mb-2"><i class="bi bi-journal-richtext me-1 text-success"></i>{{ p.enrollment.program.name }}</div>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <div class="amount">KES {{ p.amount|floatformat:2 }}</div>
+          <div class="sub-line">{{ p.get_payment_method_display }} &bull; {{ p.created_at|date:"d M Y" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:tuition_payment_detail' p.pk %}" class="btn btn-xs btn-outline-secondary" style="font-size:.78rem">View</a>
+      </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-credit-card fs-1 d-block mb-2" style="opacity:.25"></i>No payments found.
+    </div>
+    {% endfor %}
+    {% include "dim/tuition/_payment_pagination.html" %}
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}

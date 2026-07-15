@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}My Performance{% endblock %}
 {% block page_title %}My Performance{% endblock %}
 {% block nav_reports_open %}show{% endblock %}
@@ -12,7 +12,7 @@
 <div class="row g-3 mb-4">
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card">
-      <div class="stat-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-clipboard-check"></i></div>
+      <div class="stat-icon bg-success-subtle text-success mb-2"><i class="bi bi-clipboard-check"></i></div>
       <div class="stat-value">{{ attempts.count }}</div>
       <div class="stat-label">Assessments Completed</div>
     </div>
@@ -40,7 +40,7 @@
   </div>
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card">
-      <div class="stat-icon bg-info-subtle text-info mb-2"><i class="bi bi-person-check"></i></div>
+      <div class="stat-icon bg-success-subtle text-success mb-2"><i class="bi bi-person-check"></i></div>
       <div class="stat-value">
         {% if attendance_by_program %}
         {% with vals=attendance_by_program.values %}
@@ -57,7 +57,7 @@
   <!-- Assessment results -->
   <div class="col-lg-7">
     <div class="module-card">
-      <h6 class="fw-semibold mb-3"><i class="bi bi-clipboard-check me-1 text-primary"></i>Assessment Results</h6>
+      <h6 class="fw-semibold mb-3"><i class="bi bi-clipboard-check me-1 text-success"></i>Assessment Results</h6>
       {% if attempts %}
       {% for attempt in attempts %}
       <div class="border-bottom py-3 d-flex align-items-center justify-content-between" style="font-size:.875rem;">

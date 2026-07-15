@@ -1,0 +1,118 @@
+{% extends base_template|default:"school/teacher/base.html" %}
+{% block title %}Class Discipline | {{ stream.grade.name }} {{ stream.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-0"><i class="bi bi-shield-exclamation me-2 text-warning"></i>Class Discipline</h5>
+      <small class="text-muted">{{ stream.grade.name }} – {{ stream.name }}
+        {% if total_open %} &bull; <span class="text-danger fw-semibold">{{ total_open }} open</span>{% endif %}
+      </small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'school:teacher-discipline-create' %}" class="btn btn-sm btn-warning">
+        <i class="bi bi-plus me-1"></i>Log Incident
+      </a>
+      <a href="{% url 'school:class-teacher-roster' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Roster
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search student or description…" style="max-width:240px;">
+    <select name="resolved" class="form-select form-select-sm" style="max-width:140px;">
+      <option value="" {% if resolved == '' %}selected{% endif %}>All records</option>
+      <option value="0" {% if resolved == '0' %}selected{% endif %}>Open only</option>
+      <option value="1" {% if resolved == '1' %}selected{% endif %}>Resolved only</option>
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filter"></i></button>
+    {% if q or resolved %}<a href="?" class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></a>{% endif %}
+  </form>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th class="hide-xs">Type</th>
+              <th class="hide-sm">Severity</th>
+              <th class="hide-xs">Date</th>
+              <th>Status</th>
+              <th class="hide-sm">Description</th>
+              <th class="hide-sm">Action Taken</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rec in page_obj %}
+            <tr class="{% if rec.severity == 'critical' %}table-danger{% elif rec.severity == 'high' %}table-warning{% endif %}">
+              <td class="fw-semibold">{{ rec.student.user.get_full_name }}</td>
+              <td class="hide-xs">
+                <span class="badge bg-secondary rounded-pill" style="font-size:.72rem;">{{ rec.get_incident_type_display|default:rec.incident_type }}</span>
+              </td>
+              <td class="hide-sm">
+                {% if rec.severity == 'critical' or rec.severity == 'high' %}
+                <span class="badge bg-danger" style="font-size:.72rem;">{{ rec.severity|capfirst }}</span>
+                {% else %}
+                <span class="badge bg-secondary" style="font-size:.72rem;">{{ rec.severity|default:"—"|capfirst }}</span>
+                {% endif %}
+              </td>
+              <td class="hide-xs text-muted">{{ rec.date|date:"d M Y"|default:"—" }}</td>
+              <td>
+                {% if rec.resolved %}
+                <span class="badge bg-success" style="font-size:.72rem;">Resolved</span>
+                {% else %}
+                <span class="badge bg-danger" style="font-size:.72rem;">Open</span>
+                {% endif %}
+              </td>
+              <td class="hide-sm text-muted" style="max-width:200px;">{{ rec.description|truncatechars:60 }}</td>
+              <td class="hide-sm text-muted">{{ rec.action_taken|default:"—"|truncatechars:50 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-5">
+                <i class="bi bi-shield-check display-4 text-success opacity-50 d-block mb-2"></i>
+                No discipline records{% if q %} matching "{{ q }}"{% endif %}.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+      {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&resolved={{ resolved }}">&laquo;</a></li>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+      <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+      <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ q }}&resolved={{ resolved }}">{{ num }}</a></li>
+      {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&resolved={{ resolved }}">&raquo;</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+
+</div>
+{% endblock %}

@@ -12,71 +12,147 @@ Attendance | {{ lesson.subject.name }}
 
     <!-- HEADER -->
     <div class="card shadow-sm rounded-4 mb-3 p-3">
-        <h5 class="mb-1">
-            Taking Attendance: <strong>{{ lesson.subject.name }}</strong>
-        </h5>
-        <small class="text-muted">
-            Class: {{ lesson.stream }} |
-            Date: {{ lesson.lesson_date }} |
-            Time: {{ lesson.time_slot.start_time }} - {{ lesson.time_slot.end_time }}
-        </small>
+        <div class="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+            <div>
+                <h5 class="mb-1">
+                    <i class="bi bi-clipboard2-check me-2 text-success"></i>Taking Attendance: <strong>{{ lesson.subject.name }}</strong>
+                </h5>
+                <small class="text-muted">
+                    <i class="bi bi-people me-1"></i>{{ lesson.stream }} &nbsp;|&nbsp;
+                    <i class="bi bi-calendar3 me-1"></i>{{ lesson.lesson_date }} &nbsp;|&nbsp;
+                    <i class="bi bi-clock me-1"></i>{{ lesson.time_slot.start_time }} – {{ lesson.time_slot.end_time }}
+                </small>
+            </div>
+            <!-- Progress pill -->
+            <div class="text-end">
+                <div class="fw-bold text-success" id="progressCount" style="font-size:1.1rem;">0 / {{ enrollments|length }}</div>
+                <small class="text-muted">students marked</small>
+            </div>
+        </div>
+        <!-- Progress bar -->
+        <div class="progress mt-2" style="height:6px;">
+            <div class="progress-bar bg-success" id="progressBar" style="width:0%; transition:width .3s;"></div>
+        </div>
     </div>
 
-    <div class="row">
+    <!-- ── BULK ACTION TOOLBAR ─────────────────────────────────────── -->
+    <div class="card shadow-sm rounded-3 mb-3 p-2">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <span class="text-muted small fw-semibold me-1"><i class="bi bi-lightning-charge me-1"></i>Quick Actions:</span>
+            <button type="button" class="btn btn-sm btn-success" id="markAllPresentBtn" title="Set all visible students to Present">
+                <i class="bi bi-check-all me-1"></i>All Present
+            </button>
+            <button type="button" class="btn btn-sm btn-warning" id="markAllETBtn" title="Set all to Early Tardy">
+                <i class="bi bi-clock-history me-1"></i>All ET
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" id="markAllUABtn" title="Set all visible students to Unauthorized Absent">
+                <i class="bi bi-x-circle me-1"></i>All Absent (UA)
+            </button>
+            <div class="vr d-none d-sm-block mx-1"></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="resetAllBtn" title="Restore original selections">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+            </button>
+            <div class="ms-auto d-none d-md-flex gap-2 align-items-center">
+                <!-- Mobile summary counts inline -->
+                {% for s in status_choices %}
+                    {% if s.code not in DISCIPLINE_CODES %}
+                    <span class="badge rounded-pill bg-{{ s.color }} text-dark" style="font-size:.72rem;">
+                        {{ s.code }}: <span id="toolbar_{{ s.code|lower }}">0</span>
+                    </span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile quick summary bar -->
+    <div class="d-md-none mb-2">
+        <div class="card shadow-sm rounded-3 p-2">
+            <div class="d-flex gap-2 flex-wrap" id="statusSummaryMobile">
+                {% for s in status_choices %}
+                    {% if s.code not in DISCIPLINE_CODES %}
+                    <span class="badge bg-{{ s.color }} text-dark fs-6">
+                        {{ s.code }}: <span id="summary_mobile_{{ s.code|lower }}">0</span>
+                    </span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
         <!-- MAIN CONTENT -->
         <div class="col-md-9">
             <div class="card shadow-sm rounded-4 p-3">
 
                 <!-- SEARCH -->
-                <input id="studentSearch" class="form-control mb-3" placeholder="Search student...">
+                <div class="d-flex gap-2 mb-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                        <input id="studentSearch" class="form-control border-start-0" placeholder="Search student...">
+                        <button type="button" class="btn btn-outline-secondary" id="clearSearchBtn" title="Clear search"><i class="bi bi-x"></i></button>
+                    </div>
+                </div>
 
                 <form method="post" id="attendanceForm">
                     {% csrf_token %}
 
-                    <table class="table table-sm align-middle">
-                        <thead>
+                    <div class="table-responsive" style="-webkit-overflow-scrolling: touch;">
+                    <table class="table table-sm align-middle" id="attendanceTable">
+                        <thead class="table-light">
                             <tr>
+                                <th style="width:36px;">#</th>
                                 <th>Student</th>
                                 <th>Status</th>
-                                <th width="30%">Trends</th>
+                                <th class="hide-sm" width="28%">Recent Trend</th>
                                 <th>Discipline</th>
                             </tr>
                         </thead>
                         <tbody id="studentsTable">
                             {% for e in enrollments %}
-                            <tr data-name="{{ e.student.user.get_full_name|lower }}">
+                            <tr class="att-row" data-name="{{ e.student.user.get_full_name|lower }}" data-enroll="{{ e.id }}">
+                                <!-- ROW NUMBER -->
+                                <td class="text-muted small">{{ forloop.counter }}</td>
+
                                 <!-- STUDENT NAME -->
-                                <td>{{ e.student.user.get_full_name }}</td>
+                                <td style="min-width:120px;" class="fw-semibold small">{{ e.student.user.get_full_name }}</td>
 
                                 <!-- ATTENDANCE RADIO BUTTONS -->
-                                <td>
+                                <td style="min-width:190px;">
                                     {% if disabled_attendance|get_item:e.id %}
                                         <span class="badge bg-dark">
                                             {{ forced_status_map|get_item:e.id }}
                                         </span>
                                     {% else %}
+                                        <div class="d-flex flex-wrap gap-1">
                                         {% for s in status_choices %}
                                             {% if s.code not in DISCIPLINE_CODES %}
-                                            <label class="badge bg-{{ s.color }} text-dark me-1">
+                                            <label class="att-radio-label badge bg-{{ s.color }} text-dark"
+                                                   style="cursor:pointer; user-select:none; border:2px solid transparent; transition:border .1s;"
+                                                   title="{{ s.label }}">
                                                 <input type="radio"
+                                                    class="att-radio"
                                                     name="status_{{ e.id }}"
                                                     value="{{ s.code }}"
+                                                    data-color="{{ s.color }}"
                                                     {% if current_statuses|get_item:e.id == s.code %}checked{% endif %}
-                                                    {% if disabled_attendance|get_item:e.id %}disabled{% endif %}>
+                                                    {% if disabled_attendance|get_item:e.id %}disabled{% endif %}
+                                                    style="display:none;">
                                                 {{ s.code }}
                                             </label>
                                             {% endif %}
                                         {% endfor %}
+                                        </div>
                                     {% endif %}
                                 </td>
 
-                                <!-- TRENDS (populated by JS) -->
-                                <td class="trendsCell" data-student-id="{{ e.student.id }}">
+                                <!-- TRENDS (populated by JS, hidden on mobile) -->
+                                <td class="trendsCell hide-sm" data-student-id="{{ e.student.id }}">
                                     <!-- JS will fill this -->
                                 </td>
 
                                 <!-- DISCIPLINE BUTTONS -->
-                                <td>
+                                <td style="min-width:80px;">
                                     {% if disabled_attendance|get_item:e.id %}
                                         <span class="badge bg-dark">
                                             {{ forced_status_map|get_item:e.id }}
@@ -100,41 +176,71 @@ Attendance | {{ lesson.subject.name }}
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
 
-                    <div class="mt-3">
+                    <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
                         <button class="btn btn-primary"
                                 id="saveAttendanceBtn"
                                 {% if attendance_locked and not can_override %}disabled{% endif %}>
-                            Save Attendance
+                            <i class="bi bi-floppy me-1"></i>Save Attendance
                         </button>
-                        <button type="button" class="btn btn-success ms-2"
+                        <button type="button" class="btn btn-success"
                                 id="smartAttendanceBtn"
                                 {% if attendance_locked %}disabled{% endif %}>
-                            Smart Attendance
+                            <i class="bi bi-magic me-1"></i>Smart Attendance
                         </button>
+                        {% if attendance_locked and not can_override %}
+                        <span class="badge bg-danger ms-2"><i class="bi bi-lock me-1"></i>Attendance Locked</span>
+                        {% endif %}
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- RIGHT SIDE SUMMARY -->
-        <div class="col-md-3">
-            <div class="card shadow-sm rounded-4 p-3">
-                <h6>Status Summary</h6>
-                <ul class="list-group" id="statusSummary">
+        <!-- RIGHT SIDE SUMMARY (desktop) -->
+        <div class="col-md-3 d-none d-md-block">
+            <div class="card shadow-sm rounded-4 p-3 mb-3">
+                <h6 class="fw-bold mb-2"><i class="bi bi-bar-chart-fill me-1 text-success"></i>Status Summary</h6>
+                <ul class="list-group list-group-flush" id="statusSummary">
                     {% for s in status_choices %}
                         {% if s.code not in DISCIPLINE_CODES %}
-                        <li class="list-group-item d-flex justify-content-between">
-                            {{ s.label }}
-                            <span class="badge bg-secondary" id="summary_{{ s.code|lower }}">0</span>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                            <span class="small">{{ s.label }}</span>
+                            <span class="badge rounded-pill bg-{{ s.color }} text-dark" id="summary_{{ s.code|lower }}">0</span>
                         </li>
                         {% endif %}
                     {% endfor %}
                 </ul>
             </div>
+
+            <!-- Unmarked count -->
+            <div class="card shadow-sm rounded-4 p-3 border-warning">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-exclamation-triangle text-warning fs-4"></i>
+                    <div>
+                        <div class="fw-bold" id="unmarkedCount">0</div>
+                        <div class="text-muted small">not yet marked</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+.att-radio-label.selected-status {
+    border-color: #000 !important;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.3);
+    transform: scale(1.08);
+    display: inline-block;
+}
+.att-row.row-status-p   { background: #f0fff4; }
+.att-row.row-status-et  { background: #fffbe6; }
+.att-row.row-status-ut  { background: #fffbe6; }
+.att-row.row-status-ea  { background: #e8f4ff; }
+.att-row.row-status-ua  { background: #fff0f0; }
+.att-row.row-status-ib  { background: #f5f0ff; }
+</style>
 
 <!-- NOTIFICATION TOAST -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999">
@@ -180,137 +286,196 @@ Attendance | {{ lesson.subject.name }}
 
 <!-- JAVASCRIPT -->
 <script>
-    // Constants
     const ATTENDANCE_CODES = {{ ATTENDANCE_CODES|safe }};
     const DISCIPLINE_CODES = {{ DISCIPLINE_CODES|safe }};
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const TOTAL_STUDENTS = {{ enrollments|length }};
+
+    // Original selections at page load — used by Reset All
+    const originalSelections = {};
 
     // ─── HELPERS ────────────────────────────────────────────────────────
     function showNotification(type, message) {
         const toastEl = document.getElementById('notificationToast');
-        const msgEl = document.getElementById('toastMessage');
-        
+        const msgEl   = document.getElementById('toastMessage');
         msgEl.textContent = message;
         toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
-        
-        const toast = new bootstrap.Toast(toastEl, { delay: 4500 });
-        toast.show();
+        new bootstrap.Toast(toastEl, { delay: 4500 }).show();
     }
 
-    // ─── STUDENT SEARCH ─────────────────────────────────────────────────
-    document.getElementById('studentSearch').onkeyup = function() {
-        const value = this.value.toLowerCase();
-        document.querySelectorAll('#studentsTable tr').forEach(row => {
-            row.style.display = row.dataset.name.includes(value) ? '' : 'none';
-        });
-    };
+    // Update the highlight ring on the selected radio label
+    function refreshRowHighlights() {
+        document.querySelectorAll('.att-row').forEach(row => {
+            const checked = row.querySelector('input.att-radio:checked');
 
-    // ─── UPDATE SUMMARY + TRENDS ────────────────────────────────────────
-    function updateSummaryAndTrends() {
-        const counts = {};
-        ATTENDANCE_CODES.forEach(c => {
-            if (!DISCIPLINE_CODES.includes(c)) counts[c] = 0;
-        });
+            // Label ring
+            row.querySelectorAll('.att-radio-label').forEach(lbl => {
+                lbl.classList.toggle('selected-status', lbl.querySelector('input.att-radio') === checked);
+            });
 
-        document.querySelectorAll('input[type=radio]:checked').forEach(radio => {
-            if (counts[radio.value] !== undefined) {
-                counts[radio.value]++;
+            // Row tint
+            const statusClasses = Array.from(row.classList).filter(c => c.startsWith('row-status-'));
+            row.classList.remove(...statusClasses);
+            if (checked) {
+                row.classList.add(`row-status-${checked.value.toLowerCase()}`);
             }
         });
+    }
 
-        // Update summary badges
+    // ─── PROGRESS BAR ───────────────────────────────────────────────────
+    function updateProgress() {
+        const marked = document.querySelectorAll('#studentsTable .att-radio:checked').length;
+        const pct    = TOTAL_STUDENTS > 0 ? Math.round((marked / TOTAL_STUDENTS) * 100) : 0;
+        document.getElementById('progressBar').style.width  = pct + '%';
+        document.getElementById('progressCount').textContent = `${marked} / ${TOTAL_STUDENTS}`;
+
+        const unmarked = TOTAL_STUDENTS - marked;
+        const uEl = document.getElementById('unmarkedCount');
+        if (uEl) uEl.textContent = unmarked;
+    }
+
+    // ─── UPDATE SUMMARY ─────────────────────────────────────────────────
+    function updateSummaryAndTrends() {
+        const counts = {};
+        ATTENDANCE_CODES.forEach(c => { if (!DISCIPLINE_CODES.includes(c)) counts[c] = 0; });
+
+        document.querySelectorAll('input.att-radio:checked').forEach(radio => {
+            if (counts[radio.value] !== undefined) counts[radio.value]++;
+        });
+
         for (const code in counts) {
-            const el = document.getElementById(`summary_${code.toLowerCase()}`);
-            if (el) el.textContent = counts[code];
+            ['summary_', 'summary_mobile_', 'toolbar_'].forEach(prefix => {
+                const el = document.getElementById(`${prefix}${code.toLowerCase()}`);
+                if (el) el.textContent = counts[code];
+            });
         }
 
-        // Update trends per student
+        // Trends per student
         document.querySelectorAll('.trendsCell').forEach(cell => {
-            const studentId = cell.dataset.studentId;
-            const radios = document.querySelectorAll(`input[name="status_${studentId}"]:checked`);
-            const total = document.querySelectorAll(`input[name^="status_"]`).length / ATTENDANCE_CODES.length || 1;
+            const sid    = cell.dataset.studentId;
+            const radios = document.querySelectorAll(`input[name^="status_"]:checked`);
+            const total  = document.querySelectorAll(`input[name^="status_"]`).length / (ATTENDANCE_CODES.length || 1) || 1;
 
             let html = '';
             ATTENDANCE_CODES.forEach(code => {
                 if (DISCIPLINE_CODES.includes(code)) return;
                 const count = Array.from(radios).filter(r => r.value === code).length;
-                const pct = Math.round((count / total) * 100);
+                const pct   = Math.round((count / total) * 100);
                 const color = (code === 'P') ? 'success' : (['ET','UT'].includes(code) ? 'warning' : 'danger');
-
-                html += `
-                    <div class="mb-2">
-                        <span class="badge bg-${color}">${code} ${pct}%</span>
-                        <div class="progress" style="height: 6px;">
-                            <div class="progress-bar bg-${color}" style="width: ${pct}%"></div>
-                        </div>
-                    </div>`;
+                html += `<div class="mb-1">
+                    <span class="badge bg-${color}">${code} ${pct}%</span>
+                    <div class="progress" style="height:4px;"><div class="progress-bar bg-${color}" style="width:${pct}%"></div></div>
+                </div>`;
             });
-            cell.innerHTML = html || '<small class="text-muted">No data</small>';
+            cell.innerHTML = html || '<small class="text-muted">—</small>';
         });
+
+        refreshRowHighlights();
+        updateProgress();
     }
+
+    // ─── BULK HELPERS ────────────────────────────────────────────────────
+    function markVisibleAs(code) {
+        document.querySelectorAll('#studentsTable .att-row').forEach(row => {
+            if (row.style.display === 'none') return;
+            const target = row.querySelector(`input.att-radio[value="${code}"]:not([disabled])`);
+            if (target) target.checked = true;
+        });
+        updateSummaryAndTrends();
+        showNotification('success', `All visible students marked as ${code}`);
+    }
+
+    function resetAll() {
+        for (const enrollId in originalSelections) {
+            document.querySelectorAll(`input[name="status_${enrollId}"].att-radio`).forEach(r => r.checked = false);
+            const orig = originalSelections[enrollId];
+            if (orig) {
+                const target = document.querySelector(`input[name="status_${enrollId}"].att-radio[value="${orig}"]`);
+                if (target) target.checked = true;
+            }
+        }
+        updateSummaryAndTrends();
+        showNotification('secondary', 'Selections reset to original');
+    }
+
+    document.getElementById('markAllPresentBtn').addEventListener('click', () => markVisibleAs('P'));
+    document.getElementById('markAllETBtn').addEventListener('click', () => markVisibleAs('ET'));
+    document.getElementById('markAllUABtn').addEventListener('click', () => markVisibleAs('UA'));
+    document.getElementById('resetAllBtn').addEventListener('click', resetAll);
+
+    // ─── STUDENT SEARCH ─────────────────────────────────────────────────
+    document.getElementById('studentSearch').addEventListener('input', function() {
+        const val = this.value.toLowerCase();
+        let num = 1;
+        document.querySelectorAll('#studentsTable .att-row').forEach(row => {
+            const match = row.dataset.name.includes(val);
+            row.style.display = match ? '' : 'none';
+            if (match) {
+                const numCell = row.querySelector('td:first-child');
+                if (numCell) numCell.textContent = num++;
+            }
+        });
+    });
+
+    document.getElementById('clearSearchBtn').addEventListener('click', () => {
+        document.getElementById('studentSearch').value = '';
+        let num = 1;
+        document.querySelectorAll('#studentsTable .att-row').forEach(row => {
+            row.style.display = '';
+            const numCell = row.querySelector('td:first-child');
+            if (numCell) numCell.textContent = num++;
+        });
+    });
+
+    // ─── RADIO CHANGE ───────────────────────────────────────────────────
+    document.getElementById('studentsTable').addEventListener('change', function(e) {
+        if (e.target.matches('input.att-radio')) updateSummaryAndTrends();
+    });
 
     // ─── SMART ATTENDANCE ───────────────────────────────────────────────
     document.getElementById('smartAttendanceBtn')?.addEventListener('click', () => {
         fetch("{% url 'school:teacher-attendance-smart' lesson.id %}", {
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
-            }
+            headers: { "X-Requested-With": "XMLHttpRequest" }
         })
         .then(r => r.json())
         .then(data => {
-            if (!data.success) {
-                showNotification('danger', data.error || 'Smart attendance failed');
-                return;
-            }
-
+            if (!data.success) { showNotification('danger', data.error || 'Smart attendance failed'); return; }
             for (const enrollmentId in data.statuses) {
-                const radios = document.getElementsByName(`status_${enrollmentId}`);
-                radios.forEach(r => {
-                    if (r.value === data.statuses[enrollmentId]) {
-                        r.checked = true;
-                    }
+                document.getElementsByName(`status_${enrollmentId}`).forEach(r => {
+                    r.checked = r.value === data.statuses[enrollmentId];
                 });
             }
             updateSummaryAndTrends();
             showNotification('success', 'Smart attendance applied');
         })
-        .catch(err => {
-            showNotification('danger', 'Error loading smart attendance');
-            console.error(err);
-        });
+        .catch(() => showNotification('danger', 'Error loading smart attendance'));
     });
 
     // ─── SAVE ATTENDANCE ────────────────────────────────────────────────
     document.getElementById('attendanceForm').addEventListener('submit', function(e) {
         e.preventDefault();
-
-        const formData = new FormData(this);
+        const btn = document.getElementById('saveAttendanceBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
 
         fetch(window.location.href, {
             method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: formData
+            headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(this)
         })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => Promise.reject(err));
-            }
-            return response.json();
-        })
+        .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
         .then(data => {
             if (data.success) {
-                showNotification('success', 'Attendance saved successfully');
+                showNotification('success', 'Attendance saved successfully ✓');
                 updateSummaryAndTrends();
             } else {
                 showNotification('danger', data.error || 'Failed to save attendance');
             }
         })
-        .catch(err => {
-            showNotification('danger', err.error || 'Network error - please try again');
-            console.error('Save error:', err);
+        .catch(err => showNotification('danger', err.error || 'Network error — please try again'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Save Attendance';
         });
     });
 
@@ -318,38 +483,25 @@ Attendance | {{ lesson.subject.name }}
     document.querySelectorAll('.disciplineBtn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.getElementById('disciplineStudent').value = btn.dataset.student;
-            document.getElementById('disciplineCode').value = btn.dataset.code;
+            document.getElementById('disciplineCode').value   = btn.dataset.code;
             new bootstrap.Modal(document.getElementById('disciplineModal')).show();
         });
     });
 
     document.getElementById('saveDisciplineBtn')?.addEventListener('click', () => {
-        const studentId = document.getElementById('disciplineStudent').value;
-        const code = document.getElementById('disciplineCode').value;
         const description = document.getElementById('modalDesc').value.trim();
-        const incidentType = document.getElementById('modalType').value;
-        const severity = document.getElementById('modalSeverity').value;
-        const action = document.getElementById('modalAction').value.trim();
-
-        if (!description) {
-            showNotification('warning', 'Please enter a description');
-            return;
-        }
+        if (!description) { showNotification('warning', 'Please enter a description'); return; }
 
         fetch("{% url 'school:teacher-discipline-create-ajax' %}", {
             method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
             body: new URLSearchParams({
-                student_id: studentId,
-                code: code,
-                description: description,
-                incident_type: incidentType,
-                severity: severity,
-                action: action
+                student_id: document.getElementById('disciplineStudent').value,
+                code:        document.getElementById('disciplineCode').value,
+                description,
+                incident_type: document.getElementById('modalType').value,
+                severity:      document.getElementById('modalSeverity').value,
+                action:        document.getElementById('modalAction').value.trim()
             })
         })
         .then(r => r.json())
@@ -357,20 +509,29 @@ Attendance | {{ lesson.subject.name }}
             if (data.success) {
                 showNotification('success', 'Discipline record saved');
                 bootstrap.Modal.getInstance(document.getElementById('disciplineModal')).hide();
-                // Optional: clear fields
-                document.getElementById('modalDesc').value = '';
+                document.getElementById('modalDesc').value   = '';
                 document.getElementById('modalAction').value = '';
             } else {
                 showNotification('danger', data.error || 'Failed to save discipline record');
             }
         })
-        .catch(() => {
-            showNotification('danger', 'Error saving discipline record');
-        });
+        .catch(() => showNotification('danger', 'Error saving discipline record'));
     });
 
     // ─── INITIAL LOAD ───────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', updateSummaryAndTrends);
+    document.addEventListener('DOMContentLoaded', () => {
+        // Snapshot original selections for Reset All
+        document.querySelectorAll('#studentsTable .att-row').forEach(row => {
+            const checked = row.querySelector('input.att-radio:checked');
+            const firstRadio = row.querySelector('input.att-radio');
+            if (firstRadio) {
+                const enrollId = firstRadio.name.replace('status_', '');
+                originalSelections[enrollId] = checked ? checked.value : null;
+            }
+        });
+
+        updateSummaryAndTrends();
+    });
 </script>
 
 {% endblock %}

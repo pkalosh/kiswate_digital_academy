@@ -171,16 +171,29 @@ def get_user_redirect(user):
     if user.is_student:
         return "userauths:student-dashboard"
 
+    if user.is_principal or user.is_deputy_principal or user.is_admin or user.school_staff:
+        # First-login check: redirect principal/admin to subject selection if school has no subjects
+        if user.is_admin or user.is_principal:
+            school = getattr(user, 'school_admin_profile', None)
+            if not school:
+                try:
+                    school = user.staffprofile.school
+                except Exception:
+                    school = None
+            if school:
+                from school.models import Subject as SchoolSubject
+                if not SchoolSubject.objects.filter(school=school).exists():
+                    return "school:subject-activate-catalog"
+        return "school:dashboard"
+
     if user.is_teacher:
         return "userauths:teacher-dashboard"
-
-    if user.school_staff or user.is_admin or user.is_principal or user.is_deputy_principal:
-        return "school:dashboard"
 
     logger.warning(f"User {user.id} has no role assigned.")
     return "userauths:sign-in"
 
 
+@ratelimit(key='ip', rate='10/m', block=True)
 def LoginView(request):
 
     # If already logged in
@@ -368,7 +381,8 @@ def student_dashboard(request):
     try:
         student = user.student
     except Student.DoesNotExist:
-        messages.error(request, "Student profile not found.")
+        logout(request)
+        messages.error(request, "Student profile not found. Please contact your school administrator.")
         return redirect("userauths:sign-in")
 
     today = timezone.now().date()
@@ -507,11 +521,14 @@ def student_dashboard(request):
     # Complaints
     student_complaints = Complaint.objects.filter(student=student).order_by('-created_at')[:5]
 
-    # Announcements
+    # Announcements — exclude expired/disabled ones
     from school.models import Announcement as AnnModel
+    from django.db.models import Q
     announcements = AnnModel.objects.filter(
         school=student.school,
         audience__in=['all', 'students']
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
     ).order_by('-is_pinned', '-created_at')[:3]
 
     context = {
@@ -686,24 +703,53 @@ def logoutView(request):
 
 @login_required
 def change_passwordView(request):
-    if request.method == 'POST':
-        form = PasswordChangeForm(user=request.user, data=request.POST)
-        if form.is_valid():
-            user = form.save()
-            update_session_auth_hash(request, user)  # Keep the user logged in
-            messages.success(request, 'Your password was successfully updated!')
-            return redirect('userauths:sign-in')
-        else:
-            messages.error(request, 'Please correct the error below.')
+    user = request.user
+
+    # Pick base template and success redirect based on role
+    if getattr(user, 'is_kiswate_admin', False) or getattr(user, 'is_kiswate_user', False):
+        base_tpl = 'Dashboard/base.html'
+        success_url = 'kiswate_digital_app:kiswate_admin_dashboard'
+    elif getattr(user, 'is_principal', False) or getattr(user, 'is_deputy_principal', False) or getattr(user, 'is_admin', False):
+        base_tpl = 'school/base.html'
+        success_url = 'school:dashboard'
+    elif getattr(user, 'is_teacher', False):
+        base_tpl = 'school/teacher/base.html'
+        success_url = 'userauths:teacher-dashboard'
+    elif getattr(user, 'is_parent', False):
+        base_tpl = 'school/parent/base.html'
+        success_url = 'userauths:parent-dashboard'
+    elif getattr(user, 'is_student', False):
+        base_tpl = 'school/student/base.html'
+        success_url = 'userauths:student-dashboard'
     else:
-        form = PasswordChangeForm(user=request.user)
-    
-    return render(request, "users/changepassword.html", {'form': form})
+        base_tpl = 'school/base.html'
+        success_url = 'userauths:sign-in'
+
+    if request.method == 'POST':
+        current  = request.POST.get('current_password', '')
+        new_pw   = request.POST.get('new_password', '')
+        confirm  = request.POST.get('confirm_password', '')
+
+        if not user.check_password(current):
+            messages.error(request, 'Current password is incorrect.')
+        elif len(new_pw) < 8:
+            messages.error(request, 'New password must be at least 8 characters.')
+        elif new_pw != confirm:
+            messages.error(request, 'New passwords do not match.')
+        else:
+            user.set_password(new_pw)
+            user.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Password changed successfully.')
+            return redirect(success_url)
+
+    return render(request, 'users/change_password.html', {'base_template': base_tpl})
 
 
 
 def generate_otp_code(length=6):
-    return ''.join([str(random.randint(0, 9)) for _ in range(length)])
+    import secrets
+    return ''.join([str(secrets.randbelow(10)) for _ in range(length)])
 
 
 def get_client_ip(request):
@@ -742,8 +788,8 @@ def ForgotPasswordView(request):
                 purpose="password_reset"
             ).count()
 
-            if otp_count >= 4:
-                messages.error(request, "You have reached the maximum of 2 OTP requests today. Try again tomorrow.")
+            if otp_count >= 3:
+                messages.error(request, "You have reached the maximum of 3 OTP requests today. Try again tomorrow.")
                 return redirect("userauths:forgot-password")
 
             # Generate OTP
@@ -806,22 +852,36 @@ def VerifyOTPView(request):
             messages.warning(request, "Passwords do not match.")
             return redirect("userauths:verify-otp")
 
+        # Find the pending OTP for this user (ignore the code for now — check attempts first)
         otp = OTP.objects.filter(
             user=user,
-            otp_code=otp_input,
             purpose="password_reset",
             is_used=False,
             expires_at__gt=timezone.now()
-        ).first()
+        ).order_by('-created_at').first()
 
         if not otp:
-            messages.error(request, "Invalid or expired OTP.")
+            messages.error(request, "Invalid or expired OTP. Please request a new one.")
+            return redirect("userauths:forgot-password")
+
+        # Brute-force guard: max 3 wrong attempts per OTP
+        if otp.attempts >= 3:
+            otp.is_used = True
+            otp.save(update_fields=['is_used'])
+            messages.error(request, "Too many wrong attempts. Please request a new OTP.")
+            return redirect("userauths:forgot-password")
+
+        if otp.otp_code != otp_input:
+            otp.attempts += 1
+            otp.save(update_fields=['attempts'])
+            remaining = 3 - otp.attempts
+            messages.error(request, f"Invalid OTP. {remaining} attempt(s) remaining.")
             return redirect("userauths:verify-otp")
 
         # Mark OTP as used
         otp.is_used = True
         otp.verified_at = timezone.now()
-        otp.save()
+        otp.save(update_fields=['is_used', 'verified_at'])
 
         # Reset password
         user.set_password(new_password)

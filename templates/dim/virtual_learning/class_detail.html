@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ vc.title }}{% endblock %}
 {% block page_title %}Class Detail{% endblock %}
 {% block nav_classes_open %}show{% endblock %}
@@ -95,9 +95,16 @@
     <div class="module-card">
       <h6 class="fw-semibold mb-3">Teacher Actions</h6>
       <div class="d-flex flex-wrap gap-2">
-        <a href="{% url 'kiswate_digital_app:mark_attendance' vc.pk %}" class="btn btn-sm btn-outline-primary">
+        <a href="{% url 'kiswate_digital_app:mark_attendance' vc.pk %}" class="btn btn-sm btn-outline-success">
           <i class="bi bi-person-check me-1"></i>Mark Attendance
         </a>
+        <form method="post" action="{% url 'kiswate_digital_app:mark_nil_attendance' vc.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-secondary"
+                  onclick="return confirm('Submit NIL attendance? This records that the class ran with no student attendance.')">
+            <i class="bi bi-dash-circle me-1"></i>Submit NIL
+          </button>
+        </form>
         <form method="post" action="{% url 'kiswate_digital_app:send_class_reminder' vc.pk %}" class="d-inline">
           {% csrf_token %}
           <button type="submit" class="btn btn-sm btn-outline-warning">
@@ -114,6 +121,11 @@
         </form>
         {% endif %}
       </div>
+      {% if vc.notes and '[NIL]' in vc.notes %}
+      <div class="alert alert-secondary mt-3 py-2 px-3 mb-0" style="font-size:.78rem;">
+        <i class="bi bi-dash-circle me-1"></i><strong>NIL recorded</strong> — this class has been marked with NIL attendance.
+      </div>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -149,15 +161,15 @@
     <!-- Attendance Summary -->
     <div class="module-card">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-semibold mb-0"><i class="bi bi-people me-1 text-primary"></i>Attendance Summary</h6>
-        <span class="badge bg-primary-subtle text-primary rounded-pill">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-people me-1 text-success"></i>Attendance Summary</h6>
+        <span class="badge bg-success-subtle text-success rounded-pill">
           {{ attendance_summary.rate_pct }}%
         </span>
       </div>
 
       <!-- How attendance works callout -->
       <div class="alert alert-light border rounded-3 py-2 px-3 mb-3" style="font-size:.78rem;">
-        <i class="bi bi-info-circle me-1 text-primary"></i>
+        <i class="bi bi-info-circle me-1 text-success"></i>
         <strong>How it works:</strong> Attendance is recorded when students click
         <em>Join Class</em>, or when a teacher manually marks it via <em>Mark Attendance</em>.
       </div>

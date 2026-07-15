@@ -1,0 +1,125 @@
+{% extends base_template|default:"school/base.html" %}
+{% block title %}{{ session.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <a href="{% url 'school:school-exams' %}" class="btn btn-sm btn-outline-secondary me-2">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <span class="fw-bold fs-5">{{ session.name }}</span>
+      <span class="badge {% if session.is_published %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+        {% if session.is_published %}Published{% else %}Draft{% endif %}
+      </span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% if request.user.is_principal or request.user.is_admin %}
+      <form method="post" action="{% url 'school:exam-publish' session.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-sm {% if session.is_published %}btn-warning{% else %}btn-success{% endif %}">
+          <i class="bi bi-{% if session.is_published %}eye-slash{% else %}eye{% endif %} me-1"></i>
+          {% if session.is_published %}Unpublish{% else %}Publish Results{% endif %}
+        </button>
+      </form>
+      {% endif %}
+      <a href="{% url 'school:exam-result-upload' session.pk %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-upload me-1"></i>Bulk Upload
+      </a>
+      <a href="{% url 'school:exam-ranking-grade' session.pk %}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-bar-chart-line me-1"></i>Grade Ranking
+      </a>
+      <a href="{% url 'school:exam-subject-performance' session.pk %}" class="btn btn-sm btn-outline-info">
+        <i class="bi bi-graph-up me-1"></i>Subject Performance
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Session info -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-success">{{ session.grade.name }}</div>
+        <small class="text-muted">Grade</small>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold text-primary">{{ session.year }}</div>
+        <small class="text-muted">Year</small>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-4 fw-bold">{{ session.total_marks|floatformat:0 }}</div>
+        <small class="text-muted">Total Marks</small>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fs-6 text-muted">
+          CAT /{{ session.cat_out_of|floatformat:0 }} &nbsp;
+          Asgn /{{ session.assignment_out_of|floatformat:0 }} &nbsp;
+          Asmt /{{ session.assessment_out_of|floatformat:0 }} &nbsp;
+          Exam /{{ session.exam_out_of|floatformat:0 }}
+        </div>
+        <small class="text-muted">Components</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry grid: streams × subjects -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white">
+      <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Enter Scores — Select Stream & Subject</h6>
+    </div>
+    <div class="card-body">
+      {% if streams and subjects %}
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle text-center mb-0" style="font-size:.85rem;">
+          <thead class="table-light">
+            <tr>
+              <th class="text-start">Stream</th>
+              {% for subject in subjects %}
+                <th>{{ subject.name }}</th>
+              {% endfor %}
+              <th>Stream Ranking</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stream in streams %}
+            <tr>
+              <td class="text-start fw-semibold">{{ stream.name }}</td>
+              {% for subject in subjects %}
+              <td>
+                <a href="{% url 'school:exam-result-entry' session.pk stream.pk subject.pk %}"
+                   class="btn btn-xs btn-outline-secondary" style="font-size:.75rem;padding:.2rem .5rem;">
+                  <i class="bi bi-pencil"></i> Enter
+                </a>
+              </td>
+              {% endfor %}
+              <td>
+                <a href="{% url 'school:exam-ranking-stream' session.pk stream.pk %}"
+                   class="btn btn-xs btn-outline-success" style="font-size:.75rem;padding:.2rem .5rem;">
+                  <i class="bi bi-list-ol"></i> Rank
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="text-muted text-center py-4">No streams or subjects found for this grade.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

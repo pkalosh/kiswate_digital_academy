@@ -41,7 +41,42 @@
 </form>
 
 <div class="card border-0 shadow-sm">
-  <div class="table-responsive">
+
+  <!-- Mobile cards (xs/sm) -->
+  <div class="d-md-none p-2">
+    {% for sub in subscriptions %}
+    <div class="card border mb-2" style="border-radius:10px;">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-bold small">{{ sub.school.name }}</div>
+            <div class="text-muted" style="font-size:.75rem;">{{ sub.school.code }}</div>
+            <div class="small mt-1">
+              <span class="fw-semibold">{{ sub.plan.name|default:"—" }}</span>
+              &bull; {{ sub.billing_cycle|default:"—" }}
+            </div>
+            <div class="text-muted" style="font-size:.75rem;">
+              {{ sub.start_date|date:"d M Y"|default:"—" }} → {{ sub.end_date|date:"d M Y"|default:"—" }}
+            </div>
+            <div class="small">{{ sub.current_students_count|default:0 }} students</div>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1">
+            {% if sub.status == 'active' %}<span class="badge bg-success">Active</span>
+            {% elif sub.status == 'trial' %}<span class="badge bg-info">Trial</span>
+            {% elif sub.status == 'expired' %}<span class="badge bg-danger">Expired</span>
+            {% else %}<span class="badge bg-secondary">{{ sub.status }}</span>{% endif %}
+            <div class="fw-bold text-success small">KES {{ sub.price_charged|floatformat:0|intcomma }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <p class="text-center text-muted py-4">No subscriptions found.</p>
+    {% endfor %}
+  </div>
+
+  <!-- Desktop table (md+) -->
+  <div class="table-responsive d-none d-md-block">
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>

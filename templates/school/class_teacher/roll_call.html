@@ -1,0 +1,151 @@
+{% extends base_template|default:"school/teacher/base.html" %}
+{% block title %}Roll Call | {{ stream.grade.name }} {{ stream.name }} | {{ report_date|date:"d M Y" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:820px">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <!-- Date nav -->
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-0"><i class="bi bi-check2-square me-2 text-success"></i>Roll Call</h5>
+      <small class="text-muted">{{ stream.grade.name }} – {{ stream.name }}</small>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <a href="?date={{ prev_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+      <form method="get" class="d-flex align-items-center gap-1">
+        <input type="date" name="date" value="{{ report_date|date:'Y-m-d' }}" class="form-control form-control-sm" style="width:140px;" onchange="this.form.submit()">
+      </form>
+      <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+  </div>
+
+  <h6 class="fw-semibold mb-3">{{ report_date|date:"l, d F Y" }}</h6>
+
+  <!-- Summary badges -->
+  {% if summary %}
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    {% for code, label in STATUS_CHOICES %}
+    {% if summary|default_if_none:'' %}
+    <span class="badge bg-secondary rounded-pill" style="font-size:.75rem;">
+      {{ label }}: {{ summary|default_if_none:'' }}
+    </span>
+    {% endif %}
+    {% endfor %}
+    <span class="badge bg-success rounded-pill" style="font-size:.75rem;">Present: {{ summary.P|default:0 }}</span>
+    <span class="badge bg-danger rounded-pill" style="font-size:.75rem;">Absent: {{ summary.UA|default:0 }}</span>
+    <span class="badge bg-warning text-dark rounded-pill" style="font-size:.75rem;">Excused: {{ summary.EA|default:0 }}</span>
+    <span class="badge bg-info text-dark rounded-pill" style="font-size:.75rem;">Tardy: {{ summary.ET|default:0|add:summary.UT|default:0 }}</span>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="card border-0 shadow-sm rounded-4">
+      <!-- Quick-mark toolbar -->
+      <div class="card-header bg-white border-0 pt-3 pb-2 d-flex gap-2 flex-wrap align-items-center">
+        <small class="text-muted fw-semibold me-1">Mark all as:</small>
+        <button type="button" class="btn btn-xs btn-outline-success" onclick="markAll('P')">Present</button>
+        <button type="button" class="btn btn-xs btn-outline-danger" onclick="markAll('UA')">Absent</button>
+        <button type="button" class="btn btn-xs btn-outline-info" onclick="markAll('EA')">Excused</button>
+        <div class="ms-auto">
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="bi bi-floppy me-1"></i>Save Roll Call
+          </button>
+        </div>
+      </div>
+
+      <div class="card-body p-0">
+        <!-- Mobile card list -->
+        <div class="d-md-none p-3">
+          {% for row in rows %}
+          <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+            <div class="fw-semibold" style="font-size:.85rem;">{{ forloop.counter }}. {{ row.student.user.get_full_name }}</div>
+            <div class="d-flex gap-1 flex-wrap justify-content-end" style="min-width:220px;">
+              {% for code, label in STATUS_CHOICES %}
+              <div class="form-check form-check-inline m-0">
+                <input class="form-check-input status-radio" type="radio"
+                       name="status_{{ row.student.id }}"
+                       id="m_{{ row.student.id }}_{{ code }}"
+                       value="{{ code }}"
+                       {% if row.status == code %}checked{% elif not row.status and code == 'P' %}{% endif %}>
+                <label class="form-check-label" for="m_{{ row.student.id }}_{{ code }}" style="font-size:.72rem;">{{ code }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Desktop table -->
+        <div class="table-responsive d-none d-md-block">
+          <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+            <thead class="table-light">
+              <tr>
+                <th width="30">#</th>
+                <th>Name</th>
+                <th>Adm No</th>
+                {% for code, label in STATUS_CHOICES %}
+                <th class="text-center" style="min-width:56px;">{{ code }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr>
+                <td class="text-muted">{{ forloop.counter }}</td>
+                <td class="fw-semibold">{{ row.student.user.get_full_name }}</td>
+                <td class="text-muted">{{ row.student.student_id }}</td>
+                {% for code, label in STATUS_CHOICES %}
+                <td class="text-center">
+                  <input type="radio" class="form-check-input status-radio"
+                         name="status_{{ row.student.id }}"
+                         value="{{ code }}"
+                         title="{{ label }}"
+                         {% if row.status == code %}checked{% endif %}>
+                </td>
+                {% endfor %}
+              </tr>
+              {% empty %}
+              <tr><td colspan="10" class="text-center text-muted py-4">No students in this class.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card-footer bg-white border-0 text-end">
+        <button type="submit" class="btn btn-success btn-sm px-4">
+          <i class="bi bi-floppy me-1"></i>Save Roll Call
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <div class="mt-3 d-flex gap-2">
+    <a href="{% url 'school:class-teacher-roster' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Roster
+    </a>
+    <a href="{% url 'school:class-teacher-attendance-summary' %}" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-bar-chart me-1"></i>Attendance Summary
+    </a>
+  </div>
+</div>
+
+<style>.btn-xs{padding:.18rem .4rem;font-size:.73rem;}</style>
+<script>
+function markAll(code) {
+  document.querySelectorAll(`.status-radio[value="${code}"]`).forEach(r => r.checked = true);
+}
+</script>
+{% endblock %}

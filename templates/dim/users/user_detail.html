@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}{{ profile.full_name }}{% endblock %}
 {% block page_title %}User Detail{% endblock %}
 {% block nav_users_open %}show{% endblock %}
@@ -10,6 +10,11 @@
     {% if profile.vetting_status == 'pending' %}
     <a href="{% url 'kiswate_digital_app:vet_user' profile.pk %}" class="btn btn-sm btn-outline-warning">
       <i class="bi bi-shield-check me-1"></i>Vet Profile
+    </a>
+    {% endif %}
+    {% if profile.role == 'teacher' and profile.vetting_status == 'approved' %}
+    <a href="{% url 'kiswate_digital_app:assign_lessons_to_teacher' profile.pk %}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-journal-plus me-1"></i>Assign Lessons
     </a>
     {% endif %}
     <a href="{% url 'kiswate_digital_app:user_list' %}" class="btn btn-sm btn-outline-secondary">

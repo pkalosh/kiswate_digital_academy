@@ -2,29 +2,23 @@
 {% block title %}Discipline | {{ school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
-  <div class="d-flex align-items-center gap-2">
-    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-    <div>
-      <h6 class="m-0 fw-bold">Discipline Records</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Discipline</li>
-        </ol>
-      </nav>
+<div class="d-flex align-items-center gap-2 px-1 py-2 flex-wrap">
+  <div class="flex-grow-1">
+    <h6 class="m-0 fw-bold">Discipline Records</h6>
+    <nav aria-label="breadcrumb" class="small">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Discipline</li>
+      </ol>
+    </nav>
+  </div>
+  <form method="get">
+    <div class="input-group input-group-sm">
+      <input type="text" name="q" class="form-control" placeholder="Search records..." value="{{ query }}" style="min-width:160px;">
+      <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
     </div>
-  </div>
-
-  <div class="d-flex align-items-center gap-2">
-    <form method="get" class="d-inline">
-      <div class="input-group input-group-sm" style="width:250px;">
-        <input type="text" name="q" class="form-control" placeholder="Search records..." value="{{ query }}">
-        <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
-      </div>
-    </form>
-  </div>
-</header>
+  </form>
+</div>
 
 <section class="content container-fluid py-4">
 
@@ -46,25 +40,30 @@
           <thead class="table-light">
             <tr>
               <th>Student</th>
-              <th>Teacher</th>
-              <th>Type</th>
+              <th class="hide-xs">Type</th>
               <th>Description</th>
-              <th>Severity</th>
-              <th>Action Taken</th>
-              <th>Date</th>
+              <th class="hide-sm">Severity</th>
+              <th class="hide-sm">Action Taken</th>
+              <th class="hide-xs">Date</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for record in records %}
             <tr>
-              <td>{{ record.student.user.get_full_name }}</td>
-              <td>{{ record.teacher.user.get_full_name }}</td>
-              <td>{{ record.incident_type }}</td>
-              <td>{{ record.description }}</td>
-              <td>{{ record.severity }}</td>
-              <td>{{ record.action_taken|default:"-" }}</td>
-              <td>{{ record.date }}</td>
+              <td>
+                {{ record.student.user.get_full_name }}
+                <div class="d-sm-none text-muted" style="font-size:.75rem;">
+                  {{ record.incident_type }} &middot; {{ record.date }}
+                </div>
+              </td>
+              <td class="hide-xs">{{ record.incident_type }}</td>
+              <td>
+                <span class="d-inline-block text-truncate" style="max-width:200px;" title="{{ record.description }}">{{ record.description }}</span>
+              </td>
+              <td class="hide-sm">{{ record.severity }}</td>
+              <td class="hide-sm">{{ record.action_taken|default:"—" }}</td>
+              <td class="hide-xs">{{ record.date }}</td>
               <td>
                 <button class="btn btn-sm btn-outline-primary"
                         data-bs-toggle="modal"

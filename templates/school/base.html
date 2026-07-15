@@ -30,7 +30,7 @@
     }
 
     html, body { height: 100%; }
-    body { background: linear-gradient(180deg, var(--kenya-grey), #fff); }
+    body { background: var(--kenya-grey); }
 
     /* Layout */
     .app {
@@ -105,6 +105,17 @@
     .badge-red   { background: rgba(187,10,33,.12); color: var(--kenya-red); }
     .badge-dark  { background: rgba(17,17,17,.12); color: var(--kenya-black); }
 
+    /* Sidebar scrollable */
+    .sidebar {
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: #333 transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
     /* Responsive sidebar */
     @media (max-width: 992px) {
       .app { grid-template-columns: 1fr; }
@@ -113,30 +124,103 @@
       .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; }
       .scrim.show { display: block; backdrop-filter: blur(1px); }
     }
-  
+
+    /* Mobile content improvements */
+    @media (max-width: 767px) {
+      .content { padding: .5rem !important; padding-bottom: 5rem !important; }
+      .header { padding: .4rem .6rem; border-radius: 0 !important; }
+      .header h6 { font-size: .85rem; }
+      .header .badge { display: none; }
+      .k-page-title { font-size: 1rem !important; }
+      .table-responsive { -webkit-overflow-scrolling: touch; }
+      .card { border-radius: .5rem !important; }
+    }
+
+    /* Column-hide utilities */
+    @media (max-width: 575px) { .hide-xs { display: none !important; } }
+    @media (max-width: 767px) { .hide-sm { display: none !important; } }
+
+    /* Bottom mobile navigation */
+    .mobile-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--kenya-black);
+      padding: .5rem 0 calc(.5rem + env(safe-area-inset-bottom));
+      z-index: 1040;
+      border-top: 1px solid #2a2a2a;
+      display: none;
+    }
+    .mobile-nav a {
+      color: #888; text-decoration: none;
+      display: flex; flex-direction: column; align-items: center;
+      font-size: .58rem; gap: .08rem; padding: 0 .2rem; transition: color .15s;
+    }
+    .mobile-nav a i { font-size: 1.15rem; line-height: 1; }
+    .mobile-nav a.active, .mobile-nav a:hover { color: #fff; }
+    .mobile-nav a.active i { color: #0aa84a; }
+    @media (max-width: 992px) {
+      .mobile-nav { display: flex; justify-content: space-around; }
+    }
+
+    /* Ensure all tables are responsive */
+    .content table:not([class*="table-responsive"] table) {
+      width: 100%;
+    }
+
 /* Apply to all tables with .table, or target specific table with an ID */
 .table {
-  font-size: 0.85rem;              /* Reduce font size */
+  font-size: 0.85rem;
 }
 
 .table td, .table th {
-  padding: 0.3rem 0.4rem;          /* Reduce vertical and horizontal padding */
-  vertical-align: middle;          /* Keep content centered vertically */
+  padding: 0.3rem 0.4rem;
+  vertical-align: middle;
 }
 
-/* Optional: Make header bold and compact */
 .table thead th {
   font-weight: 500;
-  background-color: #f8f9fa;       /* Light grey */
+  background-color: #f8f9fa;
 }
 
-/* Optional: Narrow row height further */
 .table-sm td, .table-sm th {
   padding: 0.25rem 0.5rem;
 }
 
+    /* Sidebar section label */
+    .side-section {
+      font-size: .62rem; font-weight: 700; letter-spacing: .07em;
+      color: #666; padding: .7rem .75rem .15rem; text-transform: uppercase;
+    }
+
+    /* ── DIL shared utility classes ── */
+    .module-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.25rem; transition: box-shadow .2s; }
+    .module-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+    .stat-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.25rem 1.5rem; }
+    .stat-card .stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+    .stat-card .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-card .stat-label { font-size: .78rem; color: #6b7280; margin-top: .15rem; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    .page-header h5 { margin: 0; font-weight: 700; }
+    .btn-brand { background: #0b7a2a; color: #fff; border: none; border-radius: 6px; }
+    .btn-brand:hover { background: #065f20; color: #fff; }
+    .btn-xs { padding: .2rem .55rem; font-size: .75rem; line-height: 1.4; border-radius: 6px; }
+    .rate-bar { height: 6px; border-radius: 3px; background: #e5e7eb; }
+    .rate-fill { height: 100%; border-radius: 3px; background: #0b7a2a; }
+    .badge-pending  { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #d1fae5; color: #065f46; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .badge-teacher  { background: #d1fae5; color: #065f46; }
+    .badge-student  { background: #f3e8ff; color: #6b21a8; }
+    .pill-gmeet { background: #e8f5e9; color: #1b5e20; }
+    .pill-teams { background: #e3f2fd; color: #0d47a1; }
+    .pill-zoom  { background: #e8eaf6; color: #283593; }
+    .table-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; }
+    .table-card .table { margin: 0; }
+    .table-card .table th { background: #f9fafb; font-size: .78rem; font-weight: 600; color: #374151; }
+    .form-card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 1.75rem; }
 
   </style>
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
   <div class="app">
@@ -153,37 +237,82 @@
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
-      
-      <!-- Dropdown (Collapsible) -->
-      <a class="side-link d-flex justify-content-between align-items-center" 
+      <!-- School Management Dropdown -->
+      <a class="side-link d-flex justify-content-between align-items-center"
         data-bs-toggle="collapse" href="#agencyMenu" role="button" aria-expanded="false" aria-controls="agencyMenu">
-        <span><i class="bi bi-diagram-3"></i> Schools Management</span>
+        <span><i class="bi bi-building-gear"></i> School Management</span>
         <i class="bi bi-chevron-down small"></i>
       </a>
-      <div class="collapse ps-4" id="agencyMenu">
-        <a class="side-link" href="{% url 'school:term-list' %}">Terms</a>
-        <a class="side-link" href="{% url 'school:school-grades' %}">Grades</a>
-        <a class="side-link" href="{% url 'school:school-subjects' %}">Subjects</a>
-        <a class="side-link" href="{% url 'school:school-users' %}">Users</a>
-        <a class="side-link" href="{% url 'school:time-slot-list' %}">Time Slots</a>
-        <a class="side-link" href="{% url 'school:school-timetable' %}">Lessons</a>
-        <a class="side-link" href="{% url 'school:timetable_week' %}">Timetables</a>
-          <a class="side-link" href="{% url 'school:smartid-list' %}">Smart IDs</a>
-        <a class="side-link" href="{% url 'school:scan_logs' %}">IDs Scan Logs</a>
-        <a class="side-link" href="{% url 'school:attendance-dashboard' %}">Attendance</a>
-        <a class="side-link" href="{% url 'school:school-assignments' %}">Assignments</a>
-        <a class="side-link" href="{% url 'school:school-discipline' %}">Discipline</a>
-        <a class="side-link" href="{% url 'school:finance-dashboard' %}"><i class="bi bi-cash-stack me-1"></i>Finance</a>
-        <a class="side-link" href="{% url 'school:school-fees' %}">Payments</a>
-        <a class="side-link" href="{% url 'school:announcements' %}"><i class="bi bi-megaphone me-1"></i>Announcements</a>
-        <a class="side-link" href="{% url 'school:school-settings' %}">Settings</a>
-        <a class="side-link" href="{% url 'school:upload_excel_page' %}">Data Upload</a>
+      <div class="collapse ps-3" id="agencyMenu">
+        <div class="side-section">Academic</div>
+        <a class="side-link" href="{% url 'school:term-list' %}"><i class="bi bi-calendar-range"></i> Terms</a>
+        <a class="side-link" href="{% url 'school:school-grades' %}"><i class="bi bi-mortarboard"></i> Grades</a>
+        <a class="side-link" href="{% url 'school:grade-promote' %}"><i class="bi bi-arrow-up-circle"></i> Promote Grade</a>
+        <a class="side-link" href="{% url 'school:school-subjects' %}"><i class="bi bi-book"></i> Subjects</a>
+        <a class="side-link" href="{% url 'school:time-slot-list' %}"><i class="bi bi-clock-history"></i> Time Slots</a>
+        <a class="side-link" href="{% url 'school:school-timetable' %}"><i class="bi bi-journal-text"></i> Lessons</a>
+        <a class="side-link" href="{% url 'school:timetable_week' %}"><i class="bi bi-calendar-week"></i> Timetables</a>
 
+        <div class="side-section">People</div>
+        <a class="side-link" href="{% url 'school:school-users' %}"><i class="bi bi-people-fill"></i> Users</a>
+        <a class="side-link" href="{% url 'school:manage-class-teachers' %}"><i class="bi bi-person-badge"></i> Class Teachers</a>
+        {% if request.user.is_principal or request.user.is_deputy_principal or request.user.is_admin %}
+        <a class="side-link" href="{% url 'school:class-teacher-roster' %}"><i class="bi bi-card-list"></i> Class Roster</a>
+        {% endif %}
+        <a class="side-link" href="{% url 'school:smartid-list' %}"><i class="bi bi-credit-card-2-front"></i> Smart IDs</a>
+        <a class="side-link" href="{% url 'school:scan_logs' %}"><i class="bi bi-qr-code-scan"></i> Scan Logs</a>
+
+        <div class="side-section">Operations</div>
+        <a class="side-link" href="{% url 'school:attendance-dashboard' %}"><i class="bi bi-person-check-fill"></i> Attendance</a>
+        <a class="side-link" href="{% url 'school:school-assignments' %}"><i class="bi bi-file-earmark-text"></i> Assignments</a>
+        <a class="side-link" href="{% url 'school:school-exams' %}"><i class="bi bi-journal-check"></i> Exams</a>
+        <a class="side-link" href="{% url 'school:school-discipline' %}"><i class="bi bi-shield-exclamation"></i> Discipline</a>
+        <a class="side-link" href="{% url 'school:school-fees' %}"><i class="bi bi-receipt"></i> Payments</a>
+        <a class="side-link" href="{% url 'school:announcements' %}"><i class="bi bi-megaphone-fill"></i> Announcements</a>
+
+        <div class="side-section">Admin</div>
+        <a class="side-link" href="{% url 'school:school-settings' %}"><i class="bi bi-gear-fill"></i> Settings</a>
+        <a class="side-link" href="{% url 'school:upload_excel_page' %}"><i class="bi bi-cloud-upload"></i> Data Upload</a>
       </div>
 
-      <a class="side-link" href="{% url 'userauths:teacher-dashboard' %}">Teacher Dashboard</a>
+      {% if request.user.is_admin or request.user.is_principal or request.user.is_deputy_principal %}
+      <a class="side-link d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" href="#financeMenu" role="button" aria-expanded="false" aria-controls="financeMenu">
+        <span><i class="bi bi-cash-stack"></i> Finance</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-3" id="financeMenu">
+        <a class="side-link" href="{% url 'school:finance-dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+        <a class="side-link" href="{% url 'school:fee-structure-list' %}"><i class="bi bi-list-columns"></i> Fee Structures</a>
+        <a class="side-link" href="{% url 'school:fee-payment-upload' %}"><i class="bi bi-cloud-upload"></i> Upload Payments</a>
+        <a class="side-link" href="{% url 'school:finance-payment-statement' %}"><i class="bi bi-file-earmark-bar-graph"></i> Payment Statement</a>
+        <a class="side-link" href="{% url 'school:finance-collection-report' %}"><i class="bi bi-bar-chart-line"></i> Collection Report</a>
+      </div>
+      {% endif %}
+
+      <a class="side-link" href="{% url 'userauths:teacher-dashboard' %}">
+        <i class="bi bi-person-video3"></i> Teacher Dashboard
+      </a>
+      {% if request.user.is_principal or request.user.is_deputy_principal %}
+      <a class="side-link d-flex justify-content-between align-items-center"
+        data-bs-toggle="collapse" href="#dilMenu" role="button" aria-expanded="false" aria-controls="dilMenu">
+        <span><i class="bi bi-lightbulb-fill"></i> DIL</span>
+        <i class="bi bi-chevron-down small"></i>
+      </a>
+      <div class="collapse ps-3" id="dilMenu">
+        <div class="side-section">Enrolment</div>
+        <a class="side-link" href="{% url 'kiswate_digital_app:principal_enroll_tuition' %}"><i class="bi bi-person-plus-fill"></i> Enroll Students</a>
+        <div class="side-section">Programs</div>
+        <a class="side-link" href="{% url 'kiswate_digital_app:tuition_program_list' %}"><i class="bi bi-journal-richtext"></i> Programs</a>
+        <div class="side-section">Finance</div>
+        <a class="side-link" href="{% url 'kiswate_digital_app:tuition_payment_list' %}"><i class="bi bi-cash-stack"></i> Payments</a>
+      </div>
+      {% endif %}
+      <a class="side-link" href="{% url 'userauths:change-password' %}">
+        <i class="bi bi-shield-lock"></i> Change Password
+      </a>
       <a class="side-link" href="{% url 'userauths:sign-out' %}">
-        <i class="bi bi-gear"></i> Sign Out
+        <i class="bi bi-box-arrow-right"></i> Sign Out
       </a>
     </nav>
 
@@ -195,17 +324,32 @@
 
     <!-- Main -->
     <main class="main">
+
+      {% if request.session.kiswate_impersonator_pk %}
+      <!-- Impersonation banner -->
+      <div style="background:#7c3aed;color:#fff;padding:.5rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem;font-size:.83rem;flex-wrap:wrap;z-index:1100;position:sticky;top:0;">
+        <span>
+          <i class="bi bi-eye-fill me-2"></i>
+          <strong>Impersonating:</strong> {{ request.user.get_full_name }} ({{ request.user.email }})
+          &mdash; you are viewing this school as <em>{{ request.user.get_full_name }}</em>.
+        </span>
+        <a href="{% url 'kiswate_digital_app:stop_impersonating' %}"
+           style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:.25rem .75rem;text-decoration:none;font-weight:600;white-space:nowrap;">
+          <i class="bi bi-arrow-return-left me-1"></i>Return to Kiswate Admin
+        </a>
+      </div>
+      {% endif %}
+
       <!-- Header -->
-      <header class="header d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-          <h6 class="m-0 fw-bold">{{school.name}} Dashboard</h6>
+      <header class="header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <div class="d-flex align-items-center gap-2 min-width-0">
+          <button class="btn btn-sm btn-dark d-lg-none flex-shrink-0" id="toggleSidebar"><i class="bi bi-list"></i></button>
+          <h6 class="m-0 fw-bold text-truncate">{{school.name}} Dashboard</h6>
         </div>
-    
-        <div class="d-flex align-items-center gap-2">
-          <span class="badge badge-dark rounded-pill px-2 py-1"><i class="bi bi-calendar3 me-1"></i> <span id="today"></span></span>
+
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+          <span class="badge badge-dark rounded-pill px-2 py-1 d-none d-sm-inline-flex"><i class="bi bi-calendar3 me-1"></i> <span id="today"></span></span>
           <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
-          
         </div>
             <!-- Alerts -->
 <!-- Django Messages as Bootstrap Toasts -->
@@ -252,6 +396,31 @@
   </div>
 
   <div class="scrim" id="scrim"></div>
+
+  <!-- Bottom mobile nav -->
+  <nav class="mobile-nav">
+    <a href="{% url 'school:dashboard' %}">
+      <i class="bi bi-house-fill"></i><span>Home</span>
+    </a>
+    <a href="{% url 'school:school-users' %}">
+      <i class="bi bi-people-fill"></i><span>People</span>
+    </a>
+    <a href="{% url 'school:attendance-dashboard' %}">
+      <i class="bi bi-person-check-fill"></i><span>Attendance</span>
+    </a>
+    {% if request.user.is_admin or request.user.is_principal or request.user.is_deputy_principal %}
+    <a href="{% url 'school:finance-dashboard' %}">
+      <i class="bi bi-cash-stack"></i><span>Finance</span>
+    </a>
+    {% else %}
+    <a href="{% url 'school:school-exams' %}">
+      <i class="bi bi-journal-check"></i><span>Exams</span>
+    </a>
+    {% endif %}
+    <a href="{% url 'school:school-settings' %}">
+      <i class="bi bi-gear-fill"></i><span>Settings</span>
+    </a>
+  </nav>
 
   <!-- JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

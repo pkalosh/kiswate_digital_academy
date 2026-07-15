@@ -1,106 +1,313 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ lesson.title }}{% endblock %}
 {% block page_title %}Lesson{% endblock %}
 {% block nav_lessons_open %}show{% endblock %}
 
+{% block extra_css %}
+<style>
+  .lesson-hero {
+    background: linear-gradient(135deg, #0b7a2a 0%, #065f20 70%, #034012 100%);
+    border-radius: 14px;
+    padding: 1.5rem 1.75rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .lesson-hero::after {
+    content: '';
+    position: absolute;
+    right: -30px; top: -30px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+  }
+  .lesson-hero .hero-title { font-size: 1.15rem; font-weight: 700; margin-bottom: .25rem; }
+  .lesson-hero .hero-sub { opacity: .75; font-size: .83rem; }
+
+  .resource-btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .65rem 1.1rem; border-radius: 10px;
+    font-size: .85rem; font-weight: 600; text-decoration: none; transition: opacity .15s;
+  }
+  .resource-btn:hover { opacity: .85; }
+  .resource-btn.btn-notes { background: #f0fdf4; color: #065f46; border: 1px solid #bbf7d0; }
+  .resource-btn.btn-video { background: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; }
+
+  /* Teacher-only accent stripe */
+  .teacher-badge-bar {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: .5rem .85rem;
+    font-size: .8rem;
+    color: #065f46;
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+
+  .assign-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .6rem 0; border-bottom: 1px solid #f3f4f6; font-size: .875rem;
+  }
+  .assign-row:last-child { border-bottom: none; }
+</style>
+{% endblock %}
+
 {% block content %}
+
+{% if portal_role == 'teacher' or request.user.is_kiswate_admin or request.user.is_kiswate_user %}
+<!-- ══ TEACHER / ADMIN VIEW ══════════════════════════════════════════════════ -->
+
 <div class="page-header">
   <div>
-    <h5 class="mb-0">{{ lesson.title }}</h5>
+    <h5 class="mb-0"><i class="bi bi-journal-text me-2 text-success"></i>{{ lesson.title }}</h5>
     <span class="text-muted" style="font-size:.83rem;">{{ lesson.program.name }}</span>
   </div>
   <div class="d-flex gap-2">
+    {% if request.user.is_kiswate_admin or request.user.is_kiswate_user or portal_role == 'teacher' %}
     <a href="{% url 'kiswate_digital_app:lesson_edit' lesson.pk %}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-pencil"></i>
+      <i class="bi bi-pencil me-1"></i>Edit
     </a>
+    {% endif %}
     <a href="{% url 'kiswate_digital_app:lesson_list' %}" class="btn btn-sm btn-outline-secondary">
       <i class="bi bi-arrow-left"></i>
     </a>
   </div>
 </div>
 
+<div class="teacher-badge-bar">
+  <i class="bi bi-person-badge"></i>
+  You are viewing this lesson as a <strong>teacher</strong>.
+  {% if lesson.teacher %}Assigned instructor: <strong>{{ lesson.teacher.full_name }}</strong>{% endif %}
+</div>
+
 <div class="row g-4">
   <div class="col-lg-8">
+
+    <!-- Content card -->
     <div class="module-card mb-4">
       {% if lesson.topic %}
-      <div class="mb-2">
-        <span class="badge bg-primary-subtle text-primary rounded-pill" style="font-size:.78rem;">
-          <i class="bi bi-tag me-1"></i>{{ lesson.topic }}
-        </span>
-      </div>
+      <span class="badge bg-success-subtle text-success rounded-pill mb-2" style="font-size:.78rem;">
+        <i class="bi bi-tag me-1"></i>{{ lesson.topic }}
+      </span>
       {% endif %}
       {% if lesson.description %}
-      <p style="font-size:.9rem;">{{ lesson.description }}</p>
+      <p style="font-size:.9rem;line-height:1.7;">{{ lesson.description }}</p>
       {% endif %}
-      <div class="d-flex gap-3 flex-wrap mt-3" style="font-size:.83rem;">
-        <span class="text-muted"><i class="bi bi-person me-1"></i>{{ lesson.teacher.full_name }}</span>
-        <span class="text-muted"><i class="bi bi-hash me-1"></i>Lesson {{ lesson.order }}</span>
-        <span class="text-muted"><i class="bi bi-calendar3 me-1"></i>{{ lesson.created_at|date:"M d, Y" }}</span>
+      <div class="d-flex flex-wrap gap-3 mt-3" style="font-size:.82rem;color:#6b7280;">
+        <span><i class="bi bi-hash me-1"></i>Lesson #{{ lesson.order }}</span>
+        <span><i class="bi bi-calendar3 me-1"></i>{{ lesson.created_at|date:"M d, Y" }}</span>
+        <span>
+          {% if lesson.is_published %}
+          <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
+          {% else %}
+          <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
+          {% endif %}
+        </span>
       </div>
     </div>
 
     <!-- Resources -->
     <div class="module-card mb-4">
       <h6 class="fw-semibold mb-3"><i class="bi bi-folder me-1 text-warning"></i>Resources</h6>
-      {% if lesson.notes_file %}
-      <a href="{{ lesson.notes_file.url }}" class="btn btn-outline-secondary btn-sm me-2" target="_blank">
-        <i class="bi bi-file-earmark-pdf me-1"></i>Download Notes
-      </a>
-      {% endif %}
-      {% if lesson.video_url %}
-      <a href="{{ lesson.video_url }}" class="btn btn-outline-danger btn-sm" target="_blank">
-        <i class="bi bi-play-circle me-1"></i>Watch Video
-      </a>
-      {% endif %}
-      {% if not lesson.notes_file and not lesson.video_url %}
-      <p class="text-muted mb-0" style="font-size:.85rem;">No resources uploaded yet.</p>
+      <div class="d-flex flex-wrap gap-2">
+        {% if lesson.notes_file %}
+        <a href="{{ lesson.notes_file.url }}" class="resource-btn btn-notes" target="_blank">
+          <i class="bi bi-file-earmark-pdf"></i>Download Notes
+        </a>
+        {% endif %}
+        {% if lesson.video_url %}
+        <a href="{{ lesson.video_url }}" class="resource-btn btn-video" target="_blank">
+          <i class="bi bi-play-circle"></i>Watch Video
+        </a>
+        {% endif %}
+        {% if not lesson.notes_file and not lesson.video_url %}
+        <p class="text-muted mb-0 small">No resources uploaded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Live Classes / Meeting Links -->
+    <div class="module-card mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-camera-video me-1 text-danger"></i>Live Classes</h6>
+        {% if portal_role == 'teacher' or request.user.is_kiswate_admin or request.user.is_kiswate_user %}
+        <a href="{% url 'kiswate_digital_app:virtual_class_create' %}" class="btn btn-sm btn-outline-danger">
+          <i class="bi bi-plus-lg me-1"></i>Schedule
+        </a>
+        {% endif %}
+      </div>
+      {% if upcoming_classes %}
+        {% for vc in upcoming_classes %}
+        <div class="d-flex align-items-center justify-content-between py-2 border-bottom" style="font-size:.85rem;">
+          <div>
+            <div class="fw-semibold">{{ vc.title }}</div>
+            <div class="text-muted" style="font-size:.77rem;">
+              <i class="bi bi-calendar3 me-1"></i>{{ vc.scheduled_at|date:"d M Y H:i" }}
+              &bull; {{ vc.duration_minutes }} min
+              &bull; <i class="{{ vc.platform_icon }} me-1"></i>{{ vc.get_platform_display }}
+            </div>
+            {% if vc.meeting_id %}<div class="text-muted" style="font-size:.75rem;">ID: {{ vc.meeting_id }}{% if vc.passcode %} · Pass: {{ vc.passcode }}{% endif %}</div>{% endif %}
+          </div>
+          <div class="d-flex gap-1 flex-shrink-0 ms-2">
+            {% if vc.meeting_link %}
+            <a href="{% url 'kiswate_digital_app:join_class' vc.pk %}" class="btn btn-sm btn-danger" target="_blank">
+              <i class="bi bi-camera-video-fill me-1"></i>Join
+            </a>
+            {% endif %}
+            {% if portal_role == 'teacher' or request.user.is_kiswate_admin or request.user.is_kiswate_user %}
+            <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-sm btn-outline-secondary">
+              Manage
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted mb-0 small">No upcoming live classes for this program.</p>
       {% endif %}
     </div>
 
-    <!-- Assignments in this lesson -->
+    <!-- Assignments -->
     <div class="module-card">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-semibold mb-0"><i class="bi bi-file-earmark-text me-1 text-primary"></i>Assignments</h6>
-        <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn btn-sm btn-outline-secondary">
+        <h6 class="fw-semibold mb-0"><i class="bi bi-file-earmark-text me-1 text-success"></i>Assignments</h6>
+        {% if request.user.is_kiswate_admin or request.user.is_kiswate_user or portal_role == 'teacher' %}
+        <a href="{% url 'kiswate_digital_app:assignment_create' %}" class="btn btn-sm btn-brand">
           <i class="bi bi-plus-lg me-1"></i>Add
         </a>
+        {% endif %}
       </div>
-      {% if assignments %}
       {% for a in assignments %}
-      <div class="d-flex align-items-center justify-content-between border-bottom py-2" style="font-size:.875rem;">
+      <div class="assign-row">
         <div>
           <div class="fw-semibold">{{ a.title }}</div>
-          <div class="text-muted" style="font-size:.78rem;">Due: {{ a.due_date|date:"M d, Y H:i" }}</div>
+          <div class="text-muted" style="font-size:.78rem;"><i class="bi bi-clock me-1"></i>Due {{ a.due_date|date:"M d, Y H:i" }}</div>
         </div>
-        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-xs btn-outline-secondary">View</a>
       </div>
+      {% empty %}
+      <p class="text-muted mb-0 small">No assignments for this lesson.</p>
       {% endfor %}
-      {% else %}
-      <p class="text-muted mb-0" style="font-size:.85rem;">No assignments for this lesson.</p>
-      {% endif %}
     </div>
   </div>
 
+  <!-- Sidebar -->
   <div class="col-lg-4">
     <div class="module-card">
-      <h6 class="fw-semibold mb-3">Info</h6>
+      <h6 class="fw-semibold mb-3">Lesson Info</h6>
       <dl class="row g-1 mb-0" style="font-size:.85rem;">
-        <dt class="col-6 text-muted fw-normal">Program</dt>
-        <dd class="col-6">{{ lesson.program.name }}</dd>
-        <dt class="col-6 text-muted fw-normal">Teacher</dt>
-        <dd class="col-6">{{ lesson.teacher.full_name }}</dd>
-        <dt class="col-6 text-muted fw-normal">Order</dt>
-        <dd class="col-6">#{{ lesson.order }}</dd>
-        <dt class="col-6 text-muted fw-normal">Status</dt>
-        <dd class="col-6">
+        <dt class="col-5 text-muted fw-normal">Program</dt>
+        <dd class="col-7">{{ lesson.program.name }}</dd>
+        {% if lesson.program.subject %}
+        <dt class="col-5 text-muted fw-normal">Subject</dt>
+        <dd class="col-7">{{ lesson.program.subject.name }}</dd>
+        {% endif %}
+        <dt class="col-5 text-muted fw-normal">Instructor</dt>
+        <dd class="col-7">{{ lesson.teacher.full_name|default:"—" }}</dd>
+        <dt class="col-5 text-muted fw-normal">Order</dt>
+        <dd class="col-7">#{{ lesson.order }}</dd>
+        <dt class="col-5 text-muted fw-normal">Status</dt>
+        <dd class="col-7">
           {% if lesson.is_published %}
           <span class="badge badge-approved rounded-pill" style="font-size:.7rem;">Published</span>
           {% else %}
           <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Draft</span>
           {% endif %}
         </dd>
+        <dt class="col-5 text-muted fw-normal">Assignments</dt>
+        <dd class="col-7">{{ assignments|length }}</dd>
       </dl>
     </div>
   </div>
 </div>
+
+{% else %}
+<!-- ══ STUDENT / PARENT VIEW ════════════════════════════════════════════════ -->
+
+<div class="lesson-hero">
+  <div class="hero-title"><i class="bi bi-journal-text me-2"></i>{{ lesson.title }}</div>
+  <div class="hero-sub">{{ lesson.program.name }}{% if lesson.topic %} · {{ lesson.topic }}{% endif %}</div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <!-- Content -->
+    {% if lesson.description %}
+    <div class="module-card mb-4">
+      <p class="mb-0" style="font-size:.9rem;line-height:1.75;">{{ lesson.description }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Resources -->
+    <div class="module-card mb-4">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-folder me-1 text-warning"></i>Resources</h6>
+      <div class="d-flex flex-wrap gap-2">
+        {% if lesson.notes_file %}
+        <a href="{{ lesson.notes_file.url }}" class="resource-btn btn-notes" target="_blank">
+          <i class="bi bi-file-earmark-pdf"></i>Download Notes
+        </a>
+        {% endif %}
+        {% if lesson.video_url %}
+        <a href="{{ lesson.video_url }}" class="resource-btn btn-video" target="_blank">
+          <i class="bi bi-play-circle"></i>Watch Video
+        </a>
+        {% endif %}
+        {% if not lesson.notes_file and not lesson.video_url %}
+        <p class="text-muted mb-0 small">No resources uploaded for this lesson yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Assignments (view only) -->
+    {% if assignments %}
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-file-earmark-text me-1 text-success"></i>Assignments</h6>
+      {% for a in assignments %}
+      <div class="assign-row">
+        <div>
+          <div class="fw-semibold">{{ a.title }}</div>
+          <div class="text-muted" style="font-size:.78rem;"><i class="bi bi-clock me-1"></i>Due {{ a.due_date|date:"M d, Y H:i" }}</div>
+        </div>
+        {% if portal_role == 'student' %}
+        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-xs btn-brand">Open</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-lg-4">
+    <div class="module-card">
+      <h6 class="fw-semibold mb-3">About this Lesson</h6>
+      <dl class="row g-1 mb-0" style="font-size:.85rem;">
+        <dt class="col-5 text-muted fw-normal">Program</dt>
+        <dd class="col-7">{{ lesson.program.name }}</dd>
+        {% if lesson.teacher %}
+        <dt class="col-5 text-muted fw-normal">Instructor</dt>
+        <dd class="col-7">{{ lesson.teacher.full_name }}</dd>
+        {% endif %}
+        <dt class="col-5 text-muted fw-normal">Lesson</dt>
+        <dd class="col-7">#{{ lesson.order }}</dd>
+        {% if assignments %}
+        <dt class="col-5 text-muted fw-normal">Assignments</dt>
+        <dd class="col-7">{{ assignments|length }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+
+    <div class="mt-3">
+      <a href="{% url 'kiswate_digital_app:lesson_list' %}" class="btn btn-outline-secondary btn-sm w-100">
+        <i class="bi bi-arrow-left me-1"></i>Back to Lessons
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

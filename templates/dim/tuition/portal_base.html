@@ -1,0 +1,237 @@
+{% extends "dim/base.html" %}
+{% load static %}
+
+{% block sidebar %}
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="bi bi-mortarboard-fill text-white"></i></div>
+    <div>
+      <div class="logo-text">Kiswate Digital</div>
+      <div class="logo-sub">Differentiated Instruction Learning</div>
+    </div>
+  </div>
+
+  <nav class="menu">
+
+    {% if portal_role == 'teacher' %}
+
+    <div class="menu-section-label">DIL</div>
+    <a class="side-link {% block nav_t_dash %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:teacher_tuition_dashboard' %}">
+      <i class="bi bi-speedometer2"></i> My Dashboard
+    </a>
+
+    <div class="menu-section-label">Programs</div>
+    <a class="side-link {% block nav_t_new_prog %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:teacher_program_create' %}">
+      <i class="bi bi-plus-circle"></i> New Program
+    </a>
+
+    <div class="menu-section-label">Content</div>
+    <a class="side-link" href="{% url 'kiswate_digital_app:lesson_list' %}">
+      <i class="bi bi-journal-text"></i> Lessons
+    </a>
+    <a class="side-link" href="{% url 'kiswate_digital_app:assignment_list' %}">
+      <i class="bi bi-file-earmark-text"></i> Assignments
+    </a>
+    <a class="side-link" href="{% url 'kiswate_digital_app:assessment_list' %}">
+      <i class="bi bi-clipboard-check"></i> Assessments
+    </a>
+
+    <div class="menu-section-label">Classes</div>
+    <a class="side-link" href="{% url 'kiswate_digital_app:virtual_class_list' %}">
+      <i class="bi bi-camera-video"></i> Virtual Classes
+    </a>
+
+    <div class="menu-section-label">Communication</div>
+    <a class="side-link" href="{% url 'kiswate_digital_app:notification_list' %}">
+      <i class="bi bi-bell"></i> Notifications
+    </a>
+
+    {% elif portal_role == 'student' %}
+
+    <div class="menu-section-label">My DIL</div>
+    <a class="side-link {% block nav_s_dash %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:student_tuition_dashboard' %}">
+      <i class="bi bi-book-half"></i> My Dashboard
+    </a>
+    <a class="side-link {% block nav_s_browse %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:tuition_browse' %}">
+      <i class="bi bi-search"></i> Browse Programs
+    </a>
+
+    <div class="menu-section-label">Learning</div>
+    <a class="side-link {% block nav_s_lessons %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:lesson_list' %}">
+      <i class="bi bi-journal-text"></i> Lessons
+    </a>
+    <a class="side-link {% block nav_s_classes %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:virtual_class_list' %}">
+      <i class="bi bi-camera-video"></i> Live Classes
+    </a>
+    <a class="side-link {% block nav_s_asgn %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:assignment_list' %}">
+      <i class="bi bi-file-earmark-text"></i> Assignments
+    </a>
+    <a class="side-link {% block nav_s_assess %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:assessment_list' %}">
+      <i class="bi bi-clipboard-check"></i> Assessments
+    </a>
+
+    <div class="menu-section-label">Account</div>
+    <a class="side-link {% block nav_s_pay %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:student_payment_view' %}">
+      <i class="bi bi-credit-card"></i> My Payments
+    </a>
+    <a class="side-link {% block nav_s_perf %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:my_performance' %}">
+      <i class="bi bi-bar-chart-line"></i> My Performance
+    </a>
+    <a class="side-link {% block nav_s_guardian %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:student_add_guardian_self' %}">
+      <i class="bi bi-person-plus"></i> Add Guardian
+    </a>
+
+    {% elif portal_role == 'parent' %}
+
+    <div class="menu-section-label">My Children</div>
+    <a class="side-link {% block nav_p_view %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:parent_tuition_view' %}">
+      <i class="bi bi-speedometer2"></i> Overview
+    </a>
+    <a class="side-link" href="{% url 'kiswate_digital_app:tuition_browse' %}">
+      <i class="bi bi-search"></i> Browse Programs
+    </a>
+
+    <div class="menu-section-label">Learning</div>
+    <a class="side-link {% block nav_p_classes %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:virtual_class_list' %}">
+      <i class="bi bi-camera-video"></i> Live Classes
+    </a>
+    <a class="side-link {% block nav_p_asgn %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:assignment_list' %}">
+      <i class="bi bi-file-earmark-text"></i> Assignments
+    </a>
+    <a class="side-link {% block nav_p_assess %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:assessment_list' %}">
+      <i class="bi bi-clipboard-check"></i> Assessments
+    </a>
+
+    <div class="menu-section-label">Account</div>
+    <a class="side-link {% block nav_p_notif %}{% endblock %}"
+       href="{% url 'kiswate_digital_app:notification_list' %}">
+      <i class="bi bi-bell"></i> Notifications
+    </a>
+
+    {% else %}
+
+    <div class="menu-section-label">Explore</div>
+    <a class="side-link" href="{% url 'kiswate_digital_app:tuition_browse' %}">
+      <i class="bi bi-search"></i> Browse Programs
+    </a>
+    {% if request.user.is_authenticated %}
+    <a class="side-link" href="{% url 'kiswate_digital_app:student_tuition_dashboard' %}">
+      <i class="bi bi-person-check"></i> My DIL
+    </a>
+    {% else %}
+    <a class="side-link" href="{% url 'kiswate_digital_app:student_register' %}">
+      <i class="bi bi-person-plus"></i> Register as Student
+    </a>
+    <a class="side-link" href="{% url 'kiswate_digital_app:teacher_register' %}">
+      <i class="bi bi-person-badge"></i> Register as Teacher
+    </a>
+    {% endif %}
+
+    {% endif %}
+
+    <div class="menu-section-label">Account</div>
+    {% if request.user.is_authenticated %}
+    <a class="side-link" href="{% url 'userauths:sign-out' %}">
+      <i class="bi bi-box-arrow-left"></i> Sign Out
+    </a>
+    {% else %}
+    <a class="side-link" href="{% url 'userauths:sign-in' %}">
+      <i class="bi bi-box-arrow-in-right"></i> Sign In
+    </a>
+    {% endif %}
+
+  </nav>
+</aside>
+{% endblock sidebar %}
+
+{% block mobile_nav %}
+<nav class="mobile-nav">
+  {% if portal_role == 'teacher' %}
+  <a href="{% url 'kiswate_digital_app:teacher_tuition_dashboard' %}" class="{% block mnav_t_dash %}{% endblock %}">
+    <i class="bi bi-speedometer2"></i><span>Home</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:lesson_list' %}" class="{% block mnav_t_lessons %}{% endblock %}">
+    <i class="bi bi-journal-text"></i><span>Lessons</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:virtual_class_list' %}" class="{% block mnav_t_classes %}{% endblock %}">
+    <i class="bi bi-camera-video"></i><span>Classes</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:assignment_list' %}" class="{% block mnav_t_asgn %}{% endblock %}">
+    <i class="bi bi-file-earmark-text"></i><span>Tasks</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:notification_list' %}" class="{% block mnav_t_notif %}{% endblock %}">
+    <i class="bi bi-bell"></i><span>Alerts</span>
+  </a>
+  {% elif portal_role == 'student' %}
+  <a href="{% url 'kiswate_digital_app:student_tuition_dashboard' %}" class="{% block mnav_s_dash %}{% endblock %}">
+    <i class="bi bi-house-fill"></i><span>Home</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="{% block mnav_s_browse %}{% endblock %}">
+    <i class="bi bi-search"></i><span>Browse</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:assignment_list' %}" class="{% block mnav_s_asgn %}{% endblock %}">
+    <i class="bi bi-file-earmark-text"></i><span>Tasks</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:assessment_list' %}" class="{% block mnav_s_assess %}{% endblock %}">
+    <i class="bi bi-clipboard-check"></i><span>Tests</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:student_payment_view' %}" class="{% block mnav_s_pay %}{% endblock %}">
+    <i class="bi bi-credit-card"></i><span>Payments</span>
+  </a>
+  {% elif portal_role == 'parent' %}
+  <a href="{% url 'kiswate_digital_app:parent_tuition_view' %}" class="{% block mnav_p_home %}{% endblock %}">
+    <i class="bi bi-house-fill"></i><span>Home</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="{% block mnav_p_browse %}{% endblock %}">
+    <i class="bi bi-search"></i><span>Browse</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:assignment_list' %}" class="{% block mnav_p_asgn %}{% endblock %}">
+    <i class="bi bi-file-earmark-text"></i><span>Tasks</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:virtual_class_list' %}" class="{% block mnav_p_classes %}{% endblock %}">
+    <i class="bi bi-camera-video"></i><span>Classes</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:notification_list' %}" class="{% block mnav_p_notif %}{% endblock %}">
+    <i class="bi bi-bell"></i><span>Alerts</span>
+  </a>
+  {% else %}
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}">
+    <i class="bi bi-search"></i><span>Browse</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:student_register' %}">
+    <i class="bi bi-person-plus"></i><span>Register</span>
+  </a>
+  <a href="{% url 'userauths:sign-in' %}">
+    <i class="bi bi-box-arrow-in-right"></i><span>Sign In</span>
+  </a>
+  {% endif %}
+</nav>
+{% endblock mobile_nav %}
+
+{% block header_actions %}
+<div class="d-flex align-items-center gap-2 flex-shrink-0">
+  <span class="badge bg-light text-dark border rounded-pill px-2 py-1 d-none d-md-inline-flex" style="font-size:.75rem;">
+    <i class="bi bi-calendar3 me-1"></i>{% now "M d, Y" %}
+  </span>
+  {% if request.user.is_authenticated %}
+  <span class="badge bg-dark rounded-pill px-2 py-1 d-none d-sm-inline-flex" style="font-size:.75rem;">
+    <i class="bi bi-person me-1"></i>{{ request.user.get_full_name|default:request.user.email }}
+  </span>
+  {% endif %}
+</div>
+{% endblock header_actions %}

@@ -1,5 +1,5 @@
 <!-- templates/Dashboard/subscription_plan_list.html -->
-{% extends 'Dashboard/admindash-base.html' %}
+{% extends 'Dashboard/base.html' %}
 {% block title %}Subscription Plans | Dashboard{% endblock %}
 
 {% block content %}
@@ -55,7 +55,47 @@
 
     <div class="card shadow-sm border-0 rounded-4">
       <div class="card-body">
-        <div class="table-responsive">
+
+        <!-- Mobile cards (xs/sm) -->
+        <div class="d-md-none mb-2">
+          {% for plan in plans %}
+          <div class="card border mb-2" style="border-radius:10px;">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-bold">{{ plan.name }}</div>
+                  <div class="text-muted small">{{ plan.description|truncatewords:8|default:"—" }}</div>
+                  <div class="mt-1" style="font-size:.8rem;">
+                    <span class="me-2">Base: <strong>${{ plan.base_price|floatformat:2 }}</strong></span>
+                    <span class="me-2">Student: ${{ plan.price_per_student|floatformat:2 }}</span>
+                    <span>Parent: ${{ plan.price_per_parent|floatformat:2 }}</span>
+                  </div>
+                </div>
+                <div class="d-flex flex-column align-items-end gap-1">
+                  {% if plan.is_active %}
+                    <span class="badge bg-success">Active</span>
+                  {% else %}
+                    <span class="badge bg-danger">Inactive</span>
+                  {% endif %}
+                  <div class="btn-group btn-group-sm mt-1">
+                    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#editModal{{ plan.pk }}">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ plan.pk }}">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <p class="text-center text-muted py-4">No subscription plans yet.</p>
+          {% endfor %}
+        </div>
+
+        <!-- Desktop table (md+) -->
+        <div class="table-responsive d-none d-md-block">
           <table class="table table-hover align-middle">
             <thead class="table-light">
               <tr>
@@ -222,7 +262,8 @@
               {% endfor %}
             </tbody>
           </table>
-        </div>
+        </div><!-- /table-responsive d-none d-md-block -->
+
       </div>
     </div>
 

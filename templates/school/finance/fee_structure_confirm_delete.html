@@ -1,0 +1,22 @@
+{% extends "school/base.html" %}
+{% block title %}Delete Fee Structure{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="row justify-content-center">
+    <div class="col-lg-5">
+      <div class="card border-danger shadow-sm">
+        <div class="card-header bg-danger text-white"><h5 class="mb-0"><i class="bi bi-trash me-2"></i>Delete Fee Structure</h5></div>
+        <div class="card-body">
+          <p>Are you sure you want to delete:</p>
+          <p class="fw-bold">{{ fs }}</p>
+          <p class="text-danger small">This will NOT delete any existing invoices generated from this structure.</p>
+          <form method="post" class="d-flex gap-2">{% csrf_token %}
+            <button type="submit" class="btn btn-danger">Yes, Delete</button>
+            <a href="{% url 'school:fee-structure-list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -3,72 +3,111 @@
 {% block nav_results %}active{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h5 class="fw-bold mb-0">Exam Results &amp; Scores</h5>
-  {% if children|length > 1 %}
-  <form method="get" class="d-flex gap-2">
-    <select name="child" class="form-select form-select-sm" onchange="this.form.submit()">
-      <option value="">All Children</option>
-      {% for child in children %}
-      <option value="{{ child.pk }}" {% if selected_child_id == child.pk|stringformat:"s" %}selected{% endif %}>
-        {{ child.user.get_full_name }}
-      </option>
-      {% endfor %}
-    </select>
-  </form>
-  {% endif %}
-</div>
+<div class="container-fluid py-3">
+  <h4 class="fw-bold mb-1"><i class="bi bi-journal-check me-2 text-success"></i>Exam Results</h4>
+  <p class="text-muted mb-3">Published exam results for your child(ren).</p>
 
-{% for rd in results_data %}
-<div class="card k-card mb-4">
-  <div class="card-header py-2 d-flex align-items-center gap-2">
-    <i class="bi bi-person-circle text-success"></i>
-    <strong>{{ rd.student.user.get_full_name }}</strong>
-    <span class="badge bg-secondary">{{ rd.student.grade_level.name }}</span>
-    <div class="ms-auto small text-muted">{{ rd.submissions|length }} graded submission(s)</div>
+  {% if children|length > 1 %}
+  <div class="d-flex gap-2 mb-3 flex-wrap">
+    <a href="?" class="btn btn-sm {% if not selected_child_id %}btn-success{% else %}btn-outline-secondary{% endif %}">All</a>
+    {% for child in children %}
+    <a href="?child={{ child.pk }}" class="btn btn-sm {% if selected_child_id == child.pk|stringformat:'s' %}btn-success{% else %}btn-outline-secondary{% endif %}">
+      {{ child.user.get_full_name }}
+    </a>
+    {% endfor %}
   </div>
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0 k-tight">
-      <thead class="table-light">
-        <tr><th>Assignment</th><th>Subject</th><th>Type</th><th>Score</th><th>Out of</th><th>%</th><th>Feedback</th><th>Date</th></tr>
-      </thead>
-      <tbody>
-        {% for sub in rd.submissions %}
-        {% with pct=sub.score|floatformat:1 %}
-        <tr>
-          <td class="fw-semibold">{{ sub.assignment.title|truncatechars:30 }}</td>
-          <td>{{ sub.assignment.subject.name }}</td>
-          <td><span class="badge bg-light text-dark">{{ sub.assignment.get_assignment_type_display }}</span></td>
-          <td>
-            <strong class="{% if sub.score >= sub.assignment.max_score|floatformat:0|add:0 %}text-success{% elif sub.score < sub.assignment.max_score|floatformat:0|add:0|floatformat:0|add:0 %}text-warning{% endif %}">
-              {{ sub.score }}
-            </strong>
-          </td>
-          <td>{{ sub.assignment.max_score }}</td>
-          <td>
-            {% if sub.assignment.max_score > 0 %}
-              {% widthratio sub.score sub.assignment.max_score 100 %}%
-            {% else %}—{% endif %}
-          </td>
-          <td>
-            {% if sub.feedback %}
-              <span class="text-muted small" title="{{ sub.feedback }}">{{ sub.feedback|truncatechars:40 }}</span>
-            {% else %}—{% endif %}
-          </td>
-          <td>{{ sub.submitted_at|date:"M d, Y" }}</td>
-        </tr>
-        {% endwith %}
-        {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-3">No graded results yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {% endif %}
+
+  {% for entry in results_data %}
+  <div class="mb-5">
+    <h5 class="fw-bold border-bottom pb-2">
+      <i class="bi bi-person-circle me-2 text-success"></i>{{ entry.student.user.get_full_name }}
+      <small class="text-muted fw-normal ms-2">{{ entry.student.grade_level.name }} – {{ entry.student.stream.name|default:"" }}</small>
+    </h5>
+
+    {% if entry.sessions %}
+      {% for item in entry.sessions %}
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:#0b7a2a;color:white;">
+          <span class="fw-bold">{{ item.session.name }}</span>
+          <div class="d-flex gap-2 align-items-center">
+            <small>Stream Pos: <strong>{{ item.stream_pos }}</strong></small>
+            <small>Overall: <strong>{% if item.overall_pct %}{{ item.overall_pct }}%{% else %}—{% endif %}</strong></small>
+            <a href="{% url 'school:report-slip-html' item.session.pk entry.student.pk %}" class="btn btn-sm btn-light" target="_blank">
+              <i class="bi bi-file-earmark-person me-1"></i>View Slip
+            </a>
+            <a href="{% url 'school:report-slip-pdf' item.session.pk entry.student.pk %}" class="btn btn-sm btn-light">
+              <i class="bi bi-filetype-pdf me-1 text-danger"></i>PDF
+            </a>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size:.88rem;">
+              <thead class="table-light">
+                <tr>
+                  <th>Subject</th>
+                  <th class="text-center">CAT<br><small class="text-muted">/{{ item.session.cat_out_of|floatformat:0 }}</small></th>
+                  <th class="text-center">Assignment<br><small class="text-muted">/{{ item.session.assignment_out_of|floatformat:0 }}</small></th>
+                  <th class="text-center">Assessment<br><small class="text-muted">/{{ item.session.assessment_out_of|floatformat:0 }}</small></th>
+                  <th class="text-center">Exam<br><small class="text-muted">/{{ item.session.exam_out_of|floatformat:0 }}</small></th>
+                  <th class="text-center">Total</th>
+                  <th class="text-center">%</th>
+                  <th class="text-center">Grade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in item.results %}
+                <tr>
+                  <td class="fw-semibold">{{ r.subject.name }}</td>
+                  <td class="text-center">{% if r.cat_score is not None %}{{ r.cat_score|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="text-center">{% if r.assignment_score is not None %}{{ r.assignment_score|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="text-center">{% if r.assessment_score is not None %}{{ r.assessment_score|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="text-center">{% if r.exam_score is not None %}{{ r.exam_score|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="text-center fw-bold">{% if r.total is not None %}{{ r.total|floatformat:1 }}{% else %}—{% endif %}</td>
+                  <td class="text-center">{% if r.percentage is not None %}{{ r.percentage }}%{% else %}—{% endif %}</td>
+                  <td class="text-center">
+                    {% if r.grade_band == "EE" %}<span class="badge bg-success">EE</span>
+                    {% elif r.grade_band == "ME" %}<span class="badge bg-primary">ME</span>
+                    {% elif r.grade_band == "AE" %}<span class="badge bg-warning text-dark">AE</span>
+                    {% elif r.grade_band == "BE" %}<span class="badge bg-danger">BE</span>
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center text-muted py-3">No results available.</td></tr>
+                {% endfor %}
+              </tbody>
+              {% if item.results %}
+              <tfoot style="background:#e8f5e9;font-weight:bold;">
+                <tr>
+                  <td>Overall</td>
+                  <td colspan="4"></td>
+                  <td class="text-center">{{ item.overall_total|floatformat:1 }}</td>
+                  <td class="text-center">{% if item.overall_pct %}{{ item.overall_pct }}%{% else %}—{% endif %}</td>
+                  <td class="text-center">
+                    {% if item.overall_band == "EE" %}<span class="badge bg-success">EE</span>
+                    {% elif item.overall_band == "ME" %}<span class="badge bg-primary">ME</span>
+                    {% elif item.overall_band == "AE" %}<span class="badge bg-warning text-dark">AE</span>
+                    {% elif item.overall_band == "BE" %}<span class="badge bg-danger">BE</span>
+                    {% else %}—{% endif %}
+                  </td>
+                </tr>
+              </tfoot>
+              {% endif %}
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No published results yet for {{ entry.student.user.get_full_name }}.</p>
+    {% endif %}
   </div>
+  {% empty %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-people fs-1 d-block mb-2"></i>No children linked to your account.
+  </div>
+  {% endfor %}
 </div>
-{% empty %}
-<div class="text-center text-muted py-5">
-  <i class="bi bi-bar-chart display-4 d-block mb-2 opacity-50"></i>
-  No results available yet.
-</div>
-{% endfor %}
 {% endblock %}

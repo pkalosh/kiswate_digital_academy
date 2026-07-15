@@ -1,0 +1,122 @@
+{% extends base_template|default:"school/base.html" %}
+{% block title %}Subject Performance – {{ session.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-sm btn-outline-secondary me-2">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <span class="fw-bold">{{ session.name }}</span>
+      <span class="text-muted mx-1">›</span>
+      <span class="text-info fw-semibold">Subject Performance</span>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    {% for item in data %}
+    <div class="col-md-4 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-bold mb-2 text-truncate" title="{{ item.subject.name }}">{{ item.subject.name }}</h6>
+          {% if item.count %}
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <small class="text-muted">Average</small>
+            <span class="fw-bold
+              {% if item.avg >= 75 %}text-success
+              {% elif item.avg >= 50 %}text-primary
+              {% elif item.avg >= 25 %}text-warning
+              {% else %}text-danger{% endif %}">
+              {{ item.avg }}%
+            </span>
+          </div>
+          <div class="progress mb-2" style="height:6px;">
+            <div class="progress-bar
+              {% if item.avg >= 75 %}bg-success
+              {% elif item.avg >= 50 %}bg-primary
+              {% elif item.avg >= 25 %}bg-warning
+              {% else %}bg-danger{% endif %}"
+              role="progressbar" style="width:{{ item.avg }}%;"></div>
+          </div>
+          <div class="row text-center g-0" style="font-size:.8rem;">
+            <div class="col-4 border-end">
+              <div class="text-muted">High</div>
+              <div class="fw-semibold text-success">{{ item.highest }}%</div>
+            </div>
+            <div class="col-4 border-end">
+              <div class="text-muted">Low</div>
+              <div class="fw-semibold text-danger">{{ item.lowest }}%</div>
+            </div>
+            <div class="col-4">
+              <div class="text-muted">Pass%</div>
+              <div class="fw-semibold">{{ item.pass_rate }}%</div>
+            </div>
+          </div>
+          <div class="text-end mt-1"><small class="text-muted">{{ item.count }} students</small></div>
+          {% else %}
+          <p class="text-muted small">No results entered.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center text-muted py-5">No subjects found for this grade.</div>
+    {% endfor %}
+  </div>
+
+  <!-- Table view -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-dark text-white">
+      <h6 class="mb-0"><i class="bi bi-table me-2"></i>Subject Rankings (by Average %)</h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Rank</th>
+              <th>Subject</th>
+              <th>Students</th>
+              <th>Average %</th>
+              <th>Highest %</th>
+              <th>Lowest %</th>
+              <th>Pass Rate</th>
+              <th>Grade Band</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in data %}
+            <tr>
+              <td class="fw-bold text-center">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ item.subject.name }}</td>
+              <td>{{ item.count|default:"—" }}</td>
+              <td>
+                {% if item.avg is not None %}
+                  <span class="fw-bold {% if item.avg >= 75 %}text-success{% elif item.avg >= 50 %}text-primary{% elif item.avg >= 25 %}text-warning{% else %}text-danger{% endif %}">
+                    {{ item.avg }}%
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td>{% if item.highest is not None %}{{ item.highest }}%{% else %}—{% endif %}</td>
+              <td>{% if item.lowest is not None %}{{ item.lowest }}%{% else %}—{% endif %}</td>
+              <td>{% if item.pass_rate is not None %}{{ item.pass_rate }}%{% else %}—{% endif %}</td>
+              <td>
+                {% if item.avg is not None %}
+                  {% if item.avg >= 75 %}<span class="badge bg-success">EE</span>
+                  {% elif item.avg >= 50 %}<span class="badge bg-primary">ME</span>
+                  {% elif item.avg >= 25 %}<span class="badge bg-warning text-dark">AE</span>
+                  {% else %}<span class="badge bg-danger">BE</span>{% endif %}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-4">No data available.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

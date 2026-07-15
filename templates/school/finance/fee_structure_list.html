@@ -1,0 +1,103 @@
+{% extends "school/base.html" %}
+{% block title %}Fee Structures{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="fw-bold mb-0"><i class="bi bi-cash-stack me-2 text-success"></i>Fee Structures</h4>
+      <small class="text-muted">Define fee amounts per grade and term</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'school:fee-structure-create' %}" class="btn btn-success btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>New Fee Structure
+      </a>
+      <a href="{% url 'school:finance-dashboard' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-speedometer2 me-1"></i>Finance Dashboard
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}{% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}{% endif %}
+
+  <!-- Filters -->
+  <form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+      <select name="term" class="form-select form-select-sm">
+        <option value="">All Terms</option>
+        {% for t in terms %}<option value="{{ t.pk }}" {% if term_id == t.pk|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <select name="grade" class="form-select form-select-sm">
+        <option value="">All Grades</option>
+        {% for g in grades %}<option value="{{ g.pk }}" {% if grade_id == g.pk|stringformat:'s' %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Filter</button></div>
+    <div class="col-auto"><a href="{% url 'school:fee-structure-list' %}" class="btn btn-sm btn-outline-secondary">Clear</a></div>
+  </form>
+
+  <!-- Bulk Generate shortcut -->
+  {% if terms %}
+  <div class="alert alert-info py-2 d-flex align-items-center gap-3 mb-3 flex-wrap">
+    <span><i class="bi bi-lightning-charge me-1"></i><strong>Bulk Generate Invoices</strong> — pick a term then generate for all students:</span>
+    {% for t in terms|slice:":5" %}
+    <a href="{% url 'school:bulk-generate-invoices' t.pk %}" class="btn btn-sm btn-warning">{{ t.name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      {% if page_obj %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.9rem;">
+          <thead class="table-dark">
+            <tr>
+              <th>Grade</th><th>Stream</th><th>Term</th><th>Fee Type</th>
+              <th>Description</th><th class="text-end">Amount (KES)</th>
+              <th>Status</th><th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fs in page_obj %}
+            <tr>
+              <td class="fw-semibold">{{ fs.grade.name }}</td>
+              <td>{{ fs.stream.name|default:"All Streams" }}</td>
+              <td>{{ fs.term.name }}</td>
+              <td><span class="badge bg-secondary">{{ fs.fee_type.name|default:"—" }}</span></td>
+              <td>{{ fs.description }}</td>
+              <td class="text-end fw-bold">{{ fs.amount|floatformat:2 }}</td>
+              <td>{% if fs.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td>
+              <td class="text-end">
+                <a href="{% url 'school:fee-structure-edit' fs.pk %}" class="btn btn-xs btn-outline-primary" style="font-size:.75rem;padding:.2rem .5rem;">Edit</a>
+                <form method="post" action="{% url 'school:fee-structure-delete' fs.pk %}" class="d-inline" onsubmit="return confirm('Delete this fee structure?')">
+                  {% csrf_token %}<button class="btn btn-xs btn-outline-danger" style="font-size:.75rem;padding:.2rem .5rem;">Del</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <nav><ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&term={{ term_id }}&grade={{ grade_id }}">«</a></li>{% endif %}
+          <li class="page-item active"><span class="page-link">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span></li>
+          {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&term={{ term_id }}&grade={{ grade_id }}">»</a></li>{% endif %}
+        </ul></nav>
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-cash-stack fs-1 d-block mb-2"></i>No fee structures yet.
+        <a href="{% url 'school:fee-structure-create' %}">Create one</a>.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

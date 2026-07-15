@@ -1,0 +1,407 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}Parent DIL Dashboard{% endblock %}
+{% block page_title %}Parent DIL Dashboard{% endblock %}
+{% block nav_p_view %}active{% endblock %}
+{% block nav_tuition %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .par-hero { background: linear-gradient(135deg,#0b7a2a 0%,#065f20 60%,#043d15 100%); color:#fff; border-radius:16px; padding:1.5rem; margin-bottom:1.5rem; position:relative; overflow:hidden; }
+  .par-hero::after { content:''; position:absolute; right:-30px; top:-30px; width:140px; height:140px; background:rgba(255,255,255,.07); border-radius:50%; }
+  .par-hero .hero-title { font-size:1.2rem; font-weight:700; }
+  .par-hero .hero-sub { font-size:.85rem; opacity:.85; margin:.25rem 0 1rem; }
+  .hero-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
+  .btn-par { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:.45rem .9rem; font-size:.83rem; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem; }
+  .btn-par:hover, .btn-par-primary:hover { background:rgba(255,255,255,.3); color:#fff; }
+  .btn-par-primary { background:#fff; color:#0b7a2a; border-color:#fff; }
+  .btn-par-primary:hover { background:#f0fdf4; color:#0b7a2a; }
+
+  .kpi-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.75rem; margin-bottom:1.5rem; }
+  @media(min-width:768px){ .kpi-grid { grid-template-columns:repeat(4,1fr); } }
+  .kpi-card { background:#fff; border-radius:12px; border:1px solid #e5e7eb; padding:1rem; }
+  .kpi-val { font-size:1.5rem; font-weight:800; line-height:1; margin-bottom:.15rem; }
+  .kpi-lbl { font-size:.72rem; color:#6b7280; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+
+  .section-card { background:#fff; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:1.25rem; overflow:hidden; }
+  .section-head { padding:.75rem 1rem; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; }
+  .section-head h6 { margin:0; font-weight:700; font-size:.9rem; }
+  .section-body { padding:.75rem 1rem; }
+
+  .child-row { display:flex; align-items:center; gap:.75rem; padding:.6rem 0; border-bottom:1px solid #f9fafb; }
+  .child-row:last-child { border-bottom:none; }
+  .child-avatar { width:36px; height:36px; border-radius:50%; background:#f0fdf4; color:#16a34a; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+  .enr-badge { font-size:.7rem; padding:.2rem .5rem; border-radius:12px; font-weight:600; }
+  .enr-paid { background:#d1fae5; color:#065f46; }
+  .enr-pending { background:#fef3c7; color:#92400e; }
+  .enr-free { background:#d1fae5; color:#065f46; }
+  .enr-fail { background:#fee2e2; color:#991b1b; }
+
+  .task-item { display:flex; align-items:flex-start; gap:.75rem; padding:.6rem 0; border-bottom:1px solid #f9fafb; font-size:.84rem; }
+  .task-item:last-child { border-bottom:none; }
+  .task-icon { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:.9rem; }
+  .task-meta { color:#9ca3af; font-size:.73rem; }
+  .notif-dot { width:8px; height:8px; border-radius:50%; background:#0b7a2a; flex-shrink:0; margin-top:.35rem; }
+
+  .class-item { display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-bottom:1px solid #f9fafb; font-size:.83rem; }
+  .class-item:last-child { border-bottom:none; }
+
+  .program-option { border:1px solid #e5e7eb; border-radius:10px; padding:.75rem; margin-bottom:.5rem; cursor:pointer; }
+  .program-option:hover { border-color:#0b7a2a; background:#f0fdf4; }
+  .program-option input[type=radio] { margin-right:.5rem; }
+  .btn-xs { padding:.2rem .5rem; font-size:.72rem; line-height:1.4; border-radius:.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── HERO ──────────────────────────────────────────────────────────────── -->
+<div class="par-hero">
+  <div class="hero-title"><i class="bi bi-people-fill me-2"></i>Child's DIL Dashboard</div>
+  <div class="hero-sub">Track programs, assignments, assessments and payments for your child.</div>
+  <div class="hero-actions">
+    <button class="btn-par btn-par-primary" data-bs-toggle="modal" data-bs-target="#enrollModal">
+      <i class="bi bi-plus-circle"></i>Enroll Child
+    </button>
+    <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn-par">
+      <i class="bi bi-search"></i>Browse Programs
+    </a>
+  </div>
+</div>
+
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2 mb-3">
+  {{ message }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+
+<!-- ── KPI CARDS ────────────────────────────────────────────────────────── -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-val text-success">{{ total_enrolled }}</div>
+    <div class="kpi-lbl">Enrolled Programs</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-val text-danger">{{ unpaid_count }}</div>
+    <div class="kpi-lbl">Unpaid Fees</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-val text-warning">{{ assignment_count }}</div>
+    <div class="kpi-lbl">Pending Tasks</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-val text-success">{{ upcoming_class_count }}</div>
+    <div class="kpi-lbl">Upcoming Classes</div>
+  </div>
+</div>
+
+<!-- ── CHILDREN + ENROLLMENTS ───────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-head">
+    <h6><i class="bi bi-person-circle text-success me-2"></i>Children's Programs</h6>
+  </div>
+  <div class="section-body">
+
+    {% if not tuition_profiles and not guardian_links %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-mortarboard fs-2 opacity-25 d-block mb-2"></i>
+      <p class="small mb-2">No DIL activity found yet.</p>
+      <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#enrollModal">
+        <i class="bi bi-plus me-1"></i>Enroll a child
+      </button>
+    </div>
+    {% endif %}
+
+    {% for tp in tuition_profiles %}
+    <div class="child-row flex-wrap">
+      <div class="child-avatar"><i class="bi bi-person-fill"></i></div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold small">{{ tp.full_name }}</div>
+        <div class="text-muted" style="font-size:.73rem;">
+          <span class="badge {% if tp.vetting_status == 'approved' %}bg-success{% elif tp.vetting_status == 'pending' %}bg-warning text-dark{% else %}bg-danger{% endif %}" style="font-size:.65rem;">{{ tp.get_vetting_status_display }}</span>
+          · {{ tp.enrollments.count }} program{{ tp.enrollments.count|pluralize }}
+        </div>
+        <div class="mt-1 d-flex flex-wrap gap-1">
+          {% for enr in tp.enrollments.all %}{% if enr.program.is_tuition %}
+            <span title="{{ enr.program.name }}" class="enr-badge
+              {% if enr.program.price > 0 %}
+                {% if enr.payment %}{% if enr.payment.status == 'paid' %}enr-paid{% elif enr.payment.status == 'failed' %}enr-fail{% else %}enr-pending{% endif %}{% else %}enr-pending{% endif %}
+              {% else %}enr-free{% endif %}">
+              {{ enr.program.name|truncatechars:20 }}
+              {% if enr.program.price > 0 %}
+                {% if enr.payment %}{% if enr.payment.status == 'paid' %}<i class="bi bi-check-circle-fill ms-1"></i>{% elif enr.payment.status == 'failed' %}<i class="bi bi-x-circle-fill ms-1"></i>{% else %}<i class="bi bi-clock-fill ms-1"></i>{% endif %}{% else %}<i class="bi bi-exclamation-circle-fill ms-1"></i>{% endif %}
+              {% endif %}
+            </span>
+          {% endif %}{% endfor %}
+        </div>
+      </div>
+      <!-- Pay button for any unpaid program -->
+      {% for enr in tp.enrollments.all %}{% if enr.program.is_tuition and enr.program.price > 0 %}
+        {% if not enr.payment or enr.payment.status != 'paid' %}
+        <button class="btn btn-xs btn-success pay-btn flex-shrink-0"
+                data-enrollment="{{ enr.pk }}"
+                data-program="{{ enr.program.name|escapejs }}"
+                data-amount="{{ enr.program.price }}"
+                data-bs-toggle="tooltip" title="Pay for {{ enr.program.name }}">
+          <i class="bi bi-phone me-1"></i>Pay
+        </button>
+        {% endif %}
+      {% endif %}{% endfor %}
+    </div>
+    {% endfor %}
+
+    {% if guardian_links %}
+    <hr class="my-2">
+    <div class="text-muted small fw-semibold mb-1"><i class="bi bi-person-heart me-1"></i>Guardian links</div>
+    {% for g in guardian_links %}
+    <div class="child-row">
+      <div class="child-avatar" style="background:#fef3c7;color:#b45309;"><i class="bi bi-shield-check"></i></div>
+      <div>
+        <div class="fw-semibold small">{{ g.student.full_name }}</div>
+        <div class="text-muted" style="font-size:.73rem;">{{ g.relationship }}</div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── UPCOMING CLASSES ──────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-head">
+    <h6><i class="bi bi-camera-video text-success me-2"></i>Upcoming Live Classes</h6>
+  </div>
+  <div class="section-body">
+    {% if upcoming_classes %}
+    {% for cls in upcoming_classes %}
+    <div class="class-item">
+      <div class="task-icon" style="background:#d1fae5;color:#0b7a2a;"><i class="bi bi-camera-video"></i></div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold text-truncate">{{ cls.title }}</div>
+        <div class="task-meta">{{ cls.program.name }} · {{ cls.scheduled_at|date:"d M Y H:i" }}</div>
+      </div>
+      {% if cls.meeting_link %}
+      <a href="{{ cls.meeting_link }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline-success flex-shrink-0">
+        <i class="bi bi-box-arrow-up-right"></i>
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted small mb-0 text-center py-3">No upcoming live classes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── ASSIGNMENTS ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-head">
+    <h6><i class="bi bi-file-earmark-text text-warning me-2"></i>Pending Assignments</h6>
+  </div>
+  <div class="section-body">
+    {% if upcoming_assignments %}
+    {% for asgn in upcoming_assignments %}
+    <div class="task-item">
+      <div class="task-icon" style="background:#fffbeb;color:#f59e0b;"><i class="bi bi-file-earmark-text"></i></div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold text-truncate">{{ asgn.title }}</div>
+        <div class="task-meta">
+          {{ asgn.program.name }}
+          · Due <strong class="{% if asgn.due_date < now %}text-danger{% endif %}">{{ asgn.due_date|date:"d M Y" }}</strong>
+          · {{ asgn.total_marks }} marks
+        </div>
+      </div>
+      {% if asgn.due_date < now %}<span class="badge bg-danger ms-1" style="font-size:.66rem;">Overdue</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted small mb-0 text-center py-3">No pending assignments.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── ASSESSMENTS ───────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-head">
+    <h6><i class="bi bi-clipboard-check text-success me-2"></i>Assessments</h6>
+  </div>
+  <div class="section-body">
+    {% if open_assessments %}
+    {% for asmt in open_assessments %}
+    <div class="task-item">
+      <div class="task-icon" style="background:#f0fdf4;color:#16a34a;"><i class="bi bi-clipboard-check"></i></div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold text-truncate">{{ asmt.title }}</div>
+        <div class="task-meta">
+          {{ asmt.program.name }} · {{ asmt.get_assessment_type_display }} · {{ asmt.total_marks }} marks
+          {% if asmt.end_time %} · Closes {{ asmt.end_time|date:"d M Y" }}{% endif %}
+        </div>
+      </div>
+      {% if asmt.is_published %}
+      <span class="badge bg-success ms-1" style="font-size:.66rem;">Open</span>
+      {% else %}
+      <span class="badge bg-secondary ms-1" style="font-size:.66rem;">Draft</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted small mb-0 text-center py-3">No open assessments.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── NOTIFICATIONS ─────────────────────────────────────────────────────── -->
+<div class="section-card">
+  <div class="section-head">
+    <h6><i class="bi bi-bell text-success me-2"></i>Recent Notifications</h6>
+  </div>
+  <div class="section-body">
+    {% if notifications %}
+    {% for notif in notifications %}
+    <div class="task-item">
+      <div class="notif-dot"></div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="small fw-semibold text-truncate">{{ notif.subject|default:notif.notification_type|upper }}</div>
+        <div class="text-muted" style="font-size:.77rem;">{{ notif.message|truncatechars:80 }}</div>
+        <div class="task-meta">{{ notif.recipient.full_name }} · {{ notif.created_at|date:"d M Y H:i" }}</div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-muted small mb-0 text-center py-3">No notifications yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── ENROLL MODAL ──────────────────────────────────────────────────────── -->
+<div class="modal fade" id="enrollModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-plus-circle text-success me-2"></i>Enroll Child in a DIL Program</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'kiswate_digital_app:parent_enroll_child' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+
+          <!-- Select child -->
+          {% if tuition_profiles %}
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Select Child</label>
+            <select name="student_pk" class="form-select form-select-sm" required>
+              <option value="">-- choose child --</option>
+              {% for tp in tuition_profiles %}
+              <option value="{{ tp.pk }}">{{ tp.full_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% else %}
+          <div class="alert alert-warning small py-2">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            No DIL student profiles linked to your account. Ask your child to register on the DIL portal first.
+          </div>
+          {% endif %}
+
+          <!-- Search programs -->
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">Search Programs</label>
+            <input type="text" id="programSearch" class="form-control form-control-sm" placeholder="Type to filter…">
+          </div>
+
+          <div id="programList" style="max-height:300px;overflow-y:auto;">
+            {% for prog in available_programs %}
+            <label class="program-option d-flex align-items-start gap-2">
+              <input type="radio" name="program_pk" value="{{ prog.pk }}" required>
+              <div class="flex-grow-1 min-w-0">
+                <div class="fw-semibold small">{{ prog.name }}</div>
+                <div class="text-muted" style="font-size:.75rem;">
+                  {{ prog.subject.name }} ·
+                  {% if prog.teacher %}{{ prog.teacher.full_name }}{% else %}No teacher{% endif %} ·
+                  {% if prog.price > 0 %}KES {{ prog.price }}{% else %}<span class="text-success">Free</span>{% endif %}
+                </div>
+              </div>
+            </label>
+            {% empty %}
+            <p class="text-muted small text-center py-3">No active programs available.</p>
+            {% endfor %}
+          </div>
+
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-success px-4">
+            <i class="bi bi-check me-1"></i>Enroll
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── STK PUSH PAYMENT MODAL ────────────────────────────────────────────── -->
+<div class="modal fade" id="payModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-phone text-success me-2"></i>M-Pesa STK Push Payment</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="payForm" method="post" action="">
+        {% csrf_token %}
+        <div class="modal-body pt-2">
+          <p class="text-muted small mb-3">
+            Pay for <strong id="payProgram"></strong> via M-Pesa. An STK push prompt will be sent to your phone.
+          </p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">M-Pesa Phone Number</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-phone"></i></span>
+              <input type="tel" name="phone" id="payPhone" class="form-control"
+                     placeholder="e.g. 0712345678" required
+                     value="{{ request.user.phone_number|default:'' }}">
+            </div>
+          </div>
+          <div class="p-2 rounded-3 bg-success bg-opacity-10 small">
+            <i class="bi bi-info-circle text-success me-1"></i>
+            Amount: <strong id="payAmount" class="text-success"></strong>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-success px-4">
+            <i class="bi bi-send me-1"></i>Send STK Push
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Pay button → open STK push modal
+const payBaseUrl = "{% url 'kiswate_digital_app:parent_stk_push' enrollment_pk=0 %}";
+document.querySelectorAll('.pay-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.getElementById('payProgram').textContent = this.dataset.program;
+    document.getElementById('payAmount').textContent = 'KES ' + this.dataset.amount;
+    document.getElementById('payForm').action = payBaseUrl.replace('/0/', '/' + this.dataset.enrollment + '/');
+    new bootstrap.Modal(document.getElementById('payModal')).show();
+  });
+});
+
+// Program search filter
+document.getElementById('programSearch').addEventListener('input', function () {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#programList .program-option').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// Activate tooltips
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+</script>
+{% endblock %}

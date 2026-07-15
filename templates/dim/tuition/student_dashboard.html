@@ -1,0 +1,338 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}My DIL{% endblock %}
+
+{% block extra_css %}
+<style>
+  .stu-hero {
+    background: linear-gradient(135deg, #0b7a2a 0%, #096622 60%, #074d1a 100%);
+    border-radius: 16px;
+    padding: 2rem 2rem 2rem 2.5rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .stu-hero::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+  }
+  .stu-hero::before {
+    content: '';
+    position: absolute;
+    right: 60px; bottom: -60px;
+    width: 260px; height: 260px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.03);
+  }
+  .stu-hero .hero-title { font-size: 1.25rem; font-weight: 700; margin-bottom: .3rem; }
+  .stu-hero .hero-sub { opacity: .8; font-size: .88rem; }
+  .hero-actions { display: flex; gap: .75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  .btn-hero { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: .5rem 1rem; font-size: .84rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: .4rem; transition: background .2s; }
+  .btn-hero:hover { background: rgba(255,255,255,.25); color: #fff; }
+  .btn-hero-primary { background: #fff; color: #0b7a2a; border-color: #fff; }
+  .btn-hero-primary:hover { background: #f0fdf4; color: #0b7a2a; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .kpi-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 1.2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 14px 14px 0 0;
+  }
+  .kpi-card.kpi-blue::before { background: #0b7a2a; }
+  .kpi-card.kpi-amber::before { background: #f59e0b; }
+  .kpi-card.kpi-teal::before { background: #14b8a6; }
+  .kpi-card.kpi-green::before { background: #10b981; }
+  .kpi-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; margin-bottom: .65rem; }
+  .kpi-value { font-size: 1.9rem; font-weight: 800; line-height: 1; color: #111; }
+  .kpi-label { font-size: .76rem; color: #6b7280; margin-top: .2rem; font-weight: 500; }
+
+  .section-card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; padding: 1.35rem; margin-bottom: 1rem; }
+  .section-card .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .section-title { font-weight: 700; font-size: .9rem; color: #111; margin: 0; }
+
+  .list-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .7rem 0; border-bottom: 1px solid #f3f4f6; }
+  .list-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .list-row .row-title { font-weight: 600; font-size: .85rem; color: #111; }
+  .list-row .row-sub { font-size: .75rem; color: #9ca3af; }
+
+  .empty-state { text-align: center; padding: 2rem 1rem; color: #9ca3af; }
+  .empty-state i { font-size: 2rem; display: block; margin-bottom: .5rem; opacity: .3; }
+  .empty-state p { margin: 0; font-size: .82rem; }
+
+  .guardian-row { padding: .6rem 0; border-bottom: 1px solid #f3f4f6; font-size: .84rem; }
+  .guardian-row:last-child { border-bottom: none; }
+
+  .notif-row { display: flex; align-items: flex-start; gap: .75rem; padding: .65rem 0; border-bottom: 1px solid #f3f4f6; }
+  .notif-row:last-child { border-bottom: none; }
+  .notif-dot { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .78rem; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if not_registered %}
+<div class="stu-hero" style="background:linear-gradient(135deg,#7c3aed 0%,#6d28d9 60%,#5b21b6 100%);">
+  <div class="hero-title"><i class="bi bi-mortarboard me-2"></i>Join Kiswate DIL</div>
+  <div class="hero-sub">Register as a DIL student to enroll in programs from verified teachers across Kenya.</div>
+  <div class="hero-actions">
+    <a href="{% url 'kiswate_digital_app:student_register' %}" class="btn-hero btn-hero-primary">
+      <i class="bi bi-person-plus"></i>Register for DIL
+    </a>
+    <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn-hero">
+      <i class="bi bi-search"></i>Browse Programs
+    </a>
+  </div>
+</div>
+
+<div class="section-card">
+  <h6 class="section-title mb-3"><i class="bi bi-stars me-2 text-warning"></i>What you'll get as a DIL student</h6>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="p-3 rounded-3" style="background:#f0fdf4;">
+        <i class="bi bi-journal-text text-success fs-5 d-block mb-1"></i>
+        <div class="fw-semibold small">Access Lessons</div>
+        <div class="text-muted" style="font-size:.78rem;">Study materials from top teachers</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-3 rounded-3" style="background:#f0fdf4;">
+        <i class="bi bi-camera-video text-success fs-5 d-block mb-1"></i>
+        <div class="fw-semibold small">Live Classes</div>
+        <div class="text-muted" style="font-size:.78rem;">Join virtual sessions in real-time</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-3 rounded-3" style="background:#fdf4ff;">
+        <i class="bi bi-clipboard-check text-purple fs-5 d-block mb-1"></i>
+        <div class="fw-semibold small">Assessments</div>
+        <div class="text-muted" style="font-size:.78rem;">Track your progress with tests</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% elif profile.vetting_status == 'pending' %}
+<div class="stu-hero" style="background:linear-gradient(135deg,#d97706 0%,#b45309 60%,#92400e 100%);">
+  <div class="hero-title"><i class="bi bi-hourglass-split me-2"></i>Profile Under Review</div>
+  <div class="hero-sub">Your DIL profile has been submitted. Our team will review it within 24 hours.</div>
+  <div class="hero-actions">
+    <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn-hero">
+      <i class="bi bi-search"></i>Browse Programs
+    </a>
+  </div>
+</div>
+
+<div class="section-card">
+  <div class="section-header">
+    <h6 class="section-title"><i class="bi bi-info-circle me-2 text-success"></i>While you wait…</h6>
+  </div>
+  <ul class="list-unstyled mb-0" style="font-size:.875rem;">
+    <li class="py-2 border-bottom"><i class="bi bi-search text-muted me-2"></i>Browse available programs to plan your learning path</li>
+    <li class="py-2 border-bottom"><i class="bi bi-book text-muted me-2"></i>Explore subjects and find teachers you'd like to learn from</li>
+    <li class="py-2"><i class="bi bi-bell text-muted me-2"></i>You'll be notified as soon as your profile is approved</li>
+  </ul>
+</div>
+
+{% else %}
+
+<!-- Hero -->
+<div class="stu-hero">
+  <div class="hero-title">Welcome back, {{ profile.full_name|default:"Student" }} 👋</div>
+  <div class="hero-sub">Here's your DIL learning overview.</div>
+  <div class="hero-actions">
+    <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn-hero btn-hero-primary">
+      <i class="bi bi-search"></i>Browse Programs
+    </a>
+    <a href="{% url 'kiswate_digital_app:my_performance' %}" class="btn-hero">
+      <i class="bi bi-bar-chart-line"></i>My Performance
+    </a>
+    <a href="{% url 'kiswate_digital_app:student_payment_view' %}" class="btn-hero">
+      <i class="bi bi-credit-card"></i>My Payments
+    </a>
+    <a href="{% url 'kiswate_digital_app:student_add_guardian_self' %}" class="btn-hero">
+      <i class="bi bi-person-plus"></i>Add Guardian
+    </a>
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card kpi-blue">
+    <div class="kpi-icon" style="background:#d1fae5;color:#0b7a2a;"><i class="bi bi-journal-bookmark"></i></div>
+    <div class="kpi-value">{{ enrollments|length }}</div>
+    <div class="kpi-label">Enrolled Programs</div>
+  </div>
+  <div class="kpi-card kpi-amber">
+    <div class="kpi-icon" style="background:#fffbeb;color:#f59e0b;"><i class="bi bi-file-earmark-text"></i></div>
+    <div class="kpi-value">{{ pending_assignments|length }}</div>
+    <div class="kpi-label">Pending Assignments</div>
+  </div>
+  <div class="kpi-card kpi-teal">
+    <div class="kpi-icon" style="background:#f0fdfa;color:#14b8a6;"><i class="bi bi-camera-video"></i></div>
+    <div class="kpi-value">{{ upcoming_classes|length }}</div>
+    <div class="kpi-label">Upcoming Classes</div>
+  </div>
+  <div class="kpi-card kpi-green">
+    <div class="kpi-icon" style="background:#f0fdf4;color:#10b981;"><i class="bi bi-clipboard-check"></i></div>
+    <div class="kpi-value">{{ open_assessments|length }}</div>
+    <div class="kpi-label">Open Assessments</div>
+  </div>
+</div>
+
+<!-- Main Grid -->
+<div class="row g-3">
+
+  <!-- Left Column -->
+  <div class="col-12 col-lg-7">
+
+    <!-- My Programs -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-journal-bookmark me-2 text-success"></i>My Programs</h6>
+        <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-xs btn-outline-secondary">+ Enroll</a>
+      </div>
+      {% for enr in enrollments %}
+      <div class="list-row">
+        <div class="min-w-0">
+          <div class="row-title text-truncate">{{ enr.program.name }}</div>
+          <div class="row-sub">
+            {{ enr.program.subject.name }}
+            {% if enr.program.teacher %} · {{ enr.program.teacher.full_name }}{% endif %}
+          </div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:tuition_program_detail' enr.program.pk %}" class="btn btn-xs btn-outline-success flex-shrink-0">Open</a>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-journal-bookmark"></i>
+        <p>No programs yet.<br>
+          <a href="{% url 'kiswate_digital_app:tuition_browse' %}">Browse available programs</a>
+        </p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Pending Assignments -->
+    {% if pending_assignments %}
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-file-earmark-text me-2 text-warning"></i>Pending Assignments</h6>
+        <span class="badge rounded-pill" style="background:#fef3c7;color:#92400e;font-size:.72rem;">{{ pending_assignments|length }}</span>
+      </div>
+      {% for a in pending_assignments %}
+      <div class="list-row">
+        <div class="min-w-0">
+          <div class="row-title text-truncate">{{ a.title }}</div>
+          <div class="row-sub">{{ a.program.name }} &bull; Due {{ a.due_date|date:"d M Y H:i" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-xs btn-warning flex-shrink-0">View</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Right Column -->
+  <div class="col-12 col-lg-5">
+
+    <!-- Upcoming Classes -->
+    {% if upcoming_classes %}
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-camera-video me-2 text-success"></i>Upcoming Classes</h6>
+      </div>
+      {% for vc in upcoming_classes %}
+      <div class="list-row">
+        <div class="min-w-0">
+          <div class="row-title text-truncate">{{ vc.title }}</div>
+          <div class="row-sub"><i class="bi bi-calendar3 me-1"></i>{{ vc.scheduled_at|date:"D, d M · H:i" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:join_class' vc.pk %}" class="btn btn-xs btn-brand flex-shrink-0">Join</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Open Assessments -->
+    {% if open_assessments %}
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-clipboard-check me-2 text-success"></i>Open Assessments</h6>
+      </div>
+      {% for a in open_assessments %}
+      <div class="list-row">
+        <div class="min-w-0">
+          <div class="row-title text-truncate">{{ a.title }}</div>
+          <div class="row-sub">{{ a.get_assessment_type_display }} &bull; {{ a.total_marks }} marks</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:take_assessment' a.pk %}" class="btn btn-xs btn-success flex-shrink-0">Start</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Guardians -->
+    <div class="section-card">
+      <div class="section-header">
+        <h6 class="section-title"><i class="bi bi-people me-2 text-secondary"></i>Guardians</h6>
+        <a href="{% url 'kiswate_digital_app:student_add_guardian_self' %}" class="btn btn-xs btn-outline-success">+ Add</a>
+      </div>
+      {% for g in guardians %}
+      <div class="guardian-row">
+        <div class="fw-semibold">{{ g.name }}
+          <span class="text-muted fw-normal">({{ g.relationship }})</span>
+          {% if g.is_primary %}<span class="badge ms-1" style="background:#d1fae5;color:#065f46;font-size:.68rem;">Primary</span>{% endif %}
+        </div>
+        <div class="text-muted small">{{ g.phone }}{% if g.email %} · {{ g.email }}{% endif %}</div>
+      </div>
+      {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-person-plus"></i>
+        <p><a href="{% url 'kiswate_digital_app:student_add_guardian_self' %}">Add a guardian</a> for payment notifications.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+
+<!-- Notifications -->
+{% if notifications %}
+<div class="section-card mt-1">
+  <div class="section-header">
+    <h6 class="section-title"><i class="bi bi-bell me-2 text-warning"></i>Recent Notifications</h6>
+  </div>
+  {% for n in notifications %}
+  <div class="notif-row">
+    <div class="notif-dot {% if n.status == 'sent' %}bg-success bg-opacity-10 text-success{% else %}bg-secondary bg-opacity-10 text-secondary{% endif %}">
+      <i class="bi bi-bell"></i>
+    </div>
+    <div class="min-w-0">
+      <div class="fw-semibold" style="font-size:.84rem;">{{ n.subject|default:"Notification" }}</div>
+      <div class="text-muted text-truncate" style="font-size:.78rem;">{{ n.message|truncatechars:80 }}</div>
+      <div class="text-muted" style="font-size:.72rem;">{{ n.created_at|timesince }} ago</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

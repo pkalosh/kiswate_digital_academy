@@ -1,0 +1,123 @@
+{% extends 'school/base.html' %}
+{% load humanize %}
+
+{% block title %}Attendance Summary | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width:860px">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2 text-success"></i>Attendance Summary</h5>
+      <small class="text-muted">{{ period_start|date:"M d, Y" }} – {{ period_end|date:"M d, Y" }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'school:attendance-export-csv' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}&grade={{ request.GET.grade|default:'' }}&term={{ request.GET.term|default:'' }}"
+         class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv me-1"></i>CSV
+      </a>
+      <a href="{% url 'school:attendance-export-pdf' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}&grade={{ request.GET.grade|default:'' }}&term={{ request.GET.term|default:'' }}"
+         class="btn btn-sm btn-outline-danger">
+        <i class="bi bi-filetype-pdf me-1"></i>PDF
+      </a>
+      <a href="{% url 'school:attendance-dashboard' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+      </a>
+    </div>
+  </div>
+
+  <!-- Date / grade / term filter -->
+  <form method="get" class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">From</label>
+        <input type="date" name="start" value="{{ period_start|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">To</label>
+        <input type="date" name="end" value="{{ period_end|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold">Grade</label>
+        <select name="grade" class="form-select form-select-sm">
+          <option value="">All Grades</option>
+          {% for g in grades %}
+          <option value="{{ g.id }}" {% if request.GET.grade == g.id|stringformat:'s' %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold d-block">&nbsp;</label>
+        <button type="submit" class="btn btn-sm btn-success w-100">Filter</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- KPI cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4 text-success">{{ present_pct }}%</div>
+        <small class="text-muted">Attendance Rate</small>
+      </div>
+    </div>
+    {% for item in summary %}
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-3">
+        <div class="fw-bold fs-4">{{ item.count|intcomma }}</div>
+        <small class="text-muted">
+          {% if item.status == 'P' %}Present
+          {% elif item.status == 'ET' %}Excused Tardy
+          {% elif item.status == 'UT' %}Unexcused Tardy
+          {% elif item.status == 'EA' %}Excused Absent
+          {% elif item.status == 'UA' %}Unexcused Absent
+          {% elif item.status == '18' %}Suspended
+          {% elif item.status == '20' %}Expelled
+          {% elif item.status == 'IB' %}In Building
+          {% else %}{{ item.status }}{% endif %}
+        </small>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Status breakdown table -->
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-0 pt-3 pb-0 fw-semibold">Status Breakdown</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0" style="font-size:.85rem;">
+        <thead class="table-light">
+          <tr><th>Status</th><th class="text-end">Count</th></tr>
+        </thead>
+        <tbody>
+          {% for item in summary %}
+          <tr>
+            <td>
+              {% if item.status == 'P' %}<span class="badge bg-success">Present</span>
+              {% elif item.status == 'ET' %}<span class="badge bg-warning text-dark">Excused Tardy</span>
+              {% elif item.status == 'UT' %}<span class="badge bg-orange text-dark">Unexcused Tardy</span>
+              {% elif item.status == 'EA' %}<span class="badge bg-info text-dark">Excused Absent</span>
+              {% elif item.status == 'UA' %}<span class="badge bg-danger">Unexcused Absent</span>
+              {% elif item.status == '18' %}<span class="badge bg-dark">Suspended</span>
+              {% elif item.status == '20' %}<span class="badge bg-black text-white">Expelled</span>
+              {% elif item.status == 'IB' %}<span class="badge bg-secondary">In Building</span>
+              {% else %}<span class="badge bg-secondary">{{ item.status }}</span>{% endif %}
+            </td>
+            <td class="text-end fw-semibold">{{ item.count|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="2" class="text-center text-muted py-4">No records for this period.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends 'school/base.html' %}
+{% load widget_tweaks %}
+
+{% block title %}Edit Attendance | {{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width:620px">
+
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <a href="{% url 'school:attendance-dashboard' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <h5 class="fw-bold mb-0">Edit Attendance Record</h5>
+  </div>
+
+  <!-- Record summary -->
+  <div class="card border-0 shadow-sm mb-3" style="border-radius:.7rem">
+    <div class="card-body py-3 px-4">
+      <div class="row g-2" style="font-size:.85rem">
+        <div class="col-6">
+          <div class="text-muted" style="font-size:.72rem">Student</div>
+          <div class="fw-semibold">{{ attendance.enrollment.student.user.get_full_name }}</div>
+        </div>
+        <div class="col-6">
+          <div class="text-muted" style="font-size:.72rem">Date</div>
+          <div class="fw-semibold">{{ attendance.date|date:"d M Y" }}</div>
+        </div>
+        <div class="col-6">
+          <div class="text-muted" style="font-size:.72rem">Subject</div>
+          <div>{{ attendance.enrollment.lesson.subject.name }}</div>
+        </div>
+        <div class="col-6">
+          <div class="text-muted" style="font-size:.72rem">Grade / Stream</div>
+          <div>{{ attendance.enrollment.student.grade_level.name }} / {{ attendance.enrollment.student.stream.name }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit form -->
+  <form method="post">
+    {% csrf_token %}
+    <div class="card border-0 shadow-sm" style="border-radius:.7rem">
+      <div class="card-body px-4 py-3">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem">Status</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for radio in form.status %}
+            <div class="form-check form-check-inline border rounded px-3 py-2 m-0" style="cursor:pointer;min-width:130px">
+              {{ radio.tag }}
+              <label class="form-check-label ms-1" for="{{ radio.id_for_label }}" style="font-size:.83rem;cursor:pointer">
+                {{ radio.choice_label }}
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          {% if form.status.errors %}
+          <div class="text-danger mt-1" style="font-size:.8rem">{{ form.status.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" style="font-size:.85rem">Remarks</label>
+          {% render_field form.remarks class="form-control" rows="3" %}
+          {% if form.remarks.errors %}
+          <div class="text-danger mt-1" style="font-size:.8rem">{{ form.remarks.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+      </div>
+      <div class="card-footer bg-white border-0 px-4 pb-3 d-flex gap-2">
+        <button type="submit" class="btn btn-success btn-sm px-4">
+          <i class="bi bi-check-lg me-1"></i>Save Changes
+        </button>
+        <a href="{% url 'school:attendance-dashboard' %}" class="btn btn-outline-secondary btn-sm px-4">Cancel</a>
+      </div>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

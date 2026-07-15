@@ -10,22 +10,25 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ─── ENVIRONMENT-SENSITIVE SETTINGS ──────────────────────────────────────────
+# Set these in your .env or server environment before deploying to production.
+# Never commit real values to version control.
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-p852#-s37mchc46a(nr86w&xkmtv2tsrlv@%+gfl(_66g&t_6l',  # dev-only fallback
+)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-p852#-s37mchc46a(nr86w&xkmtv2tsrlv@%+gfl(_66g&t_6l'
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = ['*']
+_allowed = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = _allowed.split(',') if _allowed else (['*'] if DEBUG else [])
 SITE_ID = 1
 
 # Application definition
@@ -57,12 +60,13 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware', 
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'src.middleware.ContentSecurityPolicyMiddleware',
 ]
 
 ROOT_URLCONF = 'src.urls'
@@ -104,6 +108,24 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 RATELIMIT_USE_CACHE = 'default'
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# ─── SESSION & COOKIE SECURITY ────────────────────────────────────────────────
+SESSION_COOKIE_HTTPONLY = True       # JS cannot read session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'     # CSRF protection for cross-origin GETs
+CSRF_COOKIE_HTTPONLY = False         # Must be False — JS reads it for AJAX
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Keep logged in across tabs (set True for higher security)
+
+if not DEBUG:
+    # Production-only: force HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000       # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -208,7 +230,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': 'DEBUG' if DEBUG else 'WARNING',
     },
 }
 
@@ -255,16 +277,26 @@ SMS_PARTNERID = ''
 SMS_SHORTCODE = ''
 SMS_API_URL = ''
 
+# ─── M-PESA DARAJA ───────────────────────────────────────────────────────────
+import os as _os
+MPESA_CONSUMER_KEY    = _os.environ.get('MPESA_CONSUMER_KEY', '')
+MPESA_CONSUMER_SECRET = _os.environ.get('MPESA_CONSUMER_SECRET', '')
+MPESA_SHORTCODE       = _os.environ.get('MPESA_SHORTCODE', '174379')   # Daraja sandbox default
+MPESA_PASSKEY         = _os.environ.get('MPESA_PASSKEY', '')
+MPESA_CALLBACK_URL    = _os.environ.get('MPESA_CALLBACK_URL', '')       # public HTTPS URL
+MPESA_ENV             = _os.environ.get('MPESA_ENV', 'sandbox')         # 'sandbox' or 'production'
+
 # ─── EMAIL ───────────────────────────────────────────────────────────────────
-# Development: Django prints emails to console (default backend).
-# Production: switch backend + fill in SMTP credentials below.
+# Development: prints email to console.
+# Production: uncomment SMTP lines below and fill in credentials.
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 #
-#   EMAIL_BACKEND   = 'django.core.mail.backends.smtp.EmailBackend'
-#   EMAIL_HOST      = 'smtp.gmail.com'          # or your provider
-#   EMAIL_PORT      = 587
-#   EMAIL_USE_TLS   = True
-#   EMAIL_HOST_USER = 'your@email.com'
-#   EMAIL_HOST_PASSWORD = 'app-password'
+# EMAIL_BACKEND      = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST         = 'smtp.gmail.com'
+# EMAIL_PORT         = 587
+# EMAIL_USE_TLS      = True
+# EMAIL_HOST_USER    = 'your@email.com'
+# EMAIL_HOST_PASSWORD = 'app-password'
 #
 DEFAULT_FROM_EMAIL = 'Kiswate Digital <no-reply@kiswate.co.ke>'
 EMAIL_SUBJECT_PREFIX = '[Kiswate] '

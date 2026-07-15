@@ -3,42 +3,36 @@
 {% block title %}Attendance | {{ school.name }}{% endblock %}
 
 {% block content %}
-<header class="header d-flex align-items-center justify-content-between">
-  <div class="d-flex gap-2 align-items-center">
-    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
-    <div>
-      <h6 class="m-0 fw-bold">Attendance</h6>
-      <nav aria-label="breadcrumb" class="small">
-        <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Attendance</li>
-        </ol>
-      </nav>
-    </div>
+<div class="d-flex align-items-center gap-2 px-1 py-2">
+  <div>
+    <h6 class="m-0 fw-bold">Attendance</h6>
+    <nav aria-label="breadcrumb" class="small">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'userauths:teacher-dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Attendance</li>
+      </ol>
+    </nav>
   </div>
+</div>
 
-  <div class="d-flex gap-2 align-items-center">
-    <form method="get" class="d-inline">
-      <div class="input-group input-group-sm" style="width:300px;">
-        <input type="date" name="date" class="form-control" value="{{ request.GET.date }}">
-        <select name="lesson" class="form-select">
-          <option value="">All lessons</option>
-          {% for l in lessons_list %}
-            <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>
-              {{ l.subject.name }} — {{ l.date }}
-            </option>
-          {% endfor %}
-        </select>
-        <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
-      </div>
-    </form>
-
-    <a class="btn btn-sm btn-outline-success"
-       href="{% if request.GET.lesson %}{% url 'teacher-attendance-summary' request.GET.lesson %}{% else %}#{% endif %}">
-      Summary
-    </a>
-  </div>
-</header>
+<div class="d-flex flex-wrap gap-2 align-items-center px-1 pb-2">
+  <form method="get" class="d-flex flex-wrap gap-1 flex-grow-1">
+    <input type="date" name="date" class="form-control form-control-sm" value="{{ request.GET.date }}" style="min-width:130px; flex:1;">
+    <select name="lesson" class="form-select form-select-sm" style="min-width:160px; flex:2;">
+      <option value="">All lessons</option>
+      {% for l in lessons_list %}
+        <option value="{{ l.id }}" {% if request.GET.lesson == l.id|stringformat:"s" %}selected{% endif %}>
+          {{ l.subject.name }} — {{ l.date }}
+        </option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+  </form>
+  <a class="btn btn-sm btn-outline-success flex-shrink-0"
+     href="{% url 'school:teacher-attendance-summary' %}">
+    Summary
+  </a>
+</div>
 
 <section class="content container-fluid py-4">
   {% if messages %}
@@ -82,10 +76,10 @@
           <thead class="table-light">
             <tr>
               <th>Student</th>
-              <th>Lesson</th>
-              <th>Date</th>
+              <th class="hide-sm">Lesson</th>
+              <th class="hide-sm">Date</th>
               <th>Status</th>
-              <th>Marked By</th>
+              <th class="hide-xs">Marked By</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -93,9 +87,14 @@
           <tbody>
             {% for attendance in attendances %}
             <tr>
-              <td>{{ attendance.enrollment.student.user.get_full_name }}</td>
-              <td>{{ attendance.lesson.subject.name }} — {{ attendance.lesson.timetable.grade.name }}</td>
-              <td>{{ attendance.lesson.date }}</td>
+              <td>
+                {{ attendance.enrollment.student.user.get_full_name }}
+                <div class="d-sm-none text-muted" style="font-size:.75rem;">
+                  {{ attendance.lesson.subject.name }} &middot; {{ attendance.lesson.date }}
+                </div>
+              </td>
+              <td class="hide-sm">{{ attendance.lesson.subject.name }} — {{ attendance.lesson.timetable.grade.name }}</td>
+              <td class="hide-sm">{{ attendance.lesson.date }}</td>
               <td>
                 {% if attendance.status == 'P' %}
                   <span class="badge bg-success">Present</span>
@@ -106,11 +105,11 @@
                 {% endif %}
               </td>
 
-              <td>
+              <td class="hide-xs">
                 {% if attendance.marked_by %}
                   {{ attendance.marked_by.user.get_full_name }}
                 {% else %}
-                  Not marked
+                  <span class="text-muted">—</span>
                 {% endif %}
               </td>
 

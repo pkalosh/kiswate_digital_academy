@@ -1,11 +1,12 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"Dashboard/base.html" %}
 {% block title %}Notification Log{% endblock %}
 {% block page_title %}Notification Log{% endblock %}
-{% block nav_notif_open %}show{% endblock %}
+{% block nav_notif_open %}{% if not portal_role %}show{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-success"></i>Notification Log</h5>
+  {% if is_admin %}
   <div class="d-flex gap-2">
     <a href="{% url 'kiswate_digital_app:send_bulk_notification' %}" class="btn btn-brand btn-sm">
       <i class="bi bi-send me-1"></i>Send Bulk
@@ -14,6 +15,7 @@
       <i class="bi bi-file-text me-1"></i>Templates
     </a>
   </div>
+  {% endif %}
 </div>
 
 <div class="table-card">
@@ -37,7 +39,7 @@
         <td>
           <span class="badge rounded-pill
             {% if log.notification_type == 'sms' %}bg-warning-subtle text-warning
-            {% elif log.notification_type == 'email' %}bg-primary-subtle text-primary
+            {% elif log.notification_type == 'email' %}bg-success-subtle text-success
             {% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size:.72rem;">
             <i class="bi {% if log.notification_type == 'sms' %}bi-phone{% elif log.notification_type == 'email' %}bi-envelope{% else %}bi-broadcast{% endif %} me-1"></i>
             {{ log.get_notification_type_display }}

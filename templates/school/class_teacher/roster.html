@@ -1,0 +1,130 @@
+{% extends base_template|default:"school/teacher/base.html" %}
+{% load humanize %}
+{% block title %}Class Roster | {{ stream.grade.name }} {{ stream.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-0"><i class="bi bi-people me-2 text-success"></i>{{ stream.grade.name }} – {{ stream.name }}</h5>
+      <small class="text-muted">{{ rows|length }} active student{{ rows|length|pluralize }}</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'school:class-teacher-roll-call' %}?stream={{ stream.pk }}" class="btn btn-sm btn-success">
+        <i class="bi bi-check2-square me-1"></i>Roll Call
+      </a>
+      <a href="{% url 'school:class-teacher-attendance-summary' %}?stream={{ stream.pk }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-bar-chart me-1"></i>Attendance Summary
+      </a>
+      <a href="{% url 'school:class-teacher-subject-summary' %}?stream={{ stream.pk }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-book me-1"></i>By Subject
+      </a>
+      <a href="{% url 'school:class-teacher-discipline' %}?stream={{ stream.pk }}" class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-shield-exclamation me-1"></i>Discipline
+      </a>
+      {% if is_admin_user %}
+      <a href="{% url 'school:grade-promote' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-up-circle me-1"></i>Promote
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick KPI strip -->
+  <div class="row g-2 mb-3">
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="fw-bold">{{ rows|length }}</div>
+        <small class="text-muted" style="font-size:.72rem;">Students</small>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="fw-bold {% if fee_issues_count > 0 %}text-danger{% else %}text-success{% endif %}">{{ fee_issues_count }}</div>
+        <small class="text-muted" style="font-size:.72rem;">Fee Issues</small>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="fw-bold {% if discipline_open_count > 0 %}text-warning{% else %}text-success{% endif %}">{{ discipline_open_count }}</div>
+        <small class="text-muted" style="font-size:.72rem;">Discipline</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Student table -->
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.83rem;">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th class="d-none d-sm-table-cell">Adm No</th>
+              <th>Attendance</th>
+              <th class="d-none d-sm-table-cell">Fee</th>
+              <th class="d-none d-sm-table-cell">Discipline</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td>
+                <div class="fw-semibold">{{ r.student.user.get_full_name }}</div>
+                <div class="d-sm-none text-muted" style="font-size:.72rem;">
+                  {{ r.student.student_id }}
+                  {% if r.fee_due > 0 %} · <span class="text-danger">KES {{ r.fee_due|floatformat:0 }} due</span>{% endif %}
+                </div>
+              </td>
+              <td class="d-none d-sm-table-cell text-muted">{{ r.student.student_id }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px;min-width:50px;">
+                    <div class="progress-bar {% if r.att_rate >= 80 %}bg-success{% elif r.att_rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}"
+                         style="width:{{ r.att_rate }}%"></div>
+                  </div>
+                  <span class="fw-semibold {% if r.att_rate < 60 %}text-danger{% elif r.att_rate < 80 %}text-warning{% else %}text-success{% endif %}"
+                        style="font-size:.78rem;min-width:30px;">{{ r.att_rate }}%</span>
+                </div>
+              </td>
+              <td class="d-none d-sm-table-cell">
+                {% if r.fee_due > 0 %}
+                <span class="badge bg-danger-subtle text-danger border border-danger" style="font-size:.72rem;">KES {{ r.fee_due|floatformat:0 }}</span>
+                {% else %}
+                <span class="badge bg-success-subtle text-success" style="font-size:.72rem;">OK</span>
+                {% endif %}
+              </td>
+              <td class="d-none d-sm-table-cell">
+                {% if r.discipline > 0 %}
+                <span class="badge bg-warning text-dark" style="font-size:.72rem;">{{ r.discipline }} open</span>
+                {% else %}
+                <span class="text-muted" style="font-size:.75rem;">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'school:student_details' r.student.pk %}" class="btn btn-xs btn-outline-secondary" title="View profile">
+                  <i class="bi bi-person"></i>
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-5">No students in this class.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

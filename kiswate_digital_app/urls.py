@@ -28,6 +28,9 @@ urlpatterns = [
  
     
     # School Subscriptions
+    path('school-subscriptions/', views.school_subscription_list, name='school_subscription_list'),
+    path('school-subscriptions/<uuid:pk>/update/', views.school_subscription_update, name='school_subscription_update'),
+    path('school-subscriptions/<uuid:pk>/delete/', views.school_subscription_delete, name='school_subscription_delete'),
 
     path("invoice-list/", views.invoice_list, name="invoice_list"),
     path("create-invoice/", views.create_invoice, name="create_invoice"),
@@ -58,50 +61,52 @@ urlpatterns = [
     path('users/', views.user_list, name='user_list'),
     path('users/<int:pk>/', views.user_detail, name='user_detail'),
     path('users/<int:pk>/vet/', views.vet_user, name='vet_user'),
+    path('users/<int:pk>/assign-lessons/', views.assign_lessons_to_teacher, name='assign_lessons_to_teacher'),
     path('users/<int:student_pk>/guardian/add/', views.add_guardian, name='add_guardian'),
  
     path('school-enrollments/', views.enrollment_list, name='enrollment_list'),
     path('enrollments/new/', views.enroll_student, name='enroll_student'),
  
     # ── VIRTUAL LEARNING ─────────────────────────────────────────────────────
-    path('classes/', views.virtual_class_list, name='virtual_class_list'),
-    path('classes/new/', views.virtual_class_create, name='virtual_class_create'),
-    path('classes/<int:pk>/', views.virtual_class_detail, name='virtual_class_detail'),
-    path('classes/<int:pk>/edit/', views.virtual_class_edit, name='virtual_class_edit'),
-    path('classes/<int:pk>/cancel/', views.virtual_class_cancel, name='virtual_class_cancel'),
-    path('classes/<int:pk>/join/', views.join_class, name='join_class'),
-    path('classes/<int:pk>/attendance/', views.mark_attendance_manual, name='mark_attendance'),
-    path('classes/<int:pk>/recording/', views.upload_recording, name='upload_recording'),
-    path('classes/<int:pk>/remind/', views.send_class_reminder, name='send_class_reminder'),
- 
-    path('lessons/', views.lesson_list, name='lesson_list'),
-    path('lessons/new/', views.lesson_create, name='lesson_create'),
-    path('lessons/<int:pk>/', views.lesson_detail, name='lesson_detail'),
-    path('lessons/<int:pk>/edit/', views.lesson_edit, name='lesson_edit'),
- 
-    path('assignments/', views.assignment_list, name='assignment_list'),
-    path('assignments/new/', views.assignment_create, name='assignment_create'),
-    path('assignments/<int:pk>/', views.assignment_detail, name='assignment_detail'),
-    path('assignments/<int:pk>/submit/', views.submit_assignment, name='submit_assignment'),
-    path('submissions/<int:pk>/grade/', views.grade_submission, name='grade_submission'),
- 
+    path('dil/classes/', views.virtual_class_list, name='virtual_class_list'),
+    path('dil/classes/new/', views.virtual_class_create, name='virtual_class_create'),
+    path('dil/classes/<int:pk>/', views.virtual_class_detail, name='virtual_class_detail'),
+    path('dil/classes/<int:pk>/edit/', views.virtual_class_edit, name='virtual_class_edit'),
+    path('dil/classes/<int:pk>/cancel/', views.virtual_class_cancel, name='virtual_class_cancel'),
+    path('dil/classes/<int:pk>/join/', views.join_class, name='join_class'),
+    path('dil/classes/<int:pk>/attendance/', views.mark_attendance_manual, name='mark_attendance'),
+    path('dil/classes/<int:pk>/nil/', views.mark_nil_attendance, name='mark_nil_attendance'),
+    path('dil/classes/<int:pk>/recording/', views.upload_recording, name='upload_recording'),
+    path('dil/classes/<int:pk>/remind/', views.send_class_reminder, name='send_class_reminder'),
+
+    path('dil/lessons/', views.lesson_list, name='lesson_list'),
+    path('dil/lessons/new/', views.lesson_create, name='lesson_create'),
+    path('dil/lessons/<int:pk>/', views.lesson_detail, name='lesson_detail'),
+    path('dil/lessons/<int:pk>/edit/', views.lesson_edit, name='lesson_edit'),
+
+    path('dil/assignments/', views.assignment_list, name='assignment_list'),
+    path('dil/assignments/new/', views.assignment_create, name='assignment_create'),
+    path('dil/assignments/<int:pk>/', views.assignment_detail, name='assignment_detail'),
+    path('dil/assignments/<int:pk>/submit/', views.submit_assignment, name='submit_assignment'),
+    path('dil/submissions/<int:pk>/grade/', views.grade_submission, name='grade_submission'),
+
     # ── ASSESSMENTS ──────────────────────────────────────────────────────────
-    path('assessments/', views.assessment_list, name='assessment_list'),
-    path('assessments/new/', views.assessment_create, name='assessment_create'),
-    path('assessments/<int:pk>/', views.assessment_detail, name='assessment_detail'),
-    path('assessments/<int:pk>/questions/', views.assessment_questions, name='assessment_questions'),
-    path('assessments/<int:assessment_pk>/questions/add/', views.question_create, name='question_create'),
-    path('questions/<int:pk>/edit/', views.question_edit, name='question_edit'),
-    path('assessments/<int:pk>/take/', views.take_assessment, name='take_assessment'),
-    path('attempts/<int:pk>/result/', views.assessment_result, name='assessment_result'),
-    path('assessments/<int:pk>/publish/', views.publish_results, name='publish_results'),
- 
+    path('dil/assessments/', views.assessment_list, name='assessment_list'),
+    path('dil/assessments/new/', views.assessment_create, name='assessment_create'),
+    path('dil/assessments/<int:pk>/', views.assessment_detail, name='assessment_detail'),
+    path('dil/assessments/<int:pk>/questions/', views.assessment_questions, name='assessment_questions'),
+    path('dil/assessments/<int:assessment_pk>/questions/add/', views.question_create, name='question_create'),
+    path('dil/questions/<int:pk>/edit/', views.question_edit, name='question_edit'),
+    path('dil/assessments/<int:pk>/take/', views.take_assessment, name='take_assessment'),
+    path('dil/attempts/<int:pk>/result/', views.assessment_result, name='assessment_result'),
+    path('dil/assessments/<int:pk>/publish/', views.publish_results, name='publish_results'),
+
     # ── COMMUNICATION ─────────────────────────────────────────────────────────
-    path('notifications/', views.notification_list, name='notification_list'),
-    path('notifications/templates/', views.notification_template_list, name='notification_template_list'),
-    path('notifications/templates/new/', views.notification_template_create, name='notification_template_create'),
-    path('notifications/templates/<int:pk>/edit/', views.notification_template_edit, name='notification_template_edit'),
-    path('notifications/bulk/', views.send_bulk_notification, name='send_bulk_notification'),
+    path('dil/notifications/', views.notification_list, name='notification_list'),
+    path('dil/notifications/templates/', views.notification_template_list, name='notification_template_list'),
+    path('dil/notifications/templates/new/', views.notification_template_create, name='notification_template_create'),
+    path('dil/notifications/templates/<int:pk>/edit/', views.notification_template_edit, name='notification_template_edit'),
+    path('dil/notifications/bulk/', views.send_bulk_notification, name='send_bulk_notification'),
  
     # ── REPORTS ───────────────────────────────────────────────────────────────
     path('school-reports/', views.reports_dashboard, name='reports_dashboard'),
@@ -111,5 +116,62 @@ urlpatterns = [
     path('reports/schools/', views.school_utilization_report, name='school_utilization_report'),
     path('reports/my/', views.my_performance, name='my_performance'),
 
+    # ── TUITION — ADMIN ───────────────────────────────────────────────────────
+    path('tuition/programs/', views.tuition_program_list, name='tuition_program_list'),
+    path('tuition/programs/new/', views.tuition_program_create, name='tuition_program_create'),
+    path('tuition/programs/<int:pk>/edit/', views.tuition_program_edit, name='tuition_program_edit'),
+    path('tuition/programs/<int:pk>/delete/', views.tuition_program_delete, name='tuition_program_delete'),
+    path('tuition/programs/<int:pk>/assign-teacher/', views.tuition_assign_teacher, name='tuition_assign_teacher'),
 
+    # ── TUITION — PUBLIC ──────────────────────────────────────────────────────
+    path('tuition/', views.tuition_browse, name='tuition_browse'),
+    path('tuition/<int:pk>/', views.tuition_program_detail, name='tuition_program_detail'),
+    path('tuition/<int:pk>/enroll/', views.tuition_enroll, name='tuition_enroll'),
+
+    # ── TUITION — TEACHER ─────────────────────────────────────────────────────
+    path('tuition/teacher/', views.teacher_tuition_dashboard, name='teacher_tuition_dashboard'),
+    path('tuition/teacher/programs/new/', views.teacher_program_create, name='teacher_program_create'),
+    path('tuition/teacher/programs/<int:pk>/edit/', views.teacher_program_edit, name='teacher_program_edit'),
+    path('tuition/teacher/lessons/new/', views.lesson_create, name='teacher_lesson_create'),
+    path('tuition/teacher/classes/new/', views.virtual_class_create, name='teacher_class_create'),
+
+    # ── TUITION — STUDENT ─────────────────────────────────────────────────────
+    path('tuition/student/', views.student_tuition_dashboard, name='student_tuition_dashboard'),
+    path('tuition/student/guardian/', views.student_add_guardian_self, name='student_add_guardian_self'),
+
+    # ── TUITION — PARENT ──────────────────────────────────────────────────────
+    path('tuition/parent/', views.parent_tuition_view, name='parent_tuition_view'),
+    path('tuition/parent/enroll/', views.parent_enroll_child, name='parent_enroll_child'),
+    path('tuition/parent/payments/<int:enrollment_pk>/stk-push/', views.parent_stk_push, name='parent_stk_push'),
+
+    # ── GLOBAL SUBJECTS ────────────────────────────────────────────────────────
+    path('subjects/', views.subject_list, name='subject_list'),
+    path('subjects/create/', views.subject_create, name='subject_create'),
+    path('subjects/<int:pk>/edit/', views.subject_edit, name='subject_edit'),
+    path('subjects/<int:pk>/delete/', views.subject_delete, name='subject_delete'),
+    path('subjects/upload/', views.subject_bulk_upload, name='subject_bulk_upload'),
+
+    # ── PRINCIPAL TUITION ENROLLMENT ───────────────────────────────────────────
+    path('tuition/principal/enroll/', views.principal_enroll_tuition, name='principal_enroll_tuition'),
+
+    # ── IMPERSONATION ──────────────────────────────────────────────────────────
+    path('schools/<int:school_pk>/impersonate/<str:role>/', views.impersonate_school, name='impersonate_school'),
+    path('impersonate/stop/', views.stop_impersonating, name='stop_impersonating'),
+
+    # ── SYSTEM USERS ───────────────────────────────────────────────────────────
+    path('system-users/', views.system_users, name='system_users'),
+    path('system-users/<int:pk>/edit/', views.system_user_edit, name='system_user_edit'),
+
+    # ── GUARDIAN MANAGEMENT ────────────────────────────────────────────────────
+    path('guardians/', views.guardian_list, name='guardian_list'),
+    path('guardians/<int:pk>/edit/', views.guardian_edit, name='guardian_edit'),
+    path('guardians/<int:pk>/delete/', views.guardian_delete, name='guardian_delete'),
+
+    # ── TUITION PAYMENTS ───────────────────────────────────────────────────────
+    path('tuition/payments/', views.tuition_payment_list, name='tuition_payment_list'),
+    path('tuition/payments/<int:pk>/', views.tuition_payment_detail, name='tuition_payment_detail'),
+    path('tuition/payments/<int:pk>/update/', views.tuition_payment_update, name='tuition_payment_update'),
+    path('tuition/student/payments/', views.student_payment_view, name='student_payment_view'),
+    path('tuition/payments/<int:enrollment_pk>/stk-push/', views.tuition_stk_push, name='tuition_stk_push'),
+    path('tuition/mpesa/callback/', views.tuition_mpesa_callback, name='tuition_mpesa_callback'),
 ]

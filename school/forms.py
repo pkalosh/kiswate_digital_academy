@@ -15,6 +15,7 @@ from .models import (
     Assignment, Submission, Role, Invoice, SchoolSubscription, SubscriptionPlan, UploadedFile,
     ContactMessage, Scholarship, ScholarshipApplication, Book, Chapter, LibraryAccess,
     Certificate, Term, School, Streams, TimeSlot, CURRICULUM_CHOICES, Complaint,
+    ExamSession, ExamResult, FeeStructure, FeeType, FeeInvoice, AcademicYear,
 )
 from django.db import transaction
 
@@ -666,6 +667,21 @@ class EnrollmentForm(BaseForm):
             'status': forms.Select(choices=ENROLLMENT_STATUS_CHOICES),
         }
 
+    def __init__(self, *args, school=None, **kwargs):
+        super().__init__(*args, school=school, **kwargs)
+        # Avoid loading 100k+ lessons into a dropdown — scope to today's active lessons
+        from django.utils import timezone
+        from school.models import Lesson as LessonModel
+        if school:
+            today = timezone.now().date()
+            self.fields['lesson'].queryset = LessonModel.objects.filter(
+                timetable__school=school,
+                lesson_date__gte=today,
+            ).select_related('subject', 'time_slot').order_by('lesson_date', 'time_slot__start_time')[:500]
+            self.fields['student'].queryset = self.fields['student'].queryset.filter(
+                school=school
+            ).select_related('user').order_by('user__last_name')
+
 class TermForm(BaseForm):
     class Meta:
         model = Term
@@ -1171,3 +1187,146 @@ class BulkNotificationForm(forms.Form):
         if not any([cleaned.get('channel_inapp'), cleaned.get('channel_email'), cleaned.get('channel_sms')]):
             raise forms.ValidationError('Select at least one delivery channel.')
         return cleaned
+
+
+# ─── EXAM MODULE FORMS ────────────────────────────────────────────────────────
+
+class ExamSessionForm(forms.ModelForm):
+    class Meta:
+        model = ExamSession
+        fields = ['name', 'grade', 'term', 'year', 'cat_out_of', 'assignment_out_of', 'assessment_out_of', 'exam_out_of']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Term 1 End-Term Exams 2025'}),
+            'grade': forms.Select(attrs={'class': 'form-select'}),
+            'term': forms.Select(attrs={'class': 'form-select'}),
+            'year': forms.NumberInput(attrs={'class': 'form-control', 'min': 2020, 'max': 2100}),
+            'cat_out_of': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'}),
+            'assignment_out_of': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'}),
+            'assessment_out_of': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'}),
+            'exam_out_of': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'}),
+        }
+
+    def __init__(self, school, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['grade'].queryset = Grade.objects.filter(school=school, is_active=True)
+        self.fields['term'].queryset = Term.objects.filter(school=school).order_by('-start_date')
+        self.fields['term'].required = False
+
+
+class ExamResultForm(forms.ModelForm):
+    class Meta:
+        model = ExamResult
+        fields = ['cat_score', 'assignment_score', 'assessment_score', 'exam_score']
+        widgets = {
+            'cat_score': forms.NumberInput(attrs={'class': 'form-control form-control-sm score-input', 'step': '0.5', 'min': '0'}),
+            'assignment_score': forms.NumberInput(attrs={'class': 'form-control form-control-sm score-input', 'step': '0.5', 'min': '0'}),
+            'assessment_score': forms.NumberInput(attrs={'class': 'form-control form-control-sm score-input', 'step': '0.5', 'min': '0'}),
+            'exam_score': forms.NumberInput(attrs={'class': 'form-control form-control-sm score-input', 'step': '0.5', 'min': '0'}),
+        }
+
+
+class ExamUploadForm(forms.Form):
+    stream = forms.ModelChoiceField(
+        queryset=Streams.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text='Select the stream this file covers',
+    )
+    subject = forms.ModelChoiceField(
+        queryset=Subject.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    file = forms.FileField(
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xlsx,.xls'}),
+        help_text='Excel file: columns student_id, cat, assignment, assessment, exam',
+    )
+
+    def __init__(self, session, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['stream'].queryset = Streams.objects.filter(grade=session.grade, school=session.school)
+        self.fields['subject'].queryset = Subject.objects.filter(school=session.school, grade=session.grade)
+
+
+# ─── FINANCE MODULE FORMS ─────────────────────────────────────────────────────
+
+class FeeStructureForm(forms.ModelForm):
+    """Used for single-record edit only. Bulk create handled in the view directly."""
+    class Meta:
+        model = FeeStructure
+        fields = ['grade', 'stream', 'term', 'academic_year', 'fee_type', 'description', 'amount']
+        widgets = {
+            'grade': forms.Select(attrs={'class': 'form-select'}),
+            'stream': forms.Select(attrs={'class': 'form-select'}),
+            'term': forms.Select(attrs={'class': 'form-select'}),
+            'academic_year': forms.Select(attrs={'class': 'form-select'}),
+            'fee_type': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.TextInput(attrs={'class': 'form-control'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+        }
+
+    def __init__(self, school, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['grade'].queryset = Grade.objects.filter(school=school, is_active=True)
+        self.fields['stream'].queryset = Streams.objects.filter(school=school)
+        self.fields['stream'].required = False
+        self.fields['term'].queryset = Term.objects.filter(school=school).order_by('-start_date')
+        self.fields['academic_year'].queryset = AcademicYear.objects.filter(school=school).order_by('-start_date')
+        self.fields['academic_year'].required = False
+        self.fields['fee_type'].queryset = FeeType.objects.filter(school=school)
+
+
+class BulkInvoiceGenerateForm(forms.Form):
+    fee_structures = forms.ModelMultipleChoiceField(
+        queryset=FeeStructure.objects.none(),
+        widget=forms.CheckboxSelectMultiple(),
+        label='Fee Structures to Invoice',
+    )
+    due_date = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        required=False,
+        label='Due Date (optional)',
+    )
+    overwrite_existing = forms.BooleanField(required=False, label='Re-generate if invoice already exists')
+
+    def __init__(self, school, term, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['fee_structures'].queryset = FeeStructure.objects.filter(
+            school=school, term=term, is_active=True
+        ).select_related('grade', 'stream')
+
+
+class FeePaymentUploadForm(forms.Form):
+    term = forms.ModelChoiceField(
+        queryset=Term.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    file = forms.FileField(
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.xlsx,.xls'}),
+        help_text='Excel: columns student_id, amount, payment_method (cash/mpesa/cheque/bank), notes',
+    )
+
+    def __init__(self, school, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['term'].queryset = Term.objects.filter(school=school).order_by('-start_date')
+
+
+class FeeInvoiceForm(forms.ModelForm):
+    class Meta:
+        model = FeeInvoice
+        fields = ['student', 'term', 'academic_year', 'description', 'amount_required', 'due_date', 'notes']
+        widgets = {
+            'student': forms.Select(attrs={'class': 'form-select'}),
+            'term': forms.Select(attrs={'class': 'form-select'}),
+            'academic_year': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.TextInput(attrs={'class': 'form-control'}),
+            'amount_required': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+
+    def __init__(self, school, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['student'].queryset = Student.objects.filter(school=school, is_active=True).select_related('user')
+        self.fields['term'].queryset = Term.objects.filter(school=school).order_by('-start_date')
+        self.fields['academic_year'].queryset = AcademicYear.objects.filter(school=school).order_by('-start_date')
+        self.fields['academic_year'].required = False
+        self.fields['due_date'].required = False

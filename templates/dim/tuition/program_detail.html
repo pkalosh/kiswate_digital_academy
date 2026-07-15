@@ -1,0 +1,341 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}{{ program.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .prog-hero {
+    background: linear-gradient(135deg, #0b7a2a 0%, #065f20 70%, #034012 100%);
+    border-radius: 16px;
+    padding: 1.75rem 2rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .prog-hero::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.05);
+  }
+  .prog-hero .back-link { color: rgba(255,255,255,.7); font-size: .8rem; text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; margin-bottom: .5rem; }
+  .prog-hero .back-link:hover { color: #fff; }
+  .prog-hero h5 { font-size: 1.2rem; font-weight: 700; margin: 0 0 .25rem; }
+  .prog-hero .meta { font-size: .82rem; opacity: .8; }
+  .prog-hero .action-area { margin-top: 1rem; }
+
+  .detail-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 1.35rem;
+    margin-bottom: 1rem;
+  }
+  .detail-card h6 { font-weight: 700; font-size: .9rem; margin-bottom: 1rem; color: #111; }
+
+  .teacher-row {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .75rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+  }
+  .teacher-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: #d1fae5;
+    color: #0b7a2a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+
+  .info-list { list-style: none; padding: 0; margin: 0; }
+  .info-list li {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .5rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: .85rem;
+    color: #374151;
+  }
+  .info-list li:last-child { border-bottom: none; }
+  .info-list li i { color: #9ca3af; width: 16px; text-align: center; }
+
+  .content-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .7rem 0;
+    border-bottom: 1px solid #f3f4f6;
+    gap: .75rem;
+  }
+  .content-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .content-row .title { font-weight: 600; font-size: .85rem; color: #111; }
+  .content-row .sub { font-size: .75rem; color: #9ca3af; }
+
+  .lock-state { text-align: center; padding: 3rem 1.5rem; }
+  .lock-state .lock-icon { font-size: 3rem; opacity: .15; display: block; margin-bottom: 1rem; }
+
+  .enroll-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 1.5rem;
+  }
+  .price-display {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #0b7a2a;
+    line-height: 1;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<div class="prog-hero">
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="back-link">
+    <i class="bi bi-arrow-left"></i> Back to Browse
+  </a>
+  <h5>{{ program.name }}</h5>
+  <div class="meta">
+    {{ program.subject.name }}
+    {% if program.level %}&nbsp;·&nbsp;{{ program.get_level_display }}{% endif %}
+    {% if program.category %}&nbsp;·&nbsp;{{ program.get_category_display }}{% endif %}
+    &nbsp;·&nbsp;<i class="bi bi-people me-1"></i>{{ program.enrollments.count }} enrolled
+  </div>
+  <div class="action-area">
+    {% if enrollment %}
+      <span class="badge px-3 py-2" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:.82rem;">
+        <i class="bi bi-check-circle me-1"></i>Enrolled
+      </span>
+    {% elif not request.user.is_authenticated %}
+      <a href="{% url 'userauths:sign-in' %}" class="btn btn-light btn-sm fw-semibold px-3">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Sign In to Enroll
+      </a>
+    {% elif portal_role == 'student' %}
+      <a href="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}" class="btn btn-light btn-sm fw-semibold px-3">
+        <i class="bi bi-plus-circle me-1"></i>Enroll{% if program.price > 0 %} — KES {{ program.price }}{% else %} — Free{% endif %}
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- Left sidebar: Program info -->
+  <div class="col-12 col-lg-4">
+
+    <!-- Teacher -->
+    {% if program.teacher %}
+    <div class="detail-card">
+      <h6><i class="bi bi-person-badge me-2 text-success"></i>Instructor</h6>
+      <div class="teacher-row">
+        <div class="teacher-avatar"><i class="bi bi-person"></i></div>
+        <div>
+          <div class="fw-semibold" style="font-size:.88rem;">{{ program.teacher.full_name }}</div>
+          <div class="text-muted" style="font-size:.75rem;">DIL Teacher</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Program Details -->
+    <div class="detail-card">
+      <h6><i class="bi bi-info-circle me-2 text-success"></i>Program Details</h6>
+      <ul class="info-list">
+        <li><i class="bi bi-book"></i><span><strong>Subject:</strong> {{ program.subject.name }}</span></li>
+        {% if program.level %}
+        <li><i class="bi bi-bar-chart"></i><span><strong>Level:</strong> {{ program.get_level_display }}</span></li>
+        {% endif %}
+        {% if program.category %}
+        <li><i class="bi bi-tag"></i><span><strong>Category:</strong> {{ program.get_category_display }}</span></li>
+        {% endif %}
+        <li><i class="bi bi-people"></i><span><strong>Enrolled:</strong> {{ program.enrollments.count }} students</span></li>
+        <li>
+          <i class="bi bi-cash"></i>
+          <span>
+            <strong>Price:</strong>&nbsp;
+            {% if program.price > 0 %}
+              <span class="fw-bold text-success">KES {{ program.price }}</span>
+            {% else %}
+              <span class="badge" style="background:#d1fae5;color:#065f46;font-size:.72rem;">Free</span>
+            {% endif %}
+          </span>
+        </li>
+      </ul>
+      {% if program.description %}
+      <div class="mt-3 pt-3" style="border-top:1px solid #f3f4f6;">
+        <div class="text-muted small" style="line-height:1.6;">{{ program.description }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Enroll CTA (non-enrolled students, sticky on desktop) -->
+    {% if not enrollment and portal_role == 'student' %}
+    <div class="enroll-card">
+      <div class="price-display mb-1">
+        {% if program.price > 0 %}KES {{ program.price }}{% else %}Free{% endif %}
+      </div>
+      <div class="text-muted small mb-3">
+        {% if program.price > 0 %}One-time program fee{% else %}No cost to enroll{% endif %}
+      </div>
+      <a href="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}" class="btn btn-brand w-100">
+        <i class="bi bi-plus-circle me-1"></i>Enroll Now
+      </a>
+    </div>
+    {% elif portal_role == 'parent' and not parent_enroll %}
+    <div class="enroll-card">
+      <div class="fw-semibold small mb-1">
+        {% if program.price > 0 %}KES {{ program.price }}{% else %}Free{% endif %}
+      </div>
+      <div class="text-muted small mb-3">Enroll your child in this program</div>
+      <a href="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}" class="btn btn-brand w-100">
+        <i class="bi bi-person-plus me-1"></i>Enroll a Child
+      </a>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Right main area -->
+  <div class="col-12 col-lg-8">
+
+    {% if enrolling %}
+
+    {% if parent_enroll %}
+    <!-- Parent enrolling a child -->
+    <div class="detail-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-person-plus me-2 text-success"></i>Enroll Your Child</h6>
+      <p class="text-muted small mb-3">
+        Select which child to enroll in <strong>{{ program.name }}</strong>.
+        {% if program.price > 0 %}A fee of <strong>KES {{ program.price }}</strong> applies.{% else %}This program is free.{% endif %}
+      </p>
+      {% if tuition_profiles %}
+      <form method="post" action="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Select Child</label>
+          <select name="student_pk" class="form-select" required>
+            <option value="">— choose a child —</option>
+            {% for tp in tuition_profiles %}
+            <option value="{{ tp.pk }}">{{ tp.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-brand w-100">
+          <i class="bi bi-check-circle me-1"></i>Confirm Enrollment
+        </button>
+      </form>
+      {% else %}
+      <div class="alert alert-warning small py-2">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        No approved DIL student profiles are linked to your children. Ask your child to register on the DIL portal first.
+      </div>
+      <a href="{% url 'kiswate_digital_app:parent_tuition_view' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+      </a>
+      {% endif %}
+    </div>
+
+    {% else %}
+    <!-- Student self-enrollment form -->
+    <div class="detail-card">
+      <h6><i class="bi bi-journal-check me-2 text-brand"></i>Complete Enrollment</h6>
+      <form method="post" action="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}">
+        {% csrf_token %}
+        {% if program.price > 0 and pay_form %}
+        <div class="alert alert-success d-flex gap-2 align-items-start mb-3" style="border-radius:10px;font-size:.85rem;">
+          <i class="bi bi-info-circle mt-1 flex-shrink-0"></i>
+          <span>This program costs <strong>KES {{ program.price }}</strong>. Provide payment details below.</span>
+        </div>
+        {% for field in pay_form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        {% endif %}
+        <button type="submit" class="btn btn-brand w-100 mt-2">
+          <i class="bi bi-check-circle me-1"></i>Confirm Enrollment
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% elif enrollment %}
+
+    <!-- Upcoming Classes -->
+    {% if upcoming_classes %}
+    <div class="detail-card">
+      <h6><i class="bi bi-camera-video me-2 text-success"></i>Upcoming Classes</h6>
+      {% for vc in upcoming_classes %}
+      <div class="content-row">
+        <div>
+          <div class="title">{{ vc.title }}</div>
+          <div class="sub"><i class="bi bi-calendar3 me-1"></i>{{ vc.scheduled_at|date:"D, d M Y · H:i" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:join_class' vc.pk %}" class="btn btn-brand btn-xs px-3">Join</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Pending Assignments -->
+    {% if pending_assignments %}
+    <div class="detail-card">
+      <h6><i class="bi bi-file-earmark-text me-2 text-warning"></i>Pending Assignments</h6>
+      {% for a in pending_assignments %}
+      <div class="content-row">
+        <div>
+          <div class="title">{{ a.title }}</div>
+          <div class="sub"><i class="bi bi-clock me-1"></i>Due {{ a.due_date|date:"d M Y H:i" }}</div>
+        </div>
+        <a href="{% url 'kiswate_digital_app:assignment_detail' a.pk %}" class="btn btn-outline-success btn-xs px-3">View</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Lessons -->
+    <div class="detail-card">
+      <h6><i class="bi bi-journal-text me-2 text-success"></i>Lessons {% if lessons %}<span class="badge" style="background:#d1fae5;color:#065f46;font-size:.72rem;margin-left:.25rem;">{{ lessons|length }}</span>{% endif %}</h6>
+      {% if lessons %}
+        {% for lesson in lessons %}
+        <div class="content-row">
+          <div>
+            <div class="title">{{ lesson.title }}</div>
+            {% if lesson.topic %}<div class="sub">{{ lesson.topic }}</div>{% endif %}
+          </div>
+          <a href="{% url 'kiswate_digital_app:lesson_detail' lesson.pk %}" class="btn btn-outline-secondary btn-xs px-3">Open</a>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="text-muted small text-center py-3" style="opacity:.6;">No lessons published yet.</div>
+      {% endif %}
+    </div>
+
+    {% else %}
+    <!-- Not enrolled -->
+    <div class="detail-card lock-state">
+      <i class="bi bi-lock lock-icon"></i>
+      {% if portal_role == 'student' %}
+      <h6 class="text-muted mb-2">Enroll to access lessons, assignments, and live classes</h6>
+      <a href="{% url 'kiswate_digital_app:tuition_enroll' program.pk %}" class="btn btn-brand px-4">
+        <i class="bi bi-plus-circle me-1"></i>Enroll Now{% if program.price > 0 %} — KES {{ program.price }}{% endif %}
+      </a>
+      {% elif not request.user.is_authenticated %}
+      <h6 class="text-muted mb-2">Sign in as a student to access this program</h6>
+      <a href="{% url 'userauths:sign-in' %}" class="btn btn-brand px-4">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Sign In to Enroll
+      </a>
+      {% else %}
+      <h6 class="text-muted mb-0">Content is available to enrolled students only</h6>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

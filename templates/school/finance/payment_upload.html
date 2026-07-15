@@ -1,0 +1,44 @@
+{% extends "school/base.html" %}
+{% block title %}Upload Payments{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="mb-3"><a href="{% url 'school:finance-dashboard' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Finance Dashboard</a></div>
+  <div class="row justify-content-center">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0"><i class="bi bi-file-earmark-excel me-2"></i>Bulk Payment Upload</h5>
+        </div>
+        <div class="card-body">
+          {% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} py-2">{{ msg }}</div>{% endfor %}{% endif %}
+          <p class="text-muted small">Upload an Excel file with payment records. The system will match each row to an existing invoice and record the payment.</p>
+
+          <div class="alert alert-info py-2 mb-4">
+            <strong><i class="bi bi-info-circle me-1"></i>Excel Format</strong>
+            <table class="table table-sm table-bordered mt-2 mb-0 small">
+              <thead class="table-light"><tr><th>Column</th><th>Description</th><th>Required</th></tr></thead>
+              <tbody>
+                <tr><td><code>student_id</code></td><td>Student User ID or Admission Number</td><td>Yes</td></tr>
+                <tr><td><code>term_name</code></td><td>Term name (must match exactly)</td><td>Yes</td></tr>
+                <tr><td><code>amount_paid</code></td><td>Amount paid (numeric)</td><td>Yes</td></tr>
+                <tr><td><code>payment_date</code></td><td>Date (YYYY-MM-DD)</td><td>No</td></tr>
+                <tr><td><code>reference</code></td><td>M-PESA code or bank reference</td><td>No</td></tr>
+                <tr><td><code>notes</code></td><td>Any additional notes</td><td>No</td></tr>
+              </tbody>
+            </table>
+            <a href="/static/samples/payments_upload_sample.xlsx" class="btn btn-sm btn-outline-info mt-2"><i class="bi bi-download me-1"></i>Download Sample</a>
+          </div>
+
+          <form method="post" enctype="multipart/form-data">{% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Excel File (.xlsx)</label>
+              <input type="file" name="excel_file" accept=".xlsx" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-success"><i class="bi bi-upload me-1"></i>Upload & Process</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

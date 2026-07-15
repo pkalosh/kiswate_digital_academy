@@ -1,0 +1,198 @@
+{% extends "Dashboard/base.html" %}
+{% block title %}Global Subjects{% endblock %}
+{% block nav_subjects %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-book me-2"></i>Global Subjects</h5>
+    <small class="text-muted">{{ total }} subject{{ total|pluralize }} · used across all tuition programs</small>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
+      <i class="bi bi-plus-circle me-1"></i>Add Subject
+    </button>
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+      <i class="bi bi-cloud-upload me-1"></i>Bulk Upload
+    </button>
+  </div>
+</div>
+
+<!-- Search -->
+<form class="mb-3 d-flex gap-2" method="get">
+  <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search by name or code…">
+  <button class="btn btn-outline-secondary btn-sm">Search</button>
+  {% if q %}<a href="?" class="btn btn-outline-danger btn-sm">Clear</a>{% endif %}
+</form>
+
+<div class="table-card">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Subject Name</th>
+        <th>Code</th>
+        <th>Description</th>
+        <th>Programs</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in subjects %}
+      <tr>
+        <td class="text-muted small">{{ forloop.counter }}</td>
+        <td class="fw-semibold">{{ s.name }}</td>
+        <td><span class="badge bg-secondary">{{ s.code }}</span></td>
+        <td class="text-muted small">{{ s.description|truncatechars:60|default:"—" }}</td>
+        <td>
+          <span class="badge bg-success text-white">{{ s.programs.count }}</span>
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <button class="btn btn-xs btn-outline-success" data-bs-toggle="modal" data-bs-target="#editModal{{ s.pk }}">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <form method="post" action="{% url 'kiswate_digital_app:subject_delete' s.pk %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-xs btn-outline-danger"
+                      onclick="return confirm('Delete {{ s.name }}? This cannot be undone.')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" class="text-center text-muted py-5">
+          <i class="bi bi-book fs-2 d-block mb-2 opacity-25"></i>
+          No subjects yet. Add one or upload a spreadsheet.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}">Prev</a></li>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <li class="page-item"><a class="page-link" href="?page={{ num }}&q={{ q }}">{{ num }}</a></li>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}">Next</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+
+<!-- Add Subject Modal -->
+<div class="modal fade" id="addSubjectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'kiswate_digital_app:subject_create' %}">
+      {% csrf_token %}
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Subject</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label">{{ field.label }} {% if field.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+            {{ field }}
+            {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brand btn-sm">Add Subject</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Bulk Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'kiswate_digital_app:subject_bulk_upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-cloud-upload me-2"></i>Bulk Upload Subjects</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small mb-3">
+            <strong>Required columns:</strong> <code>name</code>, <code>code</code><br>
+            <strong>Optional columns:</strong> <code>description</code><br>
+            Existing subjects with the same <code>code</code> will be updated. Supported formats: <code>.csv</code>, <code>.xlsx</code>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Upload File <span class="text-danger">*</span></label>
+            <input type="file" name="file" class="form-control" accept=".csv,.xlsx,.xls" required>
+          </div>
+          <!-- Download template hint -->
+          <div class="text-muted small">
+            <i class="bi bi-info-circle me-1"></i>
+            Example row: <code>Mathematics, MATH, Core subject for all levels</code>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brand btn-sm">Upload</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Edit modals -->
+{% for s in subjects %}
+<div class="modal fade" id="editModal{{ s.pk }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'kiswate_digital_app:subject_edit' s.pk %}">
+      {% csrf_token %}
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Edit: {{ s.name }}</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" value="{{ s.name }}" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Code <span class="text-danger">*</span></label>
+            <input type="text" name="code" value="{{ s.code }}" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control form-control-sm" rows="2">{{ s.description }}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brand btn-sm">Save Changes</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

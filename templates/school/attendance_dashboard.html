@@ -300,9 +300,10 @@
 </div><!-- /tab-content -->
 </div><!-- /container -->
 
+{{ teacher_missed_details_json|json_script:"teacher-details-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-const teacherDetails = {{ teacher_missed_details_json|safe }};
+const teacherDetails = JSON.parse(document.getElementById('teacher-details-data').textContent);
 
 function setRange(days) {
   const today = new Date();

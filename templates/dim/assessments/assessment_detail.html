@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ assessment.title }}{% endblock %}
 {% block page_title %}Assessment Detail{% endblock %}
 {% block nav_assess_open %}show{% endblock %}
@@ -17,7 +17,7 @@
       <i class="bi bi-play me-1"></i>Take Assessment
     </a>
     {% elif profile.role == 'student' and my_attempt %}
-    <a href="{% url 'kiswate_digital_app:assessment_result' my_attempt.pk %}" class="btn btn-sm btn-outline-primary">
+    <a href="{% url 'kiswate_digital_app:assessment_result' my_attempt.pk %}" class="btn btn-sm btn-outline-success">
       <i class="bi bi-graph-up me-1"></i>View Result
     </a>
     {% endif %}

@@ -3,11 +3,11 @@
 {% block nav_attendance %}active{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h5 class="fw-bold mb-0">Attendance Records</h5>
   {% if children|length > 1 %}
-  <form method="get" class="d-flex gap-2">
-    <select name="child" class="form-select form-select-sm" onchange="this.form.submit()">
+  <form method="get">
+    <select name="child" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:150px;">
       <option value="">All Children</option>
       {% for child in children %}
       <option value="{{ child.pk }}" {% if selected_child_id == child.pk|stringformat:"s" %}selected{% endif %}>
@@ -44,14 +44,16 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0 k-tight">
       <thead class="table-light">
-        <tr><th>Date</th><th>Subject</th><th>Time</th><th>Status</th><th>Remarks</th></tr>
+        <tr><th>Date / Subject</th><th class="hide-xs">Time</th><th>Status</th><th class="hide-sm">Remarks</th></tr>
       </thead>
       <tbody>
         {% for rec in ad.records %}
         <tr>
-          <td>{{ rec.date }}</td>
-          <td>{{ rec.enrollment.lesson.subject.name|default:"—" }}</td>
           <td>
+            {{ rec.date }}
+            <div class="text-muted" style="font-size:.75rem;">{{ rec.enrollment.lesson.subject.name|default:"—" }}</div>
+          </td>
+          <td class="hide-xs">
             {% if rec.enrollment.lesson.time_slot %}
               {{ rec.enrollment.lesson.time_slot.start_time|time:"H:i" }}–{{ rec.enrollment.lesson.time_slot.end_time|time:"H:i" }}
             {% else %}—{% endif %}
@@ -61,7 +63,7 @@
               {{ rec.get_status_display }}
             </span>
           </td>
-          <td class="text-muted small">{{ rec.remarks|default:"—"|truncatechars:40 }}</td>
+          <td class="hide-sm text-muted small">{{ rec.remarks|default:"—"|truncatechars:40 }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="5" class="text-center text-muted py-3">No attendance records.</td></tr>

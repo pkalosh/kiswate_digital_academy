@@ -1,0 +1,57 @@
+{% extends base_template|default:"school/base.html" %}
+{% block title %}Bulk Upload – {{ session.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="mb-3">
+    <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Session
+    </a>
+  </div>
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Bulk Upload Scores</h5>
+          <small>{{ session.name }}</small>
+        </div>
+        <div class="card-body">
+          {% if messages %}
+            {% for msg in messages %}
+              <div class="alert alert-{{ msg.tags }} py-2">{{ msg }}</div>
+            {% endfor %}
+          {% endif %}
+
+          <div class="alert alert-info py-2 small mb-3">
+            <strong>Excel Format:</strong> Columns must be:
+            <code>student_id, cat, assignment, assessment, exam</code><br>
+            Row 1 = header. One row per student.
+          </div>
+
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Stream</label>
+              {{ form.stream }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Subject</label>
+              {{ form.subject }}
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Excel File (.xlsx)</label>
+              {{ form.file }}
+              <div class="form-text">{{ form.file.help_text }}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-cloud-upload me-1"></i>Upload & Save
+              </button>
+              <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

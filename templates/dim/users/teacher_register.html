@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
 {% block title %}Teacher Registration{% endblock %}
 {% block page_title %}Teacher Registration{% endblock %}
 
@@ -7,7 +7,7 @@
   <div class="col-lg-7">
     <div class="text-center mb-4">
       <div class="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-3"
-           style="width:56px;height:56px;font-size:1.4rem;background:#1e40af;">
+           style="width:56px;height:56px;font-size:1.4rem;background:#065f46;">
         <i class="bi bi-person-badge text-white"></i>
       </div>
       <h5 class="fw-bold">Teacher Registration</h5>

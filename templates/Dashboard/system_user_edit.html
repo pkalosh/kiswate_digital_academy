@@ -1,0 +1,130 @@
+{% extends "dim/base.html" %}
+{% block title %}Edit User — {{ target_user.get_full_name|default:target_user.email }}{% endblock %}
+{% block page_title %}Edit System User{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h5 class="mb-0"><i class="bi bi-person-gear me-2 text-success"></i>Edit User</h5>
+  <a href="{% url 'kiswate_digital_app:system_users' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Edit Details -->
+  <div class="col-lg-7">
+    <div class="form-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-person me-1"></i>User Details</h6>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">First Name</label>
+            <input type="text" name="first_name" value="{{ target_user.first_name }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Last Name</label>
+            <input type="text" name="last_name" value="{{ target_user.last_name }}" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Email (read-only)</label>
+            <input type="text" value="{{ target_user.email }}" class="form-control" readonly>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone Number</label>
+            <input type="text" name="phone_number" value="{{ target_user.phone_number }}" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold d-block mb-2">Platform Roles</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="is_kiswate_admin" id="is_kiswate_admin"
+                    {% if target_user.is_kiswate_admin %}checked{% endif %}>
+                  <label class="form-check-label" for="is_kiswate_admin">Kiswate Admin</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="is_kiswate_user" id="is_kiswate_user"
+                    {% if target_user.is_kiswate_user %}checked{% endif %}>
+                  <label class="form-check-label" for="is_kiswate_user">Kiswate User</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="is_admin" id="is_admin"
+                    {% if target_user.is_admin %}checked{% endif %}>
+                  <label class="form-check-label" for="is_admin">School Admin</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                    {% if target_user.is_active %}checked{% endif %}>
+                  <label class="form-check-label" for="is_active">Active</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <button type="submit" class="btn btn-brand"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Password + Quick Actions -->
+  <div class="col-lg-5">
+    <div class="form-card mb-3">
+      <h6 class="fw-bold mb-3"><i class="bi bi-key me-1"></i>Change Password</h6>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="change_password">
+        <div class="mb-3">
+          <label class="form-label">New Password</label>
+          <input type="password" name="new_password" class="form-control" placeholder="Min. 6 characters">
+        </div>
+        <button type="submit" class="btn btn-warning w-100">
+          <i class="bi bi-shield-lock me-1"></i>Update Password
+        </button>
+      </form>
+    </div>
+
+    <div class="form-card">
+      <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-1"></i>Account Info</h6>
+      <table class="table table-sm mb-0" style="font-size:.85rem;">
+        <tr><td class="text-muted">Email</td><td>{{ target_user.email }}</td></tr>
+        <tr><td class="text-muted">Joined</td><td>{{ target_user.date_joined|date:"M d, Y" }}</td></tr>
+        <tr><td class="text-muted">Last Login</td><td>{{ target_user.last_login|date:"M d, Y H:i"|default:"Never" }}</td></tr>
+        <tr><td class="text-muted">Status</td>
+          <td>
+            {% if target_user.is_active %}
+              <span class="badge badge-approved">Active</span>
+            {% else %}
+              <span class="badge badge-rejected">Inactive</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr><td class="text-muted">Is Teacher</td><td>{% if target_user.is_teacher %}Yes{% else %}No{% endif %}</td></tr>
+        <tr><td class="text-muted">Is Student</td><td>{% if target_user.is_student %}Yes{% else %}No{% endif %}</td></tr>
+        <tr><td class="text-muted">Is Parent</td><td>{% if target_user.is_parent %}Yes{% else %}No{% endif %}</td></tr>
+        <tr><td class="text-muted">Is Principal</td><td>{% if target_user.is_principal %}Yes{% else %}No{% endif %}</td></tr>
+      </table>
+      <form method="post" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="toggle_active">
+        <button type="submit" class="btn btn-sm w-100 {% if target_user.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+          {% if target_user.is_active %}
+            <i class="bi bi-person-dash me-1"></i>Deactivate User
+          {% else %}
+            <i class="bi bi-person-check me-1"></i>Activate User
+          {% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

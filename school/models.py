@@ -189,6 +189,7 @@ class School(models.Model):
     address = models.TextField(blank=True)
     contact_email = models.EmailField()
     contact_phone = models.CharField(max_length=15)
+    logo = models.ImageField(upload_to='school_logos/', blank=True, null=True)
     county = models.ForeignKey(County, on_delete=models.SET_NULL, null=True, blank=True)
     city = models.ForeignKey(City, on_delete=models.SET_NULL, null=True, blank=True)
     constituency = models.ForeignKey(Constituency, on_delete=models.SET_NULL, null=True, blank=True)
@@ -243,9 +244,12 @@ class Streams(models.Model):
 
 #Role Model for granular permissions
 class Role(models.Model):
-    name = models.CharField(max_length=50, unique=True)  # e.g., 'mark_suspension', 'view_parental_dashboard'
+    name = models.CharField(max_length=50)  # e.g., 'class_teacher', 'mark_suspension'
     description = models.TextField(blank=True)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='roles')
+
+    class Meta:
+        unique_together = [('name', 'school')]
 
     def __str__(self):
         return self.name
@@ -341,8 +345,32 @@ class StaffProfile(models.Model):
     # New: M2M for permissions
     roles = models.ManyToManyField(Role, blank=True, related_name='staff_members')
 
+    @property
+    def is_class_teacher(self):
+        """True when the staff member has the school-level 'class_teacher' role."""
+        return self.roles.filter(name='class_teacher').exists()
+
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.school.name}"
+
+
+class ClassTeacherAssignment(models.Model):
+    """Maps one teacher to one stream as class teacher for a given year."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='class_teacher_assignments')
+    teacher = models.ForeignKey(StaffProfile, on_delete=models.CASCADE, related_name='class_teacher_streams')
+    stream = models.ForeignKey('Streams', on_delete=models.CASCADE, related_name='class_teacher_assignments')
+    assigned_by = models.ForeignKey(
+        StaffProfile, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ct_assignments_made'
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('stream', 'school')]  # one class teacher per stream
+
+    def __str__(self):
+        return f"{self.teacher} → {self.stream}"
+
 
 # Parent
 class Parent(models.Model):
@@ -1321,13 +1349,23 @@ class AttendanceAlert(models.Model):
 
 
 class Upload(models.Model):
+    STATUS_CHOICES = [
+        ('pending',    'Pending'),
+        ('processing', 'Processing'),
+        ('done',       'Done'),
+        ('failed',     'Failed'),
+    ]
     file = models.FileField(upload_to='uploads/')
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='uploads', blank=True, null=True)
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    result_json = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Upload by {self.uploaded_by}"
+        return f"Upload #{self.pk} by {self.uploaded_by} ({self.category})"
 
 
 # ─── AUDIT LOG ───────────────────────────────────────────────────────────────
@@ -1490,3 +1528,198 @@ class FeeInvoice(models.Model):
         else:
             self.status = 'pending'
         super().save(*args, **kwargs)
+
+
+# ─── EXAM MODULE ──────────────────────────────────────────────────────────────
+
+def cbc_grade_band(percentage):
+    if percentage >= 75:
+        return 'EE'
+    elif percentage >= 50:
+        return 'ME'
+    elif percentage >= 25:
+        return 'AE'
+    return 'BE'
+
+
+def kcse_grade(percentage):
+    thresholds = [
+        (80, 'A'), (75, 'A-'), (70, 'B+'), (65, 'B'), (60, 'B-'),
+        (55, 'C+'), (50, 'C'), (45, 'C-'), (40, 'D+'), (35, 'D'),
+        (30, 'D-'),
+    ]
+    for floor, grade in thresholds:
+        if percentage >= floor:
+            return grade
+    return 'E'
+
+
+class ExamSession(models.Model):
+    """One exam period for a grade in a school (e.g., Term 1 End-Term 2025, Grade 7)."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='exam_sessions')
+    term = models.ForeignKey(Term, on_delete=models.SET_NULL, null=True, blank=True, related_name='exam_sessions')
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='exam_sessions')
+    name = models.CharField(max_length=150)
+    year = models.PositiveIntegerField()
+    cat_out_of = models.FloatField(default=30.0)
+    assignment_out_of = models.FloatField(default=10.0)
+    assessment_out_of = models.FloatField(default=10.0)
+    exam_out_of = models.FloatField(default=50.0)
+    is_published = models.BooleanField(default=False)
+    created_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='exam_sessions_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-year', '-created_at']
+        indexes = [models.Index(fields=['school', 'year', 'is_published'])]
+
+    def __str__(self):
+        return f"{self.name} – {self.grade} ({self.year})"
+
+    @property
+    def total_marks(self):
+        return self.cat_out_of + self.assignment_out_of + self.assessment_out_of + self.exam_out_of
+
+
+class ExamResult(models.Model):
+    """Per-student, per-subject score for an ExamSession."""
+    session = models.ForeignKey(ExamSession, on_delete=models.CASCADE, related_name='results')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='exam_results')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='exam_results')
+    stream = models.ForeignKey(Streams, on_delete=models.CASCADE, related_name='exam_results', null=True, blank=True)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='exam_results')
+    cat_score = models.FloatField(null=True, blank=True)
+    assignment_score = models.FloatField(null=True, blank=True)
+    assessment_score = models.FloatField(null=True, blank=True)
+    exam_score = models.FloatField(null=True, blank=True)
+    entered_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='exam_results_entered')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('session', 'student', 'subject')
+        ordering = ['student__user__last_name', 'student__user__first_name']
+        indexes = [
+            models.Index(fields=['session', 'stream']),
+            models.Index(fields=['session', 'subject']),
+            models.Index(fields=['student', 'session']),
+        ]
+
+    def __str__(self):
+        return f"{self.student} – {self.subject} – {self.session}"
+
+    @property
+    def total(self):
+        scores = [s for s in [self.cat_score, self.assignment_score, self.assessment_score, self.exam_score] if s is not None]
+        return round(sum(scores), 2) if scores else None
+
+    @property
+    def percentage(self):
+        t = self.total
+        max_t = self.session.total_marks
+        if t is not None and max_t:
+            return round((t / max_t) * 100, 1)
+        return None
+
+    @property
+    def grade_band(self):
+        pct = self.percentage
+        return cbc_grade_band(pct) if pct is not None else '–'
+
+    @property
+    def kcse_grade_label(self):
+        pct = self.percentage
+        return kcse_grade(pct) if pct is not None else '–'
+
+
+# ─── FINANCE MODULE ───────────────────────────────────────────────────────────
+
+FEE_TYPE_CHOICES = [
+    ('tuition', 'Tuition Fee'),
+    ('development', 'Development Levy'),
+    ('activity', 'Activity Fee'),
+    ('boarding', 'Boarding Fee'),
+    ('transport', 'Transport Fee'),
+    ('uniform', 'Uniform Fee'),
+    ('exam', 'Exam Fee'),
+    ('other', 'Other'),
+]
+
+
+class FeeType(models.Model):
+    """School-defined fee type names (replaces hardcoded FEE_TYPE_CHOICES)."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='fee_types')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('school', 'name')
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class FeeStructure(models.Model):
+    """Defines the fee charged for a grade (optionally a specific stream) per term."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='fee_structures')
+    grade = models.ForeignKey(Grade, on_delete=models.CASCADE, related_name='fee_structures')
+    stream = models.ForeignKey(
+        Streams, on_delete=models.CASCADE, related_name='fee_structures',
+        null=True, blank=True, help_text='Leave blank to apply to all streams in the grade'
+    )
+    term = models.ForeignKey(Term, on_delete=models.CASCADE, related_name='fee_structures')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.SET_NULL, null=True, blank=True, related_name='fee_structures')
+    fee_type = models.ForeignKey(FeeType, on_delete=models.PROTECT, related_name='fee_structures', null=True, blank=True)
+    description = models.CharField(max_length=255, default='School Fees')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.00'))])
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(StaffProfile, on_delete=models.SET_NULL, null=True, related_name='fee_structures_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['grade__name', 'fee_type__name']
+        unique_together = ('school', 'grade', 'stream', 'term', 'fee_type')
+        indexes = [models.Index(fields=['school', 'term', 'is_active'])]
+
+    def __str__(self):
+        stream_label = f' – {self.stream.name}' if self.stream else ''
+        fee_label = self.fee_type.name if self.fee_type else 'Unknown'
+        return f"{fee_label} | {self.grade.name}{stream_label} | {self.term.name} | KES {self.amount}"
+
+
+class ExamUploadJob(models.Model):
+    STATUS_PENDING    = 'pending'
+    STATUS_PROCESSING = 'processing'
+    STATUS_DONE       = 'done'
+    STATUS_FAILED     = 'failed'
+    STATUS_CHOICES = [
+        (STATUS_PENDING,    'Pending'),
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_DONE,       'Done'),
+        (STATUS_FAILED,     'Failed'),
+    ]
+
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session      = models.ForeignKey('ExamSession', on_delete=models.CASCADE, related_name='upload_jobs')
+    school       = models.ForeignKey('School', on_delete=models.CASCADE, related_name='exam_upload_jobs')
+    stream       = models.ForeignKey('Streams', on_delete=models.SET_NULL, null=True, related_name='exam_upload_jobs')
+    subject      = models.ForeignKey('Subject', on_delete=models.SET_NULL, null=True, related_name='exam_upload_jobs')
+    uploaded_by  = models.ForeignKey('userauths.User', on_delete=models.SET_NULL, null=True)
+    file_path    = models.CharField(max_length=500)
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    total_rows   = models.PositiveIntegerField(default=0)
+    processed    = models.PositiveIntegerField(default=0)
+    saved        = models.PositiveIntegerField(default=0)
+    skipped      = models.PositiveIntegerField(default=0)
+    error        = models.TextField(blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+    finished_at  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @property
+    def progress_pct(self):
+        if self.total_rows:
+            return min(100, int(self.processed / self.total_rows * 100))
+        return 0

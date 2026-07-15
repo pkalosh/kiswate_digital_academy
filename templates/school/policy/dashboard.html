@@ -1,11 +1,28 @@
 {% extends "school/policy/base.html" %}
 {% load humanize %}
-{% block title %}National Dashboard{% endblock %}
-{% block nav_dash %}active{% endblock %}
-{% block page_title %}National School Intelligence Dashboard{% endblock %}
+{% block title %}
+  {% if active_view == 'schools' %}Schools Report
+  {% elif active_view == 'teachers' %}Teacher Performance
+  {% elif active_view == 'grades' %}Grade Performance
+  {% elif active_view == 'subjects' %}Subject Attendance
+  {% elif active_view == 'discipline' %}Discipline Report
+  {% else %}National Dashboard
+  {% endif %}
+{% endblock %}
+{% block nav_dash %}{% if not active_view %}active{% endif %}{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block page_title %}
+  {% if active_view == 'schools' %}Schools Report
+  {% elif active_view == 'teachers' %}Teacher Performance
+  {% elif active_view == 'grades' %}Grade Performance
+  {% elif active_view == 'subjects' %}Subject Attendance
+  {% elif active_view == 'discipline' %}Discipline Report
+  {% else %}National School Intelligence Dashboard
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -64,6 +81,261 @@
     </div>
   </div>
 </form>
+
+{% if active_view == 'schools' %}
+<!-- ══ SCHOOLS VIEW ══════════════════════════════════════════ -->
+<div class="k-card mb-4">
+  <div class="k-card-header">
+    <i class="bi bi-trophy text-warning"></i> All Schools — Attendance Ranking
+    <span class="ms-auto badge badge-grey">{{ school_rankings|length }} schools</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table k-table mb-0">
+      <thead>
+        <tr>
+          <th>#</th><th>School</th><th>County</th><th>Classification</th>
+          <th>Records</th><th style="min-width:120px">Rate</th><th class="text-end">%</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in school_rankings %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ s.enrollment__school__name }}</td>
+          <td class="text-muted small">{{ s.enrollment__school__county__name|default:"—" }}</td>
+          <td><span class="badge badge-grey">{{ s.enrollment__school__school_classification|default:"—" }}</span></td>
+          <td class="text-muted">{{ s.total }}</td>
+          <td><div class="k-bar"><span style="width:{{ s.present_rate|floatformat:0 }}%"></span></div></td>
+          <td class="text-end fw-semibold {% if s.present_rate >= 90 %}text-success{% elif s.present_rate >= 75 %}text-warning{% else %}text-danger{% endif %}">
+            {{ s.present_rate|floatformat:1 }}%
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No data for selected filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% elif active_view == 'teachers' %}
+<!-- ══ TEACHERS VIEW ══════════════════════════════════════════ -->
+<div class="k-card mb-4">
+  <div class="k-card-header">
+    <i class="bi bi-person-badge" style="color:#8e44ad"></i> Teacher Performance — Attendance Rates
+    <span class="ms-auto badge badge-grey">{{ teacher_rankings|length }} teachers</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table k-table mb-0">
+      <thead>
+        <tr><th>#</th><th>Teacher</th><th>School</th><th>County</th><th>Records</th><th style="min-width:120px">Rate</th><th class="text-end">%</th></tr>
+      </thead>
+      <tbody>
+        {% for t in teacher_rankings %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ t.enrollment__lesson__teacher__user__first_name }} {{ t.enrollment__lesson__teacher__user__last_name }}</td>
+          <td class="text-muted small">{{ t.enrollment__school__name|truncatechars:25 }}</td>
+          <td class="text-muted small">{{ t.enrollment__school__county__name|default:"—" }}</td>
+          <td class="text-muted">{{ t.total }}</td>
+          <td><div class="k-bar"><span style="width:{{ t.performance|floatformat:0 }}%"></span></div></td>
+          <td class="text-end fw-semibold {% if t.performance >= 90 %}text-success{% elif t.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+            {{ t.performance|floatformat:1 }}%
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No teacher data for selected filters.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% elif active_view == 'grades' %}
+<!-- ══ GRADES VIEW ════════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+  <div class="col-12 col-xl-6">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-mortarboard text-success"></i> Grade Attendance Performance</div>
+      <table class="table k-table mb-0">
+        <thead><tr><th>#</th><th>Grade</th><th>Records</th><th style="min-width:120px">Rate</th><th class="text-end">%</th></tr></thead>
+        <tbody>
+          {% for g in grade_rankings %}
+          <tr>
+            <td class="text-muted">{{ forloop.counter }}</td>
+            <td class="fw-semibold">{{ g.enrollment__lesson__stream__grade__name }}</td>
+            <td class="text-muted">{{ g.total }}</td>
+            <td><div class="k-bar"><span style="width:{{ g.performance|floatformat:0 }}%"></span></div></td>
+            <td class="text-end fw-semibold {% if g.performance >= 90 %}text-success{% elif g.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+              {{ g.performance|floatformat:1 }}%
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center text-muted py-4">No data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-12 col-xl-6">
+    <div class="k-card">
+      <div class="k-card-header"><i class="bi bi-bar-chart text-primary"></i> Attendance Breakdown</div>
+      <div class="k-card-body">
+        {% if totals.total %}
+        {% with total=totals.total present=totals.present absent=totals.absent_unexcused tardy=totals.tardy %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1"><span class="small">Present</span><span class="small fw-semibold text-success">{{ present }} ({% widthratio present total 100 %}%)</span></div>
+          <div class="k-bar"><span style="width:{% widthratio present total 100 %}%"></span></div>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1"><span class="small">Absent (Unexcused)</span><span class="small fw-semibold text-danger">{{ absent }} ({% widthratio absent total 100 %}%)</span></div>
+          <div class="k-bar danger"><span style="width:{% widthratio absent total 100 %}%"></span></div>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1"><span class="small">Late / Tardy</span><span class="small fw-semibold text-warning">{{ tardy }} ({% widthratio tardy total 100 %}%)</span></div>
+          <div class="k-bar"><span style="width:{% widthratio tardy total 100 %}%;background:linear-gradient(90deg,#f39c12,#e67e22)"></span></div>
+        </div>
+        {% endwith %}
+        {% else %}
+        <div class="text-center text-muted py-4 small">No attendance data for selected filters.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% elif active_view == 'subjects' %}
+<!-- ══ SUBJECTS VIEW ══════════════════════════════════════════ -->
+<div class="k-card mb-4">
+  <div class="k-card-header"><i class="bi bi-journal-bookmark text-primary"></i> Subject Attendance Performance</div>
+  <div style="overflow-x:auto">
+    <table class="table k-table mb-0">
+      <thead><tr><th>#</th><th>Subject</th><th>Records</th><th>Present</th><th style="min-width:120px">Rate</th><th class="text-end">%</th></tr></thead>
+      <tbody>
+        {% for s in subject_rankings %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ s.enrollment__lesson__subject__name }}</td>
+          <td class="text-muted">{{ s.total }}</td>
+          <td class="text-muted">{{ s.present }}</td>
+          <td><div class="k-bar"><span style="width:{{ s.performance|floatformat:0 }}%"></span></div></td>
+          <td class="text-end fw-semibold {% if s.performance >= 90 %}text-success{% elif s.performance >= 75 %}text-warning{% else %}text-danger{% endif %}">
+            {{ s.performance|floatformat:1 }}%
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% elif active_view == 'discipline' %}
+<!-- ══ DISCIPLINE VIEW ════════════════════════════════════════ -->
+<div class="row g-3 mb-4">
+
+  <!-- By type -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card h-100">
+      <div class="k-card-header"><i class="bi bi-exclamation-octagon text-danger"></i> By Incident Type</div>
+      <div class="k-card-body">
+        {% for dt in discipline_by_type %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">{{ dt.incident_type|default:"Other"|title }}</span>
+            <span class="badge badge-red">{{ dt.count }}</span>
+          </div>
+          <div class="k-bar danger">
+            {% with max_count=discipline_by_type.0.count %}{% if max_count %}
+            <span style="width:{% widthratio dt.count max_count 100 %}%;background:linear-gradient(90deg,#e74c3c,#c0392b)"></span>
+            {% endif %}{% endwith %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3 small">No records.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- By severity -->
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="k-card h-100">
+      <div class="k-card-header"><i class="bi bi-exclamation-triangle text-warning"></i> By Severity</div>
+      <div class="k-card-body">
+        {% for ds in discipline_by_severity %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small">{{ ds.severity|default:"Not Set"|title }}</span>
+            <span class="badge badge-red">{{ ds.count }}</span>
+          </div>
+          <div class="k-bar danger">
+            {% with max_s=discipline_by_severity.0.count %}{% if max_s %}
+            <span style="width:{% widthratio ds.count max_s 100 %}%;background:linear-gradient(90deg,#e67e22,#d35400)"></span>
+            {% endif %}{% endwith %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-muted py-3 small">No records.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI summary -->
+  <div class="col-12 col-xl-4">
+    <div class="k-card h-100">
+      <div class="k-card-header"><i class="bi bi-info-circle text-info"></i> Summary</div>
+      <div class="k-card-body">
+        <div class="kpi-tile mb-3">
+          <div class="kpi-icon" style="background:rgba(231,76,60,.1);color:#c0392b"><i class="bi bi-exclamation-triangle"></i></div>
+          <div><div class="kpi-value">{{ total_discipline }}</div><div class="kpi-label">Total Cases</div></div>
+        </div>
+        <div class="kpi-tile mb-3">
+          <div class="kpi-icon" style="background:rgba(241,196,15,.1);color:#d68910"><i class="bi bi-building"></i></div>
+          <div><div class="kpi-value">{{ total_schools }}</div><div class="kpi-label">Schools Covered</div></div>
+        </div>
+        <div class="kpi-tile">
+          <div class="kpi-icon" style="background:rgba(52,152,219,.1);color:#2980b9"><i class="bi bi-people"></i></div>
+          <div><div class="kpi-value">{{ total_students }}</div><div class="kpi-label">Total Students</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Per-school discipline breakdown -->
+<div class="k-card mb-4">
+  <div class="k-card-header">
+    <i class="bi bi-building text-danger"></i> Discipline Cases by School (Top 30)
+    <span class="ms-auto badge badge-red">{{ discipline_per_school|length }} schools</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table k-table mb-0">
+      <thead><tr><th>#</th><th>School</th><th>County</th><th class="text-end">Total Cases</th><th class="text-end">Open</th></tr></thead>
+      <tbody>
+        {% for r in discipline_per_school %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td class="fw-semibold">{{ r.school__name }}</td>
+          <td class="text-muted small">{{ r.school__county__name|default:"—" }}</td>
+          <td class="text-end fw-semibold text-danger">{{ r.total }}</td>
+          <td class="text-end">
+            {% if r.open %}<span class="badge badge-red">{{ r.open }} open</span>{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No discipline records.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<!-- ══ DEFAULT OVERVIEW DASHBOARD ══════════════════════════ -->
 
 <!-- ══════════════════════════════════════════════════════════
      KPI TILES
@@ -455,13 +727,19 @@
 
 </div>
 
+{% endif %}{# end active_view switch #}
+
 {% endblock %}
 
 {% block extra_js %}
+{{ trend_labels_json|json_script:"trend-labels-data" }}
+{{ trend_rates_json|json_script:"trend-rates-data" }}
+{{ gender_labels_json|json_script:"gender-labels-data" }}
+{{ gender_counts_json|json_script:"gender-counts-data" }}
 <script>
 // ── Trend Chart ──────────────────────────────────────────────
-const trendLabels = {{ trend_labels_json|safe }};
-const trendRates  = {{ trend_rates_json|safe }};
+const trendLabels = JSON.parse(document.getElementById('trend-labels-data').textContent);
+const trendRates  = JSON.parse(document.getElementById('trend-rates-data').textContent);
 if (trendLabels.length) {
   new Chart(document.getElementById('trendChart'), {
     type: 'line',
@@ -490,8 +768,8 @@ if (trendLabels.length) {
 }
 
 // ── Gender Chart ─────────────────────────────────────────────
-const genderLabels = {{ gender_labels_json|safe }};
-const genderCounts = {{ gender_counts_json|safe }};
+const genderLabels = JSON.parse(document.getElementById('gender-labels-data').textContent);
+const genderCounts = JSON.parse(document.getElementById('gender-counts-data').textContent);
 if (genderLabels.length) {
   new Chart(document.getElementById('genderChart'), {
     type: 'doughnut',

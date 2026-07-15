@@ -13,13 +13,15 @@
   </div>
 
   <!-- Subjects notice -->
-  <div class="alert alert-info d-flex gap-2 align-items-start py-2 mb-4">
-    <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+  <div class="alert alert-warning d-flex gap-2 align-items-start py-2 mb-4">
+    <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
     <div>
-      <strong>Subjects are managed through the catalog.</strong>
-      Subjects cannot be uploaded here. Use
-      <a href="{% url 'school:subject-activate-catalog' %}" class="alert-link">Subjects → From Catalog</a>
-      to activate the subjects your school will offer.
+      <strong>Subject codes in your Excel must match subjects already activated for this school.</strong>
+      Before uploading students or teachers, go to
+      <a href="{% url 'school:subject-activate-catalog' %}" class="alert-link fw-semibold">Subjects → From Catalog</a>
+      and activate all subjects your school offers.
+      Use the exact subject <strong>code</strong> (e.g. <code>MTH</code>, <code>ENG</code>) in the <code>subjects</code> column.
+      Any unrecognised code will be <strong>skipped</strong> and reported as a warning — it will <em>not</em> be created automatically.
       If a subject is missing from the catalog, contact your Kiswate administrator.
     </div>
   </div>
@@ -251,11 +253,65 @@ fileInput.addEventListener('change', async (e) => {
   reader.readAsArrayBuffer(file);
 });
 
-// Submit via AJAX
+// Submit via AJAX — now queues background job and polls for result
+let pollTimer = null;
+
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function renderResult(data) {
+  stopPolling();
+  const errs   = data.errors   || [];
+  const warns  = data.warnings || [];
+  const fatal  = data.fatal    || '';
+  const created = data.created  || 0;
+
+  if (data.status === 'done') {
+    resultsDiv.innerHTML = `
+      <div class="alert alert-success">
+        <strong><i class="bi bi-check-circle me-1"></i>${created} record(s) imported</strong>
+        from <em>${data.category}</em>.
+        ${errs.length  ? `<hr class="my-2"><strong class="text-danger">Errors (${errs.length}):</strong><ul class="mb-0">`  + errs.map(e  => `<li>Row ${e.row}: ${e.error}</li>`).join('') + '</ul>' : ''}
+        ${warns.length ? `<hr class="my-2"><strong class="text-warning">Warnings (${warns.length}):</strong><ul class="mb-0">` + warns.map(w => `<li>Row ${w.row || '?'}: ${w.message}</li>`).join('') + '</ul>' : ''}
+        <hr class="my-2 opacity-25"><small class="text-muted">A summary email has been sent to your registered email address.</small>
+      </div>`;
+  } else {
+    resultsDiv.innerHTML = `
+      <div class="alert alert-danger">
+        <strong><i class="bi bi-x-circle me-1"></i>Upload failed</strong>
+        ${fatal ? `<br><span class="small">${fatal}</span>` : ''}
+        ${errs.length ? `<hr class="my-2"><ul class="mb-0 small">`+ errs.map(e => `<li>Row ${e.row}: ${e.error}</li>`).join('') +'</ul>' : ''}
+        <hr class="my-2 opacity-25"><small class="text-muted">A failure report has been emailed to you.</small>
+      </div>`;
+  }
+}
+
+function pollStatus(uploadId) {
+  pollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch(`/upload-status/${uploadId}/`);
+      const data = await resp.json();
+      if (data.status === 'done' || data.status === 'failed') {
+        renderResult(data);
+      } else {
+        // still processing — update spinner text
+        resultsDiv.innerHTML = `
+          <div class="d-flex align-items-center gap-2 text-info">
+            <div class="spinner-border spinner-border-sm"></div>
+            <span>Processing <strong>${data.category}</strong>… (upload #${uploadId})</span>
+          </div>`;
+      }
+    } catch (err) {
+      // network hiccup — keep polling
+      console.warn('Poll error:', err);
+    }
+  }, 3000);
+}
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  stopPolling();
   const formData = new FormData(form);
-  resultsDiv.innerHTML = '<div class="d-flex align-items-center gap-2 text-info"><div class="spinner-border spinner-border-sm"></div> Uploading…</div>';
+  resultsDiv.innerHTML = '<div class="d-flex align-items-center gap-2 text-info"><div class="spinner-border spinner-border-sm"></div> Uploading file…</div>';
 
   try {
     const resp = await fetch("{% url 'school:universal_excel_upload' %}", {
@@ -265,16 +321,18 @@ form.addEventListener('submit', async (e) => {
     });
     const data = await resp.json();
 
-    if (data.status === 'success') {
-      const errs  = data.results.errors  || [];
-      const warns = data.results.warnings || [];
+    if (data.status === 'queued') {
       resultsDiv.innerHTML = `
-        <div class="alert alert-success">
-          <strong><i class="bi bi-check-circle me-1"></i>${data.results.created} record(s) imported</strong>
-          from <em>${data.category}</em>.
-          ${errs.length  ? `<hr class="my-2"><strong class="text-danger">Errors (${errs.length}):</strong><ul class="mb-0">`  + errs.map(e  => `<li>Row ${e.row}: ${e.error}</li>`).join('') + '</ul>' : ''}
-          ${warns.length ? `<hr class="my-2"><strong class="text-warning">Warnings (${warns.length}):</strong><ul class="mb-0">` + warns.map(w => `<li>Row ${w.row}: ${w.message}</li>`).join('') + '</ul>' : ''}
+        <div class="alert alert-info d-flex gap-2 align-items-start">
+          <div class="spinner-border spinner-border-sm mt-1 flex-shrink-0"></div>
+          <div>
+            <strong>Processing in background…</strong><br>
+            <span class="small">${data.message}</span>
+          </div>
         </div>`;
+      pollStatus(data.upload_id);
+    } else if (data.status === 'done') {
+      renderResult(data);
     } else {
       resultsDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-1"></i>${data.error || JSON.stringify(data)}</div>`;
     }

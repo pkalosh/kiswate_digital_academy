@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Kiswate Learning Platform{% endblock %}</title>
+  <title>{% block title %}Kiswate Digital Learning Platform{% endblock %}</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
@@ -110,7 +110,7 @@
     .badge-pending { background: #fef3c7; color: #92400e; }
     .badge-approved { background: #d1fae5; color: #065f46; }
     .badge-rejected { background: #fee2e2; color: #991b1b; }
-    .badge-teacher { background: #dbeafe; color: #1e40af; }
+    .badge-teacher { background: #d1fae5; color: #065f46; }
     .badge-student { background: #f3e8ff; color: #6b21a8; }
 
     /* ── Platform pills ── */
@@ -138,6 +138,9 @@
     .btn-brand { background: var(--brand-green); color: #fff; border: none; }
     .btn-brand:hover { background: var(--brand-green-light); color: #fff; }
 
+    /* ── Btn XS ── */
+    .btn-xs { padding: .2rem .55rem; font-size: .75rem; line-height: 1.4; border-radius: 6px; }
+
     /* ── Attendance rate bar ── */
     .rate-bar { height: 6px; border-radius: 3px; background: #e5e7eb; }
     .rate-fill { height: 100%; border-radius: 3px; background: var(--brand-green); }
@@ -148,6 +151,42 @@
 
     /* ── Toast ── */
     .toast-container { z-index: 9999; }
+
+    /* ── Mobile bottom nav ── */
+    .mobile-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #111;
+      padding: .45rem 0 calc(.45rem + env(safe-area-inset-bottom));
+      z-index: 1040;
+      border-top: 1px solid #2a2a2a;
+      display: none;
+    }
+    .mobile-nav a {
+      color: #888;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: .57rem;
+      gap: .05rem;
+      padding: 0 .2rem;
+      transition: color .15s;
+    }
+    .mobile-nav a i { font-size: 1.1rem; line-height: 1; }
+    .mobile-nav a.active, .mobile-nav a:hover { color: #fff; }
+    .mobile-nav a.active i { color: var(--brand-green); }
+    @media (max-width: 992px) {
+      .mobile-nav { display: flex; justify-content: space-around; }
+      .content { padding-bottom: 4.5rem; }
+    }
+
+    /* ── Mobile table utilities ── */
+    @media (max-width: 575px) { .hide-xs { display: none !important; } }
+    @media (max-width: 767px) { .hide-sm { display: none !important; } }
+    .table { font-size: .85rem; }
+    .table td, .table th { padding: .3rem .4rem; vertical-align: middle; }
+    .table thead th { font-weight: 600; background: #f9fafb; }
   </style>
   {% block extra_css %}{% endblock %}
 </head>
@@ -155,12 +194,13 @@
 <div class="app">
 
   <!-- Sidebar -->
+  {% block sidebar %}
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <div class="logo-icon"><i class="bi bi-mortarboard-fill text-white"></i></div>
       <div>
         <div class="logo-text">Kiswate Digital</div>
-        <div class="logo-sub">Learning Platform</div>
+        <div class="logo-sub">Differentiated Instruction Learning</div>
       </div>
     </div>
 
@@ -171,7 +211,67 @@
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
-      <div class="menu-section-label">Learning</div>
+      <div class="menu-section-label">Administration</div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-schools">
+          <i class="bi bi-building"></i> Schools
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_schools_open %}{% endblock %}" id="nav-schools">
+          <li><a href="{% url 'kiswate_digital_app:school_list' %}"><i class="bi bi-list-ul"></i> All Schools</a></li>
+          <li><a href="{% url 'kiswate_digital_app:new_school' %}"><i class="bi bi-plus-circle"></i> Add School</a></li>
+          <li><a href="{% url 'kiswate_digital_app:school_admin_list' %}"><i class="bi bi-person-badge"></i> School Admins</a></li>
+          <li><a href="{% url 'kiswate_digital_app:demo_request_list' %}"><i class="bi bi-envelope-paper"></i> Demo Requests</a></li>
+        </ul>
+      </div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-billing">
+          <i class="bi bi-gem"></i> Subscriptions
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_billing_open %}{% endblock %}" id="nav-billing">
+          <li><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}"><i class="bi bi-file-earmark-plus"></i> Plans</a></li>
+          <li><a href="{% url 'kiswate_digital_app:invoice_list' %}"><i class="bi bi-receipt"></i> Invoices</a></li>
+          <li><a href="{% url 'kiswate_digital_app:payment_history' %}"><i class="bi bi-arrow-down-circle"></i> Payment History</a></li>
+        </ul>
+      </div>
+
+      <a class="side-link {% block nav_scholarships %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:scholarship_list_create' %}">
+        <i class="bi bi-award"></i> Scholarships
+      </a>
+
+      <a class="side-link {% block nav_subject_catalog %}{% endblock %}"
+         href="{% url 'school:catalog-subject-list' %}">
+        <i class="bi bi-journals"></i> School Subject Catalog
+      </a>
+
+      <a class="side-link {% block nav_system_users %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:system_users' %}">
+        <i class="bi bi-person-gear"></i> System Users
+      </a>
+
+      <a class="side-link {% block nav_support %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:support' %}">
+        <i class="bi bi-headset"></i> Support
+      </a>
+
+      <div class="menu-section-label">Differentiated Instruction Learning</div>
+
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-dil">
+          <i class="bi bi-mortarboard"></i> DIL
+          <i class="bi bi-chevron-down ms-auto small"></i>
+        </button>
+        <ul class="sub-menu {% block nav_tuition %}{% endblock %}" id="nav-dil">
+          <li><a href="{% url 'kiswate_digital_app:tuition_program_list' %}"><i class="bi bi-list-ul"></i> All Programs</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_program_create' %}"><i class="bi bi-plus-circle"></i> New Program</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_browse' %}"><i class="bi bi-search"></i> Browse Programs</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_payment_list' %}"><i class="bi bi-credit-card"></i> Payments</a></li>
+        </ul>
+      </div>
 
       <div class="menu-group">
         <button class="side-link has-sub" data-target="nav-classes">
@@ -217,42 +317,35 @@
         </ul>
       </div>
 
-      <div class="menu-section-label">People</div>
+      <a class="side-link {% block nav_subjects %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:subject_list' %}">
+        <i class="bi bi-journal-bookmark-fill"></i> Global Subjects
+      </a>
 
       <div class="menu-group">
         <button class="side-link has-sub" data-target="nav-users">
-          <i class="bi bi-people"></i> Users
+          <i class="bi bi-people"></i> People
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu {% block nav_users_open %}{% endblock %}" id="nav-users">
-          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All Users</a></li>
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All DIL Users</a></li>
           <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=student"><i class="bi bi-mortarboard"></i> Students</a></li>
           <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=teacher"><i class="bi bi-person-badge"></i> Teachers</a></li>
           <li><a href="{% url 'kiswate_digital_app:enrollment_list' %}"><i class="bi bi-journal-plus"></i> Enrollments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:guardian_list' %}"><i class="bi bi-person-heart"></i> Guardians</a></li>
         </ul>
       </div>
-
-      <div class="menu-section-label">Comms & Reports</div>
 
       <div class="menu-group">
         <button class="side-link has-sub" data-target="nav-notifs">
-          <i class="bi bi-bell"></i> Notifications
+          <i class="bi bi-bell"></i> Comms & Reports
           <i class="bi bi-chevron-down ms-auto small"></i>
         </button>
         <ul class="sub-menu {% block nav_notif_open %}{% endblock %}" id="nav-notifs">
-          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-clock-history"></i> Log</a></li>
+          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-clock-history"></i> Notification Log</a></li>
           <li><a href="{% url 'kiswate_digital_app:send_bulk_notification' %}"><i class="bi bi-send"></i> Send Bulk</a></li>
           <li><a href="{% url 'kiswate_digital_app:notification_template_list' %}"><i class="bi bi-file-text"></i> Templates</a></li>
-        </ul>
-      </div>
-
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="nav-reports">
-          <i class="bi bi-bar-chart-line"></i> Reports
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu {% block nav_reports_open %}{% endblock %}" id="nav-reports">
-          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-grid"></i> Overview</a></li>
+          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-grid"></i> Reports Overview</a></li>
           <li><a href="{% url 'kiswate_digital_app:student_performance_report' %}"><i class="bi bi-graph-up"></i> Performance</a></li>
           <li><a href="{% url 'kiswate_digital_app:attendance_report' %}"><i class="bi bi-person-check"></i> Attendance</a></li>
           <li><a href="{% url 'kiswate_digital_app:teacher_activity_report' %}"><i class="bi bi-activity"></i> Teacher Activity</a></li>
@@ -266,22 +359,24 @@
       </a>
     </nav>
   </aside>
+  {% endblock sidebar %}
 
   <!-- Main -->
   <main class="main">
-    <header class="header d-flex align-items-center justify-content-between">
-      <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
+    <header class="header d-flex align-items-center justify-content-between gap-2">
+      <div class="d-flex align-items-center gap-2 min-w-0 overflow-hidden">
+        <button class="btn btn-sm btn-dark d-lg-none flex-shrink-0" id="toggleSidebar">
           <i class="bi bi-list"></i>
         </button>
-        <span class="fw-semibold text-dark" style="font-size:.9rem;">{% block page_title %}Dashboard{% endblock %}</span>
+        <span class="fw-semibold text-dark text-truncate" style="font-size:.9rem;">{% block page_title %}Dashboard{% endblock %}</span>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge bg-light text-dark border rounded-pill px-2 py-1" style="font-size:.75rem;">
+      {% block header_actions %}
+      <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <span class="badge bg-light text-dark border rounded-pill px-2 py-1 d-none d-md-inline-flex" style="font-size:.75rem;">
           <i class="bi bi-calendar3 me-1"></i>{{ current_date|date:"M d, Y" }}
         </span>
         {% if request.user.is_authenticated %}
-        <span class="badge bg-dark rounded-pill px-2 py-1" style="font-size:.75rem;">
+        <span class="badge bg-dark rounded-pill px-2 py-1 d-none d-sm-inline-flex" style="font-size:.75rem;">
           <i class="bi bi-person me-1"></i>{{ request.user.get_full_name|default:request.user.username }}
         </span>
         {% endif %}
@@ -289,6 +384,7 @@
           <i class="bi bi-bell"></i>
         </a>
       </div>
+      {% endblock header_actions %}
     </header>
 
     <!-- Django Messages -->
@@ -311,6 +407,27 @@
 </div>
 
 <div class="scrim" id="scrim"></div>
+
+{% block mobile_nav %}
+<!-- Default admin bottom nav -->
+<nav class="mobile-nav">
+  <a href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}" class="{% block mnav_dashboard %}{% endblock %}">
+    <i class="bi bi-speedometer2"></i><span>Home</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:school_list' %}" class="{% block mnav_schools %}{% endblock %}">
+    <i class="bi bi-building"></i><span>Schools</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:tuition_program_list' %}" class="{% block mnav_dil %}{% endblock %}">
+    <i class="bi bi-mortarboard"></i><span>DIL</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:user_list' %}" class="{% block mnav_users %}{% endblock %}">
+    <i class="bi bi-people"></i><span>People</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:notification_list' %}" class="{% block mnav_notifs %}{% endblock %}">
+    <i class="bi bi-bell"></i><span>Alerts</span>
+  </a>
+</nav>
+{% endblock mobile_nav %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
@@ -344,6 +461,14 @@ document.querySelectorAll('.side-link.has-sub').forEach(btn => {
 // Auto-open sub-menu if a child is active
 document.querySelectorAll('.sub-menu').forEach(menu => {
   if (menu.querySelector('a.active')) menu.classList.add('show');
+});
+
+// Auto-dismiss alerts after 30 seconds
+document.querySelectorAll('.alert.alert-dismissible').forEach(alert => {
+  setTimeout(() => {
+    const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+    if (bsAlert) bsAlert.close();
+  }, 30000);
 });
 </script>
 {% block extra_js %}{% endblock %}

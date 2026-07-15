@@ -1,7 +1,7 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ action }} Class{% endblock %}
 {% block page_title %}{{ action }} Virtual Class{% endblock %}
-{% block nav_classes_open %}show{% endblock %}
+{% block nav_classes_open %}{% if not portal_role %}show{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -17,6 +17,12 @@
       <form method="post">
         {% csrf_token %}
         <div class="row g-3">
+          {% if form.teacher %}
+          <div class="col-12">
+            <label class="form-label">Teacher <span class="text-danger">*</span></label>
+            {{ form.teacher }}
+          </div>
+          {% endif %}
           <div class="col-12">
             <label class="form-label">Program</label>
             {{ form.program }}

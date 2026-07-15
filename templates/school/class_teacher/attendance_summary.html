@@ -1,0 +1,124 @@
+{% extends base_template|default:"school/teacher/base.html" %}
+{% load humanize %}
+{% block title %}Attendance Summary | {{ stream.grade.name }} {{ stream.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags }} alert-dismissible fade show py-2">
+    {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h5 class="fw-bold mb-0"><i class="bi bi-bar-chart me-2 text-success"></i>Attendance Summary</h5>
+      <small class="text-muted">{{ stream.grade.name }} – {{ stream.name }} &bull; {{ period_start|date:"d M Y" }} → {{ period_end|date:"d M Y" }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'school:class-teacher-subject-summary' %}?start={{ period_start|date:'Y-m-d' }}&end={{ period_end|date:'Y-m-d' }}" class="btn btn-sm btn-outline-info">
+        <i class="bi bi-book me-1"></i>By Subject
+      </a>
+      <a href="{% url 'school:class-teacher-roster' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-people me-1"></i>Roster
+      </a>
+    </div>
+  </div>
+
+  <!-- Date filter -->
+  <form method="get" class="card border-0 shadow-sm rounded-3 p-3 mb-4">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">From</label>
+        <input type="date" name="start" value="{{ period_start|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold">To</label>
+        <input type="date" name="end" value="{{ period_end|date:'Y-m-d' }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-sm btn-success w-100">Filter</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="card border-0 shadow-sm rounded-4">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.82rem;">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th class="text-center">Present</th>
+              <th class="text-center">Total</th>
+              <th>Rate</th>
+              <th class="hide-sm">Breakdown</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ r.student.user.get_full_name }}</td>
+              <td class="text-center">{{ r.present }}</td>
+              <td class="text-center text-muted">{{ r.total }}</td>
+              <td style="min-width:100px;">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px;">
+                    <div class="progress-bar {% if r.rate >= 80 %}bg-success{% elif r.rate >= 60 %}bg-warning{% else %}bg-danger{% endif %}"
+                         style="width:{{ r.rate }}%"></div>
+                  </div>
+                  <span class="fw-semibold {% if r.rate < 60 %}text-danger{% elif r.rate < 80 %}text-warning{% else %}text-success{% endif %}"
+                        style="min-width:32px;font-size:.78rem;">{{ r.rate }}%</span>
+                </div>
+              </td>
+              <td class="hide-sm">
+                <div class="d-flex gap-1 flex-wrap">
+                  {% for code, label in STATUS_LABELS.items %}
+                  {% if r.breakdown|default_if_none:'' %}{% endif %}
+                  {% endfor %}
+                  {% for code, cnt in r.breakdown.items %}
+                  <span class="badge bg-light text-dark border" style="font-size:.68rem;" title="{{ STATUS_LABELS|default_if_none:code }}">
+                    {{ code }}: {{ cnt }}
+                  </span>
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No attendance records for this period.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Concern list: below 60% -->
+  {% with concerns=rows %}
+  {% if concerns %}
+  <div class="mt-4">
+    <h6 class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Students Below 60% — Needs Attention</h6>
+    <div class="row g-2">
+      {% for r in rows %}
+      {% if r.rate < 60 %}
+      <div class="col-md-4">
+        <div class="card border-danger border-opacity-50 shadow-sm rounded-3 p-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="fw-semibold" style="font-size:.83rem;">{{ r.student.user.get_full_name }}</div>
+            <span class="badge bg-danger">{{ r.rate }}%</span>
+          </div>
+          <div class="text-muted" style="font-size:.73rem;">{{ r.present }}/{{ r.total }} lessons attended</div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+
+</div>
+{% endblock %}

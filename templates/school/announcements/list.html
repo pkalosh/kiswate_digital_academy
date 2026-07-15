@@ -15,7 +15,7 @@
   </div>
 
   <!-- Filter -->
-  <form method="get" class="d-flex gap-2 mb-3">
+  <form method="get" class="d-flex gap-2 mb-3 flex-wrap">
     <select name="audience" class="form-select form-select-sm" style="max-width:180px;">
       <option value="">All Audiences</option>
       <option value="all" {% if audience_filter == 'all' %}selected{% endif %}>Everyone</option>
@@ -23,23 +23,28 @@
       <option value="parents" {% if audience_filter == 'parents' %}selected{% endif %}>Parents</option>
       <option value="staff" {% if audience_filter == 'staff' %}selected{% endif %}>Staff</option>
     </select>
+    <select name="status" class="form-select form-select-sm" style="max-width:150px;">
+      <option value="">All Statuses</option>
+      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+      <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired / Disabled</option>
+    </select>
     <button class="btn btn-sm btn-success">Filter</button>
     <a href="{% url 'school:announcements' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
   </form>
 
   <div class="card border-0 shadow-sm">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
+      <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+        <thead style="background:#111;color:#fff;">
           <tr>
             <th>Title</th>
             <th>Audience</th>
-            <th>Grade</th>
-            <th>Pinned</th>
-            <th>Created By</th>
-            <th>Date</th>
-            <th>Expires</th>
-            <th></th>
+            <th class="d-none d-md-table-cell">Grade</th>
+            <th class="d-none d-md-table-cell">Pinned</th>
+            <th class="d-none d-sm-table-cell">Created</th>
+            <th class="d-none d-md-table-cell">Expires</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -47,25 +52,59 @@
           <tr>
             <td>
               <div class="fw-semibold">{{ ann.title }}</div>
-              <small class="text-muted">{{ ann.body|truncatechars:60 }}</small>
+              <small class="text-muted d-none d-sm-block">{{ ann.body|truncatechars:60 }}</small>
             </td>
             <td>
-              <span class="badge bg-info-subtle text-info border border-info">{{ ann.get_audience_display }}</span>
+              <span class="badge" style="background:#d1fae5;color:#065f46;font-size:.72rem;">{{ ann.get_audience_display }}</span>
             </td>
-            <td>{{ ann.grade.name|default:"All Grades" }}</td>
-            <td>{% if ann.is_pinned %}<i class="bi bi-pin-angle-fill text-danger"></i>{% else %}<span class="text-muted">—</span>{% endif %}</td>
-            <td>{{ ann.created_by.user.get_full_name|default:"—" }}</td>
-            <td>{{ ann.created_at|date:"d M Y" }}</td>
-            <td>{{ ann.expires_at|date:"d M Y"|default:"—" }}</td>
+            <td class="d-none d-md-table-cell">{{ ann.grade.name|default:"All" }}</td>
+            <td class="d-none d-md-table-cell">
+              {% if ann.is_pinned %}<i class="bi bi-pin-angle-fill text-danger"></i>{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="d-none d-sm-table-cell text-muted">{{ ann.created_at|date:"d M Y" }}</td>
+            <td class="d-none d-md-table-cell text-muted">{{ ann.expires_at|date:"d M Y H:i"|default:"Never" }}</td>
             <td>
-              <form method="post" action="{% url 'school:announcement-delete' ann.pk %}" onsubmit="return confirm('Delete this announcement?')">
-                {% csrf_token %}
-                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-              </form>
+              {% if ann.is_active %}
+              <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.72rem;">
+                <i class="bi bi-check-circle me-1"></i>Active
+              </span>
+              {% else %}
+              <span class="badge rounded-pill" style="background:#fee2e2;color:#991b1b;font-size:.72rem;">
+                <i class="bi bi-x-circle me-1"></i>Expired
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <!-- Toggle disable/enable -->
+                <form method="post" action="{% url 'school:announcement-disable' ann.pk %}">
+                  {% csrf_token %}
+                  {% if ann.is_active %}
+                  <button class="btn btn-xs btn-outline-warning" title="Disable — stop showing on dashboards"
+                          onclick="return confirm('Disable this announcement? It will be hidden from all dashboards.')">
+                    <i class="bi bi-eye-slash"></i>
+                  </button>
+                  {% else %}
+                  <button class="btn btn-xs btn-outline-success" title="Re-enable announcement">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                  {% endif %}
+                </form>
+                <!-- Delete -->
+                <form method="post" action="{% url 'school:announcement-delete' ann.pk %}"
+                      onsubmit="return confirm('Permanently delete this announcement?')">
+                  {% csrf_token %}
+                  <button class="btn btn-xs btn-outline-danger"><i class="bi bi-trash"></i></button>
+                </form>
+              </div>
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="text-center text-muted py-4">No announcements yet. <a href="{% url 'school:announcement-create' %}">Create one</a>.</td></tr>
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">
+              No announcements yet. <a href="{% url 'school:announcement-create' %}">Create one</a>.
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>

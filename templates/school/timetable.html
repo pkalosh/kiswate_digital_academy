@@ -10,19 +10,20 @@
   <div id="attendanceNotifications" class="mb-3"></div>
 
   <!-- WEEK NAV -->
-  <div class="d-flex justify-content-between mb-3">
-    <a href="?week={{ week_offset|add:'-1' }}" class="btn btn-sm btn-outline-secondary">← Prev</a>
-    <h6>{{ start_of_week }} → {{ end_of_week }}</h6>
-    <a href="?week={{ week_offset|add:'1' }}" class="btn btn-sm btn-outline-secondary">Next →</a>
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <a href="?week={{ week_offset|add:'-1' }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i> Prev</a>
+    <h6 class="mb-0 text-center fw-semibold">{{ start_of_week }} → {{ end_of_week }}</h6>
+    <a href="?week={{ week_offset|add:'1' }}" class="btn btn-sm btn-outline-secondary">Next <i class="bi bi-chevron-right"></i></a>
   </div>
 
   <!-- GRID -->
-  <table class="table table-bordered text-center small">
+  <div class="table-responsive" style="-webkit-overflow-scrolling:touch;">
+  <table class="table table-bordered text-center small" style="min-width:600px;">
     <thead>
       <tr>
-        <th>Time</th>
+        <th style="min-width:110px;">Time</th>
         {% for day in days %}
-          <th>{{ day|slice:":3" }}</th>
+          <th style="min-width:90px;">{{ day|slice:":3" }}</th>
         {% endfor %}
       </tr>
     </thead>
@@ -30,7 +31,7 @@
     <tbody>
       {% for slot in time_slots %}
       <tr>
-        <td>{{ slot.start_time }} - {{ slot.end_time }}</td>
+        <td class="fw-semibold text-nowrap" style="font-size:.75rem;">{{ slot.start_time }} - {{ slot.end_time }}</td>
 
         {% for day in days %}
         <td data-day="{{ day }}" data-slot="{{ slot.id }}">
@@ -48,6 +49,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 <!-- LESSON MODAL -->

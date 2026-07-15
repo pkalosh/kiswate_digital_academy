@@ -94,19 +94,42 @@ class Subject(models.Model):
         return self.name
 
 
+LEVEL_CHOICES = [
+    ('primary', 'Primary'),
+    ('form1', 'Form 1'), ('form2', 'Form 2'), ('form3', 'Form 3'), ('form4', 'Form 4'),
+    ('grade1', 'Grade 1'), ('grade2', 'Grade 2'), ('grade3', 'Grade 3'), ('grade4', 'Grade 4'),
+    ('grade5', 'Grade 5'), ('grade6', 'Grade 6'), ('grade7', 'Grade 7'), ('grade8', 'Grade 8'),
+    ('grade9', 'Grade 9'), ('grade10', 'Grade 10'), ('grade11', 'Grade 11'), ('grade12', 'Grade 12'),
+    ('olevel', 'O-Level'), ('alevel', 'A-Level'), ('diploma', 'Diploma'),
+    ('certificate', 'Certificate'), ('other', 'Other'),
+]
+
+CATEGORY_CHOICES = [
+    ('sciences', 'Sciences'), ('mathematics', 'Mathematics'), ('languages', 'Languages'),
+    ('humanities', 'Humanities'), ('arts', 'Arts & Creative'), ('technical', 'Technical & Vocational'),
+    ('ict', 'ICT & Computing'), ('business', 'Business & Commerce'), ('other', 'Other'),
+]
+
+
 class Program(models.Model):
-    """A course/program students enroll into e.g. 'Form 3 Mathematics'"""
+    """A course/program students enroll into e.g. 'Form 3 Mathematics'. school=None means standalone tuition."""
     name = models.CharField(max_length=200)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='programs')
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='programs')
+    school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='programs')
     teacher = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True,
                                 related_name='teaching_programs', limit_choices_to={'role': 'teacher'})
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    is_tuition = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    level = models.CharField(max_length=20, choices=LEVEL_CHOICES, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} — {self.school.name}"
+        if self.school:
+            return f"{self.name} — {self.school.name}"
+        return f"{self.name} (Tuition)"
 
 
 class Enrollment(models.Model):
@@ -129,8 +152,8 @@ class VirtualClass(models.Model):
     program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='virtual_classes')
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    teacher = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='hosted_classes',
-                                limit_choices_to={'role': 'teacher'})
+    teacher = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='hosted_classes', limit_choices_to={'role': 'teacher'})
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='google_meet')
     meeting_link = models.URLField()
     meeting_id = models.CharField(max_length=100, blank=True)
@@ -187,8 +210,8 @@ class Lesson(models.Model):
     program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='lessons')
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    teacher = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='lessons',
-                                limit_choices_to={'role': 'teacher'})
+    teacher = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='lessons', limit_choices_to={'role': 'teacher'})
     topic = models.CharField(max_length=200, blank=True)
     notes_file = models.FileField(upload_to='lesson_notes/', null=True, blank=True)
     video_url = models.URLField(blank=True)
@@ -251,7 +274,7 @@ class Assessment(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     is_published = models.BooleanField(default=False)
     results_published = models.BooleanField(default=False)
-    created_by = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='created_assessments')
+    created_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_assessments')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -355,3 +378,36 @@ class NotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.notification_type.upper()} → {self.recipient.full_name} ({self.status})"
+
+
+# ─── TUITION PAYMENTS ────────────────────────────────────────────────────────
+
+PAYMENT_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('paid', 'Paid'),
+    ('failed', 'Failed'),
+    ('refunded', 'Refunded'),
+]
+
+PAYMENT_METHOD_CHOICES = [
+    ('mpesa', 'M-Pesa'),
+    ('cash', 'Cash'),
+    ('bank', 'Bank Transfer'),
+    ('card', 'Card'),
+    ('school', 'School Sponsored'),
+]
+
+
+class TuitionPayment(models.Model):
+    enrollment = models.OneToOneField(Enrollment, on_delete=models.CASCADE, related_name='payment')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default='mpesa')
+    transaction_id = models.CharField(max_length=100, blank=True)
+    payer_phone = models.CharField(max_length=20, blank=True, help_text="M-Pesa or guardian phone")
+    status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='pending')
+    paid_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.enrollment} — {self.get_status_display()}"

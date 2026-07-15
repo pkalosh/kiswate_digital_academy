@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends "Dashboard/base.html" %}
 {% block title %}School Utilization{% endblock %}
 {% block page_title %}School Utilization Report{% endblock %}
 {% block nav_reports_open %}show{% endblock %}
@@ -22,7 +22,7 @@
       </div>
       <div class="row g-2 text-center">
         <div class="col-4">
-          <div class="fw-bold fs-5 text-primary">{{ row.student_count }}</div>
+          <div class="fw-bold fs-5 text-success">{{ row.student_count }}</div>
           <div class="text-muted" style="font-size:.75rem;">Students</div>
         </div>
         <div class="col-4">
@@ -38,7 +38,7 @@
           <div class="text-muted" style="font-size:.75rem;">Total Classes</div>
         </div>
         <div class="col-4">
-          <div class="fw-bold fs-5 text-info">{{ row.upcoming_classes }}</div>
+          <div class="fw-bold fs-5 text-success">{{ row.upcoming_classes }}</div>
           <div class="text-muted" style="font-size:.75rem;">Upcoming</div>
         </div>
         <div class="col-4">

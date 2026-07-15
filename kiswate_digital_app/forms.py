@@ -1,5 +1,5 @@
 # forms.py (add School forms)
-import random
+import secrets
 import string
 from django.db import transaction
 import json
@@ -19,7 +19,8 @@ from .models import (
     UserProfile, Guardian, Subject, Program, Enrollment,
     VirtualClass, Lesson, Assignment, AssignmentSubmission,
     Assessment, Question, Choice,
-    NotificationTemplate, NotificationLog,
+    NotificationTemplate, NotificationLog, TuitionPayment,
+    LEVEL_CHOICES, CATEGORY_CHOICES,
 )
 
 
@@ -145,8 +146,8 @@ class SchoolCreationForm(forms.ModelForm):
 
     def save(self, commit=True):
         # Auto-generate password for admin
-        password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-        print(password)
+        _alphabet = string.ascii_letters + string.digits
+        password = ''.join(secrets.choice(_alphabet) for _ in range(12))
 
         # Create Admin User
         admin_user = User.objects.create_user(
@@ -284,8 +285,8 @@ class SchoolEditForm(forms.ModelForm):
         
         password = None
         if self.cleaned_data['reset_password']:
-            password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-            print(password)
+            _alphabet = string.ascii_letters + string.digits
+            password = ''.join(secrets.choice(_alphabet) for _ in range(12))
             admin.set_password(password)
 
         admin.save()
@@ -542,13 +543,39 @@ def _w(widget_class, **kwargs):
  
 # ─── USER MANAGEMENT FORMS ───────────────────────────────────────────────────
  
+class StudentProfileOnlyForm(forms.ModelForm):
+    """For logged-in users creating a tuition student profile (no new User needed)."""
+    class Meta:
+        model = UserProfile
+        fields = ['phone', 'date_of_birth', 'gender']
+        widgets = {
+            'phone': forms.TextInput(attrs={'class': INPUT}),
+            'date_of_birth': forms.DateInput(attrs={'class': INPUT, 'type': 'date'}),
+            'gender': forms.Select(attrs={'class': SELECT}),
+        }
+
+
+class TeacherProfileOnlyForm(forms.ModelForm):
+    """For logged-in users creating a tuition teacher profile (no new User needed)."""
+    class Meta:
+        model = UserProfile
+        fields = ['phone', 'date_of_birth', 'gender', 'bio', 'id_number']
+        widgets = {
+            'phone': forms.TextInput(attrs={'class': INPUT}),
+            'date_of_birth': forms.DateInput(attrs={'class': INPUT, 'type': 'date'}),
+            'gender': forms.Select(attrs={'class': SELECT}),
+            'bio': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+            'id_number': forms.TextInput(attrs={'class': INPUT}),
+        }
+
+
 class StudentRegistrationForm(forms.ModelForm):
     first_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
     last_name = forms.CharField(max_length=50, widget=forms.TextInput(attrs={'class': INPUT}))
     email = forms.EmailField(widget=forms.EmailInput(attrs={'class': INPUT}))
     password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
     confirm_password = forms.CharField(widget=forms.PasswordInput(attrs={'class': INPUT}))
- 
+
     class Meta:
         model = UserProfile
         fields = ['school', 'phone', 'date_of_birth', 'gender']
@@ -558,6 +585,10 @@ class StudentRegistrationForm(forms.ModelForm):
             'date_of_birth': forms.DateInput(attrs={'class': INPUT, 'type': 'date'}),
             'gender': forms.Select(attrs={'class': SELECT}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['school'].required = False
  
     def clean(self):
         cleaned = super().clean()
@@ -593,7 +624,7 @@ class TeacherRegistrationForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple(attrs={'class': CHECK}),
         required=False
     )
- 
+
     class Meta:
         model = UserProfile
         fields = ['school', 'phone', 'date_of_birth', 'gender', 'bio', 'id_number']
@@ -605,6 +636,10 @@ class TeacherRegistrationForm(forms.ModelForm):
             'bio': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
             'id_number': forms.TextInput(attrs={'class': INPUT}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['school'].required = False
  
     def clean(self):
         cleaned = super().clean()
@@ -676,11 +711,12 @@ class VirtualClassForm(forms.ModelForm):
     class Meta:
         model = VirtualClass
         fields = [
-            'program', 'title', 'description', 'platform', 'meeting_link',
+            'teacher', 'program', 'title', 'description', 'platform', 'meeting_link',
             'meeting_id', 'passcode', 'scheduled_at', 'duration_minutes',
             'is_recurring', 'notes'
         ]
         widgets = {
+            'teacher': forms.Select(attrs={'class': SELECT}),
             'program': forms.Select(attrs={'class': SELECT}),
             'title': forms.TextInput(attrs={'class': INPUT}),
             'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
@@ -693,13 +729,20 @@ class VirtualClassForm(forms.ModelForm):
             'is_recurring': forms.CheckboxInput(attrs={'class': CHECK}),
             'notes': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
         }
- 
+
     def __init__(self, *args, **kwargs):
         teacher_profile = kwargs.pop('teacher_profile', None)
         super().__init__(*args, **kwargs)
         if teacher_profile:
+            # Teacher mode: hide teacher field (set by view), filter programs
+            self.fields.pop('teacher')
             self.fields['program'].queryset = Program.objects.filter(
                 teacher=teacher_profile, is_active=True)
+        else:
+            # Admin mode: show teacher picker
+            self.fields['teacher'].queryset = UserProfile.objects.filter(
+                role='teacher', vetting_status='approved')
+            self.fields['teacher'].required = True
  
  
 class RecordingUploadForm(forms.ModelForm):
@@ -734,8 +777,9 @@ class AttendanceManualForm(forms.Form):
 class LessonForm(forms.ModelForm):
     class Meta:
         model = Lesson
-        fields = ['program', 'title', 'description', 'topic', 'notes_file', 'video_url', 'order', 'is_published']
+        fields = ['teacher', 'program', 'title', 'description', 'topic', 'notes_file', 'video_url', 'order', 'is_published']
         widgets = {
+            'teacher': forms.Select(attrs={'class': SELECT}),
             'program': forms.Select(attrs={'class': SELECT}),
             'title': forms.TextInput(attrs={'class': INPUT}),
             'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
@@ -744,6 +788,18 @@ class LessonForm(forms.ModelForm):
             'order': forms.NumberInput(attrs={'class': INPUT}),
             'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
         }
+
+    def __init__(self, *args, **kwargs):
+        teacher_profile = kwargs.pop('teacher_profile', None)
+        super().__init__(*args, **kwargs)
+        if teacher_profile:
+            # Teacher mode: hide teacher field (set by view), filter programs
+            self.fields.pop('teacher')
+            self.fields['program'].queryset = Program.objects.filter(teacher=teacher_profile, is_active=True)
+        else:
+            # Admin mode: show teacher picker
+            self.fields['teacher'].queryset = UserProfile.objects.filter(role='teacher', vetting_status='approved')
+            self.fields['teacher'].required = True
  
  
 class AssignmentForm(forms.ModelForm):
@@ -759,6 +815,12 @@ class AssignmentForm(forms.ModelForm):
             'total_marks': forms.NumberInput(attrs={'class': INPUT}),
             'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
         }
+
+    def __init__(self, *args, **kwargs):
+        teacher_profile = kwargs.pop('teacher_profile', None)
+        super().__init__(*args, **kwargs)
+        if teacher_profile:
+            self.fields['program'].queryset = Program.objects.filter(teacher=teacher_profile, is_active=True)
  
  
 class SubmissionForm(forms.ModelForm):
@@ -802,6 +864,12 @@ class AssessmentForm(forms.ModelForm):
             'end_time': forms.DateTimeInput(attrs={'class': INPUT, 'type': 'datetime-local'}),
             'is_published': forms.CheckboxInput(attrs={'class': CHECK}),
         }
+
+    def __init__(self, *args, **kwargs):
+        teacher_profile = kwargs.pop('teacher_profile', None)
+        super().__init__(*args, **kwargs)
+        if teacher_profile:
+            self.fields['program'].queryset = Program.objects.filter(teacher=teacher_profile, is_active=True)
  
  
 class QuestionForm(forms.ModelForm):
@@ -873,4 +941,122 @@ class BulkNotificationForm(forms.Form):
                                     widget=forms.Select(attrs={'class': SELECT}))
     subject = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': INPUT}))
     message = forms.CharField(widget=forms.Textarea(attrs={'class': TEXTAREA, 'rows': 4}))
- 
+
+
+# ─── SUBJECT FORM ────────────────────────────────────────────────────────────
+
+class SubjectForm(forms.ModelForm):
+    class Meta:
+        model = Subject
+        fields = ['name', 'code', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. Mathematics'}),
+            'code': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. MATH'}),
+            'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2, 'placeholder': 'Optional description'}),
+        }
+
+
+# ─── TUITION FORMS ────────────────────────────────────────────────────────────
+
+class TuitionProgramForm(forms.ModelForm):
+    class Meta:
+        model = Program
+        fields = ['name', 'subject', 'teacher', 'description', 'price', 'level', 'category', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. Form 3 Mathematics Remedial'}),
+            'subject': forms.Select(attrs={'class': SELECT}),
+            'teacher': forms.Select(attrs={'class': SELECT}),
+            'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 3}),
+            'price': forms.NumberInput(attrs={'class': INPUT, 'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
+            'level': forms.Select(attrs={'class': SELECT}),
+            'category': forms.Select(attrs={'class': SELECT}),
+            'is_active': forms.CheckboxInput(attrs={'class': CHECK}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        teacher_locked = kwargs.pop('teacher_locked', None)
+        super().__init__(*args, **kwargs)
+        self.fields['teacher'].queryset = UserProfile.objects.filter(
+            role='teacher', vetting_status='approved')
+        self.fields['teacher'].required = False
+        if teacher_locked:
+            self.fields['teacher'].widget = forms.HiddenInput()
+            self.initial['teacher'] = teacher_locked.pk
+
+
+class TuitionPaymentForm(forms.ModelForm):
+    class Meta:
+        model = TuitionPayment
+        fields = ['payment_method', 'transaction_id', 'payer_phone', 'notes']
+        widgets = {
+            'payment_method': forms.Select(attrs={'class': SELECT}),
+            'transaction_id': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. QHX7YBABC1'}),
+            'payer_phone': forms.TextInput(attrs={'class': INPUT, 'placeholder': '+254712345678'}),
+            'notes': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2}),
+        }
+
+
+class PrincipalTuitionEnrollForm(forms.Form):
+    """Used by principals/deputies to batch-enroll school students in tuition programs."""
+    enroll_mode = forms.ChoiceField(
+        choices=[('student', 'Per Student'), ('stream', 'By Stream'), ('grade', 'By Grade')],
+        widget=forms.HiddenInput(),
+        initial='student',
+    )
+    students = forms.ModelMultipleChoiceField(
+        queryset=None,
+        widget=forms.CheckboxSelectMultiple(),
+        label='Students',
+        required=False,
+    )
+    grade = forms.ModelChoiceField(
+        queryset=None,
+        widget=forms.Select(attrs={'class': SELECT}),
+        label='Grade',
+        required=False,
+    )
+    stream = forms.ModelChoiceField(
+        queryset=None,
+        widget=forms.Select(attrs={'class': SELECT}),
+        label='Stream',
+        required=False,
+    )
+    program = forms.ModelChoiceField(
+        queryset=Program.objects.filter(is_tuition=True, is_active=True),
+        widget=forms.Select(attrs={'class': SELECT}),
+        label='Tuition Program',
+    )
+
+    def __init__(self, *args, **kwargs):
+        from school.models import Student, Grade, Streams
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        qs = Student.objects.filter(is_active=True).select_related('user', 'grade_level', 'stream').order_by('user__first_name')
+        grade_qs = Grade.objects.filter(is_active=True).order_by('name')
+        stream_qs = Streams.objects.filter(is_active=True).select_related('grade').order_by('grade__name', 'name')
+        if school:
+            qs = qs.filter(school=school)
+            grade_qs = grade_qs.filter(school=school)
+            stream_qs = stream_qs.filter(school=school)
+        self.fields['students'].queryset = qs
+        self.fields['students'].label_from_instance = lambda s: (
+            f"{s.user.get_full_name() or s.user.email}"
+            + (f" — {s.grade_level}" if s.grade_level else "")
+            + (f" {s.stream}" if s.stream else "")
+        )
+        self.fields['grade'].queryset = grade_qs
+        self.fields['grade'].label_from_instance = lambda g: g.name
+        self.fields['stream'].queryset = stream_qs
+        self.fields['stream'].label_from_instance = lambda s: f"{s.grade.name} — {s.name}"
+
+    def clean(self):
+        cleaned = super().clean()
+        mode = cleaned.get('enroll_mode', 'student')
+        if mode == 'student' and not cleaned.get('students'):
+            self.add_error('students', 'Select at least one student.')
+        elif mode == 'grade' and not cleaned.get('grade'):
+            self.add_error('grade', 'Select a grade.')
+        elif mode == 'stream' and not cleaned.get('stream'):
+            self.add_error('stream', 'Select a stream.')
+        return cleaned
+

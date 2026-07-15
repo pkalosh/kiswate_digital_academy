@@ -1,0 +1,139 @@
+{% extends "school/base.html" %}
+{% block title %}Enter Scores – {{ subject.name }} – {{ stream.name }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-sm btn-outline-secondary me-2">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      <span class="fw-bold">{{ session.name }}</span>
+      <span class="text-muted mx-1">›</span>
+      <span>{{ stream.name }}</span>
+      <span class="text-muted mx-1">›</span>
+      <span class="text-success fw-semibold">{{ subject.name }}</span>
+    </div>
+    <small class="text-muted">
+      CAT /{{ session.cat_out_of|floatformat:0 }} &nbsp;|&nbsp;
+      Assignment /{{ session.assignment_out_of|floatformat:0 }} &nbsp;|&nbsp;
+      Assessment /{{ session.assessment_out_of|floatformat:0 }} &nbsp;|&nbsp;
+      Exam /{{ session.exam_out_of|floatformat:0 }}
+    </small>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+        {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <form method="post">
+        {% csrf_token %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+            <thead class="table-dark">
+              <tr>
+                <th style="width:3rem;">#</th>
+                <th>Student Name</th>
+                <th>Adm No</th>
+                <th>CAT<br><small class="text-warning">/{{ session.cat_out_of|floatformat:0 }}</small></th>
+                <th>Assignment<br><small class="text-warning">/{{ session.assignment_out_of|floatformat:0 }}</small></th>
+                <th>Assessment<br><small class="text-warning">/{{ session.assessment_out_of|floatformat:0 }}</small></th>
+                <th>Exam<br><small class="text-warning">/{{ session.exam_out_of|floatformat:0 }}</small></th>
+                <th>Total</th>
+                <th>Grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              {% with s=row.student r=row.result %}
+              <tr>
+                <td class="text-muted">{{ forloop.counter }}</td>
+                <td class="fw-semibold">{{ s.user.get_full_name }}</td>
+                <td><code>{{ s.student_id }}</code></td>
+                <td>
+                  <input type="number" name="student_{{ s.pk }}_cat"
+                    value="{{ r.cat_score|default_if_none:'' }}"
+                    class="form-control form-control-sm score-input" style="width:4.5rem;"
+                    step="0.5" min="0" max="{{ session.cat_out_of }}">
+                </td>
+                <td>
+                  <input type="number" name="student_{{ s.pk }}_assignment"
+                    value="{{ r.assignment_score|default_if_none:'' }}"
+                    class="form-control form-control-sm score-input" style="width:4.5rem;"
+                    step="0.5" min="0" max="{{ session.assignment_out_of }}">
+                </td>
+                <td>
+                  <input type="number" name="student_{{ s.pk }}_assessment"
+                    value="{{ r.assessment_score|default_if_none:'' }}"
+                    class="form-control form-control-sm score-input" style="width:4.5rem;"
+                    step="0.5" min="0" max="{{ session.assessment_out_of }}">
+                </td>
+                <td>
+                  <input type="number" name="student_{{ s.pk }}_exam"
+                    value="{{ r.exam_score|default_if_none:'' }}"
+                    class="form-control form-control-sm score-input" style="width:4.5rem;"
+                    step="0.5" min="0" max="{{ session.exam_out_of }}">
+                </td>
+                <td class="fw-bold total-cell">
+                  {% if r and r.total is not None %}{{ r.total|floatformat:1 }}{% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if r %}
+                    {% if r.grade_band == "EE" %}<span class="badge bg-success">EE</span>
+                    {% elif r.grade_band == "ME" %}<span class="badge bg-primary">ME</span>
+                    {% elif r.grade_band == "AE" %}<span class="badge bg-warning text-dark">AE</span>
+                    {% elif r.grade_band == "BE" %}<span class="badge bg-danger">BE</span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+              {% endwith %}
+              {% empty %}
+              <tr><td colspan="9" class="text-center text-muted py-4">No students in this stream.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if rows %}
+        <div class="p-3 border-top d-flex gap-2">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-save me-1"></i>Save All Scores
+          </button>
+          <a href="{% url 'school:exam-session-detail' session.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const catMax = {{ session.cat_out_of }};
+  const asgnMax = {{ session.assignment_out_of }};
+  const asmtMax = {{ session.assessment_out_of }};
+  const examMax = {{ session.exam_out_of }};
+
+  document.querySelectorAll('tr').forEach(function (row) {
+    const inputs = row.querySelectorAll('.score-input');
+    if (!inputs.length) return;
+    const totalCell = row.querySelector('.total-cell');
+    inputs.forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        let sum = 0;
+        inputs.forEach(function (i) {
+          const v = parseFloat(i.value);
+          if (!isNaN(v)) sum += v;
+        });
+        if (totalCell) totalCell.textContent = inputs[0].value || inputs[1].value || inputs[2].value || inputs[3].value ? sum.toFixed(1) : '—';
+      });
+    });
+  });
+});
+</script>
+{% endblock %}

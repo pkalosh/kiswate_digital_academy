@@ -1,0 +1,150 @@
+{% extends "Dashboard/base.html" %}
+{% block title %}Assign Lessons — {{ teacher_profile.full_name }}{% endblock %}
+{% block page_title %}Assign Lessons{% endblock %}
+{% block nav_users_open %}show{% endblock %}
+
+{% block extra_css %}
+<style>
+  .program-block { margin-bottom: 1.5rem; }
+  .program-header {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 10px 10px 0 0;
+    padding: .65rem 1rem;
+    font-weight: 700;
+    font-size: .88rem;
+    color: #065f46;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .lesson-list {
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+  }
+  .lesson-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .6rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background .15s;
+    cursor: pointer;
+  }
+  .lesson-row:last-child { border-bottom: none; }
+  .lesson-row:hover { background: #f9fafb; }
+  .lesson-row.selected { background: #f0fdf4; }
+  .lesson-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #0b7a2a; flex-shrink: 0; }
+  .lesson-title { font-size: .875rem; font-weight: 600; color: #111; }
+  .lesson-meta { font-size: .75rem; color: #9ca3af; }
+  .select-all-link { font-size: .75rem; color: #0b7a2a; text-decoration: none; cursor: pointer; }
+  .select-all-link:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h5 class="mb-0"><i class="bi bi-journal-plus me-2 text-success"></i>Assign Lessons</h5>
+    <div class="text-muted small mt-1">Select lessons for <strong>{{ teacher_profile.full_name }}</strong> to teach</div>
+  </div>
+  <a href="{% url 'kiswate_digital_app:user_detail' teacher_profile.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+
+      {% if programs_map %}
+        {% for program, lessons in programs_map.items %}
+        <div class="program-block">
+          <div class="program-header">
+            <span><i class="bi bi-book me-2"></i>{{ program.name }}
+              {% if program.subject %}<span class="fw-normal text-muted ms-2" style="font-size:.78rem;">{{ program.subject.name }}</span>{% endif %}
+            </span>
+            <a class="select-all-link" onclick="toggleAll(this, '{{ program.pk }}')">Select all</a>
+          </div>
+          <div class="lesson-list" id="prog-{{ program.pk }}">
+            {% for lesson in lessons %}
+            <label class="lesson-row {% if lesson.pk in assigned_ids %}selected{% endif %}"
+                   data-prog="{{ program.pk }}">
+              <input type="checkbox" name="lesson_ids" value="{{ lesson.pk }}"
+                     {% if lesson.pk in assigned_ids %}checked{% endif %}
+                     onchange="this.closest('.lesson-row').classList.toggle('selected', this.checked)">
+              <div class="flex-grow-1 min-w-0">
+                <div class="lesson-title text-truncate">{{ lesson.title }}</div>
+                {% if lesson.topic %}
+                <div class="lesson-meta"><i class="bi bi-tag me-1"></i>{{ lesson.topic }}</div>
+                {% endif %}
+              </div>
+              <div class="flex-shrink-0">
+                {% if lesson.is_published %}
+                <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.68rem;">Published</span>
+                {% else %}
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary" style="font-size:.68rem;">Draft</span>
+                {% endif %}
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="module-card text-center py-5 text-muted">
+        <i class="bi bi-journal-x" style="font-size:2.5rem;opacity:.3;"></i>
+        <p class="mt-3 mb-0">No lessons exist yet. Create lessons first before assigning them.</p>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <div class="col-lg-4">
+      <!-- Teacher summary card -->
+      <div class="module-card mb-3">
+        <h6 class="fw-semibold mb-3"><i class="bi bi-person-badge me-1 text-success"></i>Teacher</h6>
+        <div class="fw-semibold">{{ teacher_profile.full_name }}</div>
+        <div class="text-muted small">{{ teacher_profile.user.email }}</div>
+        <div class="mt-2">
+          <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;font-size:.72rem;">
+            <i class="bi bi-check-circle me-1"></i>Approved
+          </span>
+        </div>
+      </div>
+
+      <div class="module-card">
+        <h6 class="fw-semibold mb-2"><i class="bi bi-info-circle me-1 text-success"></i>How it works</h6>
+        <p class="text-muted small mb-3">
+          Check the lessons this teacher will deliver. Unchecked lessons that were previously assigned will be unassigned.
+          The teacher will see their mapped lessons on their DIL dashboard.
+        </p>
+        {% if programs_map %}
+        <button type="submit" class="btn btn-brand w-100">
+          <i class="bi bi-check-circle me-1"></i>Save Assignment
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleAll(link, progPk) {
+  const container = document.getElementById('prog-' + progPk);
+  const boxes = container.querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => {
+    b.checked = !allChecked;
+    b.closest('.lesson-row').classList.toggle('selected', !allChecked);
+  });
+  link.textContent = allChecked ? 'Select all' : 'Deselect all';
+}
+</script>
+{% endblock %}

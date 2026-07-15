@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}Mark Attendance{% endblock %}
 {% block page_title %}Mark Attendance{% endblock %}
 {% block nav_classes_open %}show{% endblock %}
@@ -23,31 +23,106 @@
         students who already clicked "Join" are still recorded automatically.
       </div>
 
-      <form method="post">
+      <form method="post" id="dilAttendanceForm">
         {% csrf_token %}
-        <h6 class="fw-semibold mb-3">Enrolled Students</h6>
 
+        <!-- Bulk action helpers -->
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+          <h6 class="fw-semibold mb-0">Enrolled Students</h6>
+          {% if form.present_students.field.queryset %}
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-success" id="selectAllBtn">
+              <i class="bi bi-check-all me-1"></i>Select All
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn">
+              <i class="bi bi-x me-1"></i>Deselect All
+            </button>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Search -->
         {% if form.present_students.field.queryset %}
-        <div style="max-height:400px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px; padding:.75rem;">
+        <div class="input-group input-group-sm mb-3">
+          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" class="form-control border-start-0" id="dilStudentSearch" placeholder="Search student…">
+        </div>
+
+        <!-- Selected count badge -->
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="text-muted small">Marked present:</span>
+          <span class="badge rounded-pill bg-success" id="selectedCount">0</span>
+          <span class="text-muted small">/ {{ form.present_students.field.queryset.count }}</span>
+        </div>
+
+        <div id="studentList" style="max-height:450px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px;">
           {% for widget in form.present_students %}
-          <div class="form-check py-1 border-bottom">
-            {{ widget.tag }} <label class="form-check-label ms-2" for="{{ widget.id_for_label }}">
+          <div class="form-check d-flex align-items-center gap-2 px-3 py-2 border-bottom dil-student-row hover-bg"
+               data-name="{{ widget.choice_label|lower }}"
+               style="cursor:pointer;">
+            {{ widget.tag }}
+            <label class="form-check-label w-100" for="{{ widget.id_for_label }}" style="cursor:pointer;">
               {{ widget.choice_label }}
             </label>
           </div>
           {% endfor %}
         </div>
+
         {% else %}
         <p class="text-muted">No enrolled students found for this program.</p>
         {% endif %}
 
-        <div class="d-flex gap-2 mt-4">
+        <div class="d-flex gap-2 mt-4 flex-wrap">
           <button type="submit" class="btn btn-brand">
-            <i class="bi bi-check-lg me-1"></i>Save Attendance
+            <i class="bi bi-floppy me-1"></i>Save Attendance
           </button>
           <a href="{% url 'kiswate_digital_app:virtual_class_detail' vc.pk %}" class="btn btn-outline-secondary">Cancel</a>
         </div>
       </form>
+
+      <style>
+        .dil-student-row:hover { background: #f9fafb; }
+        .dil-student-row:last-child { border-bottom: none !important; }
+      </style>
+
+      <script>
+        const checkboxes = document.querySelectorAll('#studentList input[type=checkbox]');
+        const countEl    = document.getElementById('selectedCount');
+
+        function updateCount() {
+          if (countEl) countEl.textContent = document.querySelectorAll('#studentList input[type=checkbox]:checked').length;
+        }
+
+        // Make entire row clickable
+        document.querySelectorAll('.dil-student-row').forEach(row => {
+          row.addEventListener('click', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+            const cb = row.querySelector('input[type=checkbox]');
+            if (cb) { cb.checked = !cb.checked; updateCount(); }
+          });
+        });
+
+        checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+
+        document.getElementById('selectAllBtn')?.addEventListener('click', () => {
+          document.querySelectorAll('#studentList .dil-student-row:not([style*="display: none"]) input[type=checkbox]').forEach(cb => cb.checked = true);
+          updateCount();
+        });
+
+        document.getElementById('deselectAllBtn')?.addEventListener('click', () => {
+          checkboxes.forEach(cb => cb.checked = false);
+          updateCount();
+        });
+
+        document.getElementById('dilStudentSearch')?.addEventListener('input', function() {
+          const val = this.value.toLowerCase();
+          document.querySelectorAll('.dil-student-row').forEach(row => {
+            row.style.display = row.dataset.name.includes(val) ? '' : 'none';
+          });
+        });
+
+        document.addEventListener('DOMContentLoaded', updateCount);
+      </script>
     </div>
   </div>
 </div>

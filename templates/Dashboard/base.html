@@ -4,40 +4,320 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Admin Dashboard {% endblock %}</title>
-
-  <!-- Bootstrap -->
+  <title>{% block title %}Kiswate Admin{% endblock %} | Kiswate Digital</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
-  <!-- AOS -->
   <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet" />
+  <style>
+    /* ══════════════════════════════════════
+       TOKENS
+    ══════════════════════════════════════ */
+    :root {
+      --green:       #0b7a2a;
+      --green-light: #0ea83a;
+      --green-dim:   rgba(11,122,42,.13);
+      --indigo:      #4f46e5;
+      --indigo-light:#6366f1;
+      --indigo-dim:  rgba(79,70,229,.13);
+      --sidebar-bg:  #0d1117;
+      --sidebar-w:   262px;
+      --header-h:    54px;
+      /* Override Bootstrap blue → brand green */
+      --bs-primary:            #0b7a2a;
+      --bs-primary-rgb:        11, 122, 42;
+      --bs-link-color:         #0b7a2a;
+      --bs-link-color-rgb:     11, 122, 42;
+      --bs-link-hover-color:   #0ea83a;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f1f5f9; font-family: system-ui,-apple-system,sans-serif; font-size: .9rem; }
 
-  <!-- Custom CSS -->
-  <link href="{% static 'css/dashboard.css' %}" rel="stylesheet" />
+    /* ══════════════════════════════════════
+       LAYOUT
+    ══════════════════════════════════════ */
+    .app { display: flex; min-height: 100vh; }
+
+    /* ══════════════════════════════════════
+       SIDEBAR
+    ══════════════════════════════════════ */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--sidebar-bg);
+      position: fixed; top: 0; left: 0; bottom: 0;
+      overflow-y: auto; z-index: 1050;
+      transform: translateX(0); transition: transform .28s ease;
+      scrollbar-width: thin; scrollbar-color: #2a2a3e #0d1117;
+      display: flex; flex-direction: column;
+    }
+    @media (max-width: 992px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+    }
+
+    /* Logo */
+    .sidebar-logo {
+      padding: 1rem; background: #070a0e;
+      border-bottom: 1px solid #1a1f2e;
+      display: flex; align-items: center; gap: .7rem; flex-shrink: 0;
+    }
+    .logo-icon {
+      width: 38px; height: 38px; background: var(--green);
+      border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 1.05rem; flex-shrink: 0;
+    }
+    .logo-title { font-weight: 800; font-size: .93rem; color: #fff; line-height: 1.15; }
+    .logo-sub   { font-size: .67rem; color: #5a6480; margin-top: 1px; }
+
+    /* Section labels */
+    .nav-section {
+      display: flex; align-items: center; gap: .5rem;
+      padding: 1.1rem 1rem .3rem;
+      font-size: .6rem; font-weight: 800;
+      letter-spacing: .12em; text-transform: uppercase;
+    }
+    .nav-section.admin { color: #3d7a54; }
+    .nav-section.dil   { color: #9ca3af; }
+    .nav-section::after {
+      content: ''; flex: 1; height: 1px; background: #1a1f2e;
+    }
+
+    /* Visible divider between the two big sections */
+    .nav-big-divider {
+      margin: .6rem 0;
+      border: none; border-top: 2px solid #1a1f2e;
+    }
+
+    /* Nav items */
+    .side-link, button.side-link {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .58rem 1rem; color: #d1d5db; text-decoration: none;
+      background: none; border: none; width: 100%; text-align: left;
+      cursor: pointer; font-size: .84rem; transition: background .14s, color .14s;
+    }
+    .side-link i:first-child { font-size: .95rem; flex-shrink: 0; width: 16px; text-align: center; }
+
+    /* Admin zone hover/active */
+    .admin-zone .side-link:hover       { background: rgba(255,255,255,.06); color: #fff; }
+    .admin-zone .side-link.active      { background: var(--green-dim); color: #4ade80; }
+    .admin-zone .sub-menu li a:hover   { color: #fff; }
+
+    /* DIL zone hover/active — indigo tint */
+    .dil-zone   .side-link:hover       { background: rgba(99,102,241,.09); color: #fff; }
+    .dil-zone   .side-link.active      { background: var(--indigo-dim); color: #c7d2fe; }
+    .dil-zone   .sub-menu li a:hover   { color: #fff; }
+
+    /* Sub-menus */
+    .sub-menu {
+      list-style: none; padding: 0 0 0 2rem; margin: 0;
+      max-height: 0; overflow: hidden; transition: max-height .28s ease;
+    }
+    .sub-menu.show { max-height: 700px; }
+    .sub-menu li a {
+      display: flex; align-items: center; gap: .4rem;
+      padding: .3rem 0; color: #9ca3af; text-decoration: none; font-size: .795rem;
+    }
+    .sub-menu li a i { font-size: .78rem; flex-shrink: 0; width: 14px; text-align: center; }
+
+    /* Chevron */
+    .bi-chevron-down { transition: transform .22s; font-size: .68rem !important; margin-left: auto; width: auto !important; }
+
+    /* Account zone at bottom */
+    .nav-footer { padding-bottom: .75rem; }
+    .nav-footer .side-link { color: #5a6480; }
+    .nav-footer .side-link:hover { color: #8892a4; background: none; }
+
+    /* ══════════════════════════════════════
+       MAIN AREA
+    ══════════════════════════════════════ */
+    .main {
+      flex: 1; margin-left: var(--sidebar-w); min-width: 0;
+      transition: margin-left .28s ease;
+    }
+    @media (max-width: 992px) { .main { margin-left: 0; } }
+
+    /* Header */
+    .header {
+      height: var(--header-h);
+      background: #fff; border-bottom: 1px solid #e2e8f0;
+      padding: 0 1.25rem; position: sticky; top: 0; z-index: 1030;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+
+    /* Content */
+    .content {
+      padding: 1.5rem; background: #f1f5f9;
+      min-height: calc(100vh - var(--header-h));
+    }
+
+    /* ══════════════════════════════════════
+       COMPONENT CSS  (used by DIL & admin pages)
+    ══════════════════════════════════════ */
+
+    /* Cards */
+    .module-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e2e8f0;
+      padding: 1.25rem; transition: box-shadow .18s;
+    }
+    .module-card:hover { box-shadow: 0 4px 18px rgba(0,0,0,.07); }
+
+    .stat-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e2e8f0;
+      padding: 1.25rem 1.5rem;
+    }
+    .stat-card .stat-icon {
+      width: 44px; height: 44px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+    }
+    .stat-card .stat-value  { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    .stat-card .stat-label  { font-size: .76rem; color: #6b7280; margin-top: .2rem; }
+
+    /* Table card */
+    .table-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;
+    }
+    .table-card .table { margin: 0; }
+    .table-card .table th {
+      background: #f8fafc; font-size: .74rem; font-weight: 700;
+      color: #374151; text-transform: uppercase; letter-spacing: .04em;
+      padding: .65rem .85rem; white-space: nowrap;
+    }
+    .table-card .table td { padding: .55rem .85rem; vertical-align: middle; }
+    .table-card .table tbody tr:hover { background: #f8fafc; }
+
+    /* Form card */
+    .form-card {
+      background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 1.75rem;
+    }
+    .form-label { font-weight: 600; font-size: .84rem; color: #374151; }
+
+    /* Page header */
+    .page-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .page-header h5 { margin: 0; font-weight: 700; font-size: 1.05rem; color: #0f172a; }
+
+    /* Section label inside a page */
+    .section-title {
+      font-size: .7rem; font-weight: 700; letter-spacing: .09em;
+      text-transform: uppercase; color: #9ca3af; margin-bottom: .75rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+
+    /* Buttons */
+    .btn-brand { background: var(--green); color: #fff; border: none; }
+    .btn-brand:hover { background: var(--green-light); color: #fff; }
+    .btn-dil   { background: var(--indigo); color: #fff; border: none; }
+    .btn-dil:hover   { background: #4338ca; color: #fff; }
+    .btn-xs    { padding: .18rem .5rem; font-size: .73rem; line-height: 1.4; border-radius: 6px; }
+
+    /* Badges */
+    .badge-pending  { background: #fef3c7; color: #92400e; }
+    .badge-approved { background: #d1fae5; color: #065f46; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; }
+    .badge-active   { background: #d1fae5; color: #065f46; }
+    .badge-teacher  { background: #dbeafe; color: #1e40af; }
+    .badge-student  { background: #f3e8ff; color: #6b21a8; }
+
+    /* Platform pills for virtual classes */
+    .pill-gmeet { background: #e8f5e9; color: #1b5e20; }
+    .pill-teams { background: #e3f2fd; color: #0d47a1; }
+    .pill-zoom  { background: #e8eaf6; color: #283593; }
+
+    /* DIL page badge (appears near page title) */
+    .dil-badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: var(--indigo-dim); color: var(--indigo-light);
+      font-size: .68rem; font-weight: 700; padding: .18rem .55rem;
+      border-radius: 20px; letter-spacing: .05em; text-transform: uppercase;
+    }
+
+    /* Rate bar */
+    .rate-bar  { height: 6px; border-radius: 3px; background: #e2e8f0; }
+    .rate-fill { height: 100%; border-radius: 3px; background: var(--green); }
+
+    /* Alerts */
+    .alert { border-radius: 10px; border: none; font-size: .875rem; }
+    .alert-success { background: #d1fae5; color: #065f46; }
+    .alert-warning { background: #fef3c7; color: #92400e; }
+    .alert-danger  { background: #fee2e2; color: #991b1b; }
+    .alert-info    { background: #dbeafe; color: #1e40af; }
+
+    /* Overlay scrim */
+    .scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.48); z-index: 1040; }
+    .scrim.show { display: block; }
+
+    /* ══════════════════════════════════════
+       MOBILE BOTTOM NAV
+    ══════════════════════════════════════ */
+    .mobile-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #0d1117; border-top: 1px solid #1a1f2e;
+      padding: .48rem 0 calc(.48rem + env(safe-area-inset-bottom));
+      z-index: 1040; display: none;
+    }
+    .mobile-nav a {
+      color: #4b5563; text-decoration: none;
+      display: flex; flex-direction: column; align-items: center;
+      font-size: .58rem; gap: .04rem; padding: 0 .3rem; transition: color .13s;
+    }
+    .mobile-nav a i { font-size: 1.15rem; line-height: 1; }
+    .mobile-nav a.active, .mobile-nav a:hover { color: #fff; }
+    .mobile-nav a.active i { color: #4ade80; }
+    @media (max-width: 992px) {
+      .mobile-nav { display: flex; justify-content: space-around; }
+      .content { padding-bottom: 5rem; }
+    }
+
+    /* ══════════════════════════════════════
+       RESPONSIVE TABLE HELPERS
+    ══════════════════════════════════════ */
+    @media (max-width: 575px) { .hide-xs { display: none !important; } }
+    @media (max-width: 767px) { .hide-sm { display: none !important; } }
+    .table { font-size: .845rem; }
+    .table td, .table th { vertical-align: middle; }
+  </style>
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
-  <div class="app">
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <!-- <div class="brand" data-aos="fade-right">
-      <i class="bi bi-shield-lock-fill"></i>
-      <span>School Admin Console</span>
-    </div> -->
+<div class="app">
 
-    <nav class="menu">
-      <!-- Dashboard -->
-      <a class="side-link" href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
+  <!-- ════════════════════════════════════
+       SIDEBAR
+  ════════════════════════════════════ -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Branding -->
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <i class="bi bi-shield-fill-check text-white"></i>
+      </div>
+      <div>
+        <div class="logo-title">Kiswate Digital</div>
+        <div class="logo-sub">Platform Administration</div>
+      </div>
+    </div>
+
+    <!-- ── KISWATE PLATFORM ADMIN SECTION ── -->
+    <div class="admin-zone">
+      <div class="nav-section admin">
+        <i class="bi bi-gear-wide-connected" style="font-size:.7rem;"></i>
+        Platform Admin
+      </div>
+
+      <a class="side-link {% block nav_dashboard %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}">
         <i class="bi bi-speedometer2"></i> Dashboard
       </a>
 
       <!-- Schools -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="administration">
-          <i class="bi bi-building"></i> Schools
-          <i class="bi bi-chevron-down ms-auto small"></i>
+        <button class="side-link has-sub" data-target="nav-schools">
+          <i class="bi bi-building-fill"></i> Schools
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="administration">
+        <ul class="sub-menu {% block nav_schools_open %}{% endblock %}" id="nav-schools">
           <li><a href="{% url 'kiswate_digital_app:school_list' %}"><i class="bi bi-list-ul"></i> All Schools</a></li>
           <li><a href="{% url 'kiswate_digital_app:new_school' %}"><i class="bi bi-plus-circle"></i> Add School</a></li>
           <li><a href="{% url 'kiswate_digital_app:school_admin_list' %}"><i class="bi bi-person-badge"></i> School Admins</a></li>
@@ -45,324 +325,295 @@
         </ul>
       </div>
 
-      <!-- Users -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="users">
-          <i class="bi bi-people"></i> Users
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="users">
-          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All Users</a></li>
-          <li><a href="{% url 'kiswate_digital_app:staff-members' %}"><i class="bi bi-person-workspace"></i> Staff Members</a></li>
-          <li><a href="{% url 'kiswate_digital_app:enrollment_list' %}"><i class="bi bi-journal-bookmark"></i> Enrollments</a></li>
-        </ul>
-      </div>
-
       <!-- Subscriptions -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="Subscriptions">
+        <button class="side-link has-sub" data-target="nav-billing">
           <i class="bi bi-gem"></i> Subscriptions
-          <i class="bi bi-chevron-down ms-auto small"></i>
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="Subscriptions">
-          <li><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}"><i class="bi bi-file-earmark-plus"></i> Subscription Plans</a></li>
-          <li><a href="{% url 'kiswate_digital_app:invoice_list' %}"><i class="bi bi-receipt"></i> School Subscriptions</a></li>
-          <li><a href="{% url 'kiswate_digital_app:payment_history' %}"><i class="bi bi-arrow-down-circle"></i> Payment History</a></li>
+        <ul class="sub-menu {% block nav_billing_open %}{% endblock %}" id="nav-billing">
+          <li><a href="{% url 'kiswate_digital_app:subscription_plan_list' %}"><i class="bi bi-card-list"></i> Plans</a></li>
+          <li><a href="{% url 'kiswate_digital_app:invoice_list' %}"><i class="bi bi-receipt"></i> Invoices</a></li>
+          <li><a href="{% url 'kiswate_digital_app:payment_history' %}"><i class="bi bi-credit-card-2-front"></i> Payment History</a></li>
         </ul>
       </div>
 
-      <!-- Classes & Assignments -->
+      <a class="side-link {% block nav_scholarships %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:scholarship_list_create' %}">
+        <i class="bi bi-award-fill"></i> Scholarships
+      </a>
+
+      <a class="side-link {% block nav_subject_catalog %}{% endblock %}"
+         href="{% url 'school:catalog-subject-list' %}">
+        <i class="bi bi-journals"></i> School Subjects
+      </a>
+
+      <a class="side-link {% block nav_system_users %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:system_users' %}">
+        <i class="bi bi-person-gear"></i> System Users
+      </a>
+
+      <a class="side-link {% block nav_support %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:support' %}">
+        <i class="bi bi-headset"></i> Support
+      </a>
+    </div><!-- /admin-zone -->
+
+    <!-- ════ VISUAL DIVIDER ════ -->
+    <hr class="nav-big-divider">
+
+    <!-- ── DIL SECTION ── -->
+    <div class="dil-zone">
+      <div class="nav-section dil">
+        <i class="bi bi-mortarboard-fill" style="font-size:.72rem;"></i>
+        Differentiated Instruction
+      </div>
+
+      <!-- DIL Programs -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="classes">
-          <i class="bi bi-camera-video"></i> Classes
-          <i class="bi bi-chevron-down ms-auto small"></i>
+        <button class="side-link has-sub" data-target="nav-dil">
+          <i class="bi bi-collection-fill"></i> Programs
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="classes">
-          <li><a href="{% url 'kiswate_digital_app:virtual_class_list' %}"><i class="bi bi-play-circle"></i> Virtual Classes</a></li>
-          <li><a href="{% url 'kiswate_digital_app:lesson_list' %}"><i class="bi bi-book"></i> Lessons</a></li>
-          <li><a href="{% url 'kiswate_digital_app:assignment_list' %}"><i class="bi bi-clipboard-check"></i> Assignments</a></li>
+        <ul class="sub-menu {% block nav_tuition %}{% endblock %}" id="nav-dil">
+          <li><a href="{% url 'kiswate_digital_app:tuition_program_list' %}"><i class="bi bi-list-ul"></i> All Programs</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_program_create' %}"><i class="bi bi-plus-circle"></i> New Program</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_browse' %}"><i class="bi bi-search"></i> Browse</a></li>
+          <li><a href="{% url 'kiswate_digital_app:tuition_payment_list' %}"><i class="bi bi-credit-card"></i> Payments</a></li>
+        </ul>
+      </div>
+
+      <!-- Virtual Classes -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-classes">
+          <i class="bi bi-camera-video-fill"></i> Virtual Classes
+          <i class="bi bi-chevron-down"></i>
+        </button>
+        <ul class="sub-menu {% block nav_classes_open %}{% endblock %}" id="nav-classes">
+          <li><a href="{% url 'kiswate_digital_app:virtual_class_list' %}"><i class="bi bi-list-ul"></i> All Classes</a></li>
+          <li><a href="{% url 'kiswate_digital_app:virtual_class_create' %}"><i class="bi bi-plus-circle"></i> Schedule Class</a></li>
+        </ul>
+      </div>
+
+      <!-- Lessons -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-lessons">
+          <i class="bi bi-book-fill"></i> Lessons
+          <i class="bi bi-chevron-down"></i>
+        </button>
+        <ul class="sub-menu {% block nav_lessons_open %}{% endblock %}" id="nav-lessons">
+          <li><a href="{% url 'kiswate_digital_app:lesson_list' %}"><i class="bi bi-list-ul"></i> All Lessons</a></li>
+          <li><a href="{% url 'kiswate_digital_app:lesson_create' %}"><i class="bi bi-plus-circle"></i> New Lesson</a></li>
+        </ul>
+      </div>
+
+      <!-- Assignments -->
+      <div class="menu-group">
+        <button class="side-link has-sub" data-target="nav-assignments">
+          <i class="bi bi-file-earmark-text-fill"></i> Assignments
+          <i class="bi bi-chevron-down"></i>
+        </button>
+        <ul class="sub-menu {% block nav_asgn_open %}{% endblock %}" id="nav-assignments">
+          <li><a href="{% url 'kiswate_digital_app:assignment_list' %}"><i class="bi bi-list-ul"></i> All Assignments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:assignment_create' %}"><i class="bi bi-plus-circle"></i> New Assignment</a></li>
         </ul>
       </div>
 
       <!-- Assessments -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="assessments">
-          <i class="bi bi-pencil-square"></i> Assessments
-          <i class="bi bi-chevron-down ms-auto small"></i>
+        <button class="side-link has-sub" data-target="nav-assessments">
+          <i class="bi bi-clipboard-check-fill"></i> Assessments
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="assessments">
-          <li><a href="{% url 'kiswate_digital_app:assessment_list' %}"><i class="bi bi-list-check"></i> All Assessments</a></li>
+        <ul class="sub-menu {% block nav_assess_open %}{% endblock %}" id="nav-assessments">
+          <li><a href="{% url 'kiswate_digital_app:assessment_list' %}"><i class="bi bi-list-ul"></i> All Assessments</a></li>
           <li><a href="{% url 'kiswate_digital_app:assessment_create' %}"><i class="bi bi-plus-circle"></i> New Assessment</a></li>
         </ul>
       </div>
 
-      <!-- Scholarships -->
+      <a class="side-link {% block nav_subjects %}{% endblock %}"
+         href="{% url 'kiswate_digital_app:subject_list' %}">
+        <i class="bi bi-journal-bookmark-fill"></i> DIL Subjects
+      </a>
+
+      <!-- People -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="scholarships">
-          <i class="bi bi-award"></i> Scholarships
-          <i class="bi bi-chevron-down ms-auto small"></i>
+        <button class="side-link has-sub" data-target="nav-people">
+          <i class="bi bi-people-fill"></i> People
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="scholarships">
-          <li><a href="{% url 'kiswate_digital_app:scholarship_list_create' %}"><i class="bi bi-trophy"></i> Scholarship List</a></li>
+        <ul class="sub-menu {% block nav_users_open %}{% endblock %}" id="nav-people">
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}"><i class="bi bi-person-lines-fill"></i> All DIL Users</a></li>
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=student"><i class="bi bi-mortarboard"></i> Students</a></li>
+          <li><a href="{% url 'kiswate_digital_app:user_list' %}?role=teacher"><i class="bi bi-person-badge"></i> Teachers</a></li>
+          <li><a href="{% url 'kiswate_digital_app:enrollment_list' %}"><i class="bi bi-journal-plus"></i> Enrollments</a></li>
+          <li><a href="{% url 'kiswate_digital_app:guardian_list' %}"><i class="bi bi-person-heart"></i> Guardians</a></li>
         </ul>
       </div>
 
-      <!-- Notifications -->
+      <!-- Comms & Reports -->
       <div class="menu-group">
-        <button class="side-link has-sub" data-target="notifications">
-          <i class="bi bi-bell"></i> Notifications
-          <i class="bi bi-chevron-down ms-auto small"></i>
+        <button class="side-link has-sub" data-target="nav-comms">
+          <i class="bi bi-send-fill"></i> Comms & Reports
+          <i class="bi bi-chevron-down"></i>
         </button>
-        <ul class="sub-menu" id="notifications">
-          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-bell-fill"></i> All Notifications</a></li>
+        <ul class="sub-menu {% block nav_notif_open %}{% endblock %}" id="nav-comms">
+          <li><a href="{% url 'kiswate_digital_app:notification_list' %}"><i class="bi bi-bell"></i> Notifications</a></li>
           <li><a href="{% url 'kiswate_digital_app:send_bulk_notification' %}"><i class="bi bi-broadcast"></i> Send Bulk</a></li>
+          <li><a href="{% url 'kiswate_digital_app:notification_template_list' %}"><i class="bi bi-file-text"></i> Templates</a></li>
+          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-grid"></i> Reports Overview</a></li>
+          <li><a href="{% url 'kiswate_digital_app:student_performance_report' %}"><i class="bi bi-graph-up-arrow"></i> Performance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:attendance_report' %}"><i class="bi bi-person-check"></i> Attendance</a></li>
+          <li><a href="{% url 'kiswate_digital_app:teacher_activity_report' %}"><i class="bi bi-activity"></i> Teacher Activity</a></li>
+          <li><a href="{% url 'kiswate_digital_app:school_utilization_report' %}"><i class="bi bi-building-check"></i> School Utilization</a></li>
         </ul>
       </div>
 
-      <!-- Reports -->
-      <div class="menu-group">
-        <button class="side-link has-sub" data-target="reports">
-          <i class="bi bi-bar-chart-line"></i> Reports
-          <i class="bi bi-chevron-down ms-auto small"></i>
-        </button>
-        <ul class="sub-menu" id="reports">
-          <li><a href="{% url 'kiswate_digital_app:reports_dashboard' %}"><i class="bi bi-speedometer"></i> Reports Dashboard</a></li>
-          <li><a href="{% url 'kiswate_digital_app:student_performance_report' %}"><i class="bi bi-person-check"></i> Student Performance</a></li>
-          <li><a href="{% url 'kiswate_digital_app:attendance_report' %}"><i class="bi bi-calendar-check"></i> Attendance</a></li>
-          <li><a href="{% url 'kiswate_digital_app:teacher_activity_report' %}"><i class="bi bi-person-workspace"></i> Teacher Activity</a></li>
-        </ul>
-      </div>
+    </div><!-- /dil-zone -->
 
-      <!-- Support -->
-      <a class="side-link" href="{% url 'kiswate_digital_app:support' %}">
-        <i class="bi bi-headset"></i> Support
+    <!-- ── ACCOUNT ── -->
+    <div class="nav-footer mt-auto">
+      <hr class="nav-big-divider mb-0">
+      <a class="side-link" style="color:#5a6480;" href="{% url 'userauths:change-password' %}">
+        <i class="bi bi-shield-lock"></i> Change Password
       </a>
-
-      <hr style="border-color:#333;margin:.5rem 1rem;">
-
-      <!-- Sign Out -->
-      <a class="side-link" href="{% url 'userauths:sign-out' %}">
-        <i class="bi bi-box-arrow-right"></i> Sign Out
+      <a class="side-link" style="color:#5a6480;" href="{% url 'userauths:sign-out' %}">
+        <i class="bi bi-box-arrow-left"></i> Sign Out
       </a>
-    </nav>
+    </div>
+
   </aside>
 
-  <!-- Main -->
+  <!-- ════════════════════════════════════
+       MAIN CONTENT
+  ════════════════════════════════════ -->
   <main class="main">
-    <header class="header d-flex align-items-center justify-content-between">
-      <div class="d-flex align-items-center gap-2">
-        <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar">
-          <i class="bi bi-list"></i>
+
+    <!-- Top header -->
+    <header class="header">
+      <div class="d-flex align-items-center gap-2 min-w-0">
+        <button class="btn btn-sm btn-outline-secondary d-lg-none flex-shrink-0" id="toggleSidebar">
+          <i class="bi bi-list" style="font-size:1.2rem;"></i>
         </button>
-        <h6 class="m-0 fw-bold">Dashboard</h6>
-      </div>
-
-      <div class="searchbar d-none d-md-block" style="max-width: 380px;">
-        <input class="form-control form-control-sm" type="search" placeholder="Search…" />
-      </div>
-
-      <div class="d-flex align-items-center gap-2">
-        <span class="badge badge-dark rounded-pill px-2 py-1">
-          <i class="bi bi-calendar3 me-1"></i>
-          <span id="today">{{ current_date|date:"M d, Y" }}</span>
+        <span class="fw-semibold text-dark text-truncate" style="font-size:.88rem;">
+          {% block page_title %}Dashboard{% endblock %}
         </span>
-        <button class="btn btn-sm btn-outline-dark"><i class="bi bi-bell"></i></button>
       </div>
+
+      {% block header_actions %}
+      <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <span class="badge rounded-pill px-2 py-1 d-none d-md-inline-flex"
+              style="background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;font-size:.7rem;">
+          <i class="bi bi-calendar3 me-1"></i>{{ current_date|date:"M d, Y" }}
+        </span>
+        {% if request.user.is_authenticated %}
+        <span class="badge bg-dark rounded-pill px-2 d-none d-sm-inline-flex" style="font-size:.7rem;">
+          <i class="bi bi-person-circle me-1"></i>{{ request.user.get_full_name|default:request.user.email }}
+        </span>
+        {% endif %}
+        <a href="{% url 'kiswate_digital_app:notification_list' %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-bell"></i>
+        </a>
+      </div>
+      {% endblock header_actions %}
     </header>
 
-    <section class="content container-fluid">
-        {% block content %}
+    <!-- Flash messages -->
+    {% if messages %}
+    <div class="px-3 pt-2">
+      {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show d-flex align-items-center gap-2">
+        <i class="bi
+          {% if message.tags == 'success' %}bi-check-circle-fill
+          {% elif message.tags == 'warning' %}bi-exclamation-triangle-fill
+          {% elif message.tags == 'error' %}bi-x-circle-fill
+          {% else %}bi-info-circle-fill{% endif %}"></i>
+        <span>{{ message }}</span>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
 
-            <!-- Alerts -->
-<!-- Django Messages as Bootstrap Toasts -->
-
-
-        {% endblock %}
-
+    <!-- Page body -->
+    <section class="content">
+      {% block content %}{% endblock %}
     </section>
+
   </main>
 </div>
 
+<!-- Overlay -->
+<div class="scrim" id="scrim"></div>
 
-  <!-- Overlay for mobile sidebar -->
-  <div class="scrim" id="scrim"></div>
+<!-- Mobile bottom nav -->
+{% block mobile_nav %}
+<nav class="mobile-nav">
+  <a href="{% url 'kiswate_digital_app:kiswate_admin_dashboard' %}" class="{% block mnav_dashboard %}{% endblock %}">
+    <i class="bi bi-speedometer2"></i><span>Home</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:school_list' %}" class="{% block mnav_schools %}{% endblock %}">
+    <i class="bi bi-building-fill"></i><span>Schools</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:tuition_program_list' %}" class="{% block mnav_dil %}{% endblock %}">
+    <i class="bi bi-mortarboard-fill"></i><span>DIL</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:user_list' %}" class="{% block mnav_users %}{% endblock %}">
+    <i class="bi bi-people-fill"></i><span>People</span>
+  </a>
+  <a href="{% url 'kiswate_digital_app:notification_list' %}" class="{% block mnav_notifs %}{% endblock %}">
+    <i class="bi bi-bell-fill"></i><span>Alerts</span>
+  </a>
+</nav>
+{% endblock mobile_nav %}
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
 <script>
-(function() {
-  AOS.init({ duration: 600, once: true, easing: 'ease-out' });
-  
-  // Sidebar toggle
-  const sidebar = document.getElementById('sidebar');
-  const scrim = document.getElementById('scrim');
-  const toggle = document.getElementById('toggleSidebar');
-  
-  if (toggle) {
-    toggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      scrim.classList.toggle('show');
-    });
-  }
-  
-  if (scrim) {
-    scrim.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      scrim.classList.remove('show');
-    });
-  }
-  
-  // Display today's date
-  const today = new Date();
-  const options = { weekday:'short', year:'numeric', month:'short', day:'numeric' };
-  const todayEl = document.getElementById('today');
-  if (todayEl) todayEl.textContent = today.toLocaleDateString(undefined, options);
-})();
-</script>
-<!-- JS -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('toggleSidebar');
+AOS.init({ duration: 400, once: true, easing: 'ease-out' });
 
-  // Toggle sidebar visibility
-  toggleBtn.addEventListener('click', () => {
+const sidebar = document.getElementById('sidebar');
+const scrim   = document.getElementById('scrim');
+const toggle  = document.getElementById('toggleSidebar');
+
+if (toggle) {
+  toggle.addEventListener('click', () => {
     sidebar.classList.toggle('open');
-    document.body.classList.toggle('sidebar-open');
+    scrim.classList.toggle('show');
   });
-
-  // Close when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
-      sidebar.classList.remove('open');
-      document.body.classList.remove('sidebar-open');
-    }
+}
+if (scrim) {
+  scrim.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    scrim.classList.remove('show');
   });
+}
 
-  // Submenu toggle
-  document.querySelectorAll('.side-link.has-sub').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = document.getElementById(btn.dataset.target);
-      const icon = btn.querySelector('.bi-chevron-down');
-      const isOpen = target.classList.toggle('show');
-      icon.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-    });
+// Submenu toggle
+document.querySelectorAll('.side-link.has-sub').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = document.getElementById(btn.dataset.target);
+    if (!target) return;
+    const icon   = btn.querySelector('.bi-chevron-down');
+    const isOpen = target.classList.toggle('show');
+    if (icon) icon.style.transform = isOpen ? 'rotate(180deg)' : '';
   });
 });
+
+// Auto-open submenu when a child link carries .show from the template block
+document.querySelectorAll('.sub-menu.show').forEach(menu => {
+  const btn = document.querySelector(`[data-target="${menu.id}"]`);
+  if (btn) {
+    const icon = btn.querySelector('.bi-chevron-down');
+    if (icon) icon.style.transform = 'rotate(180deg)';
+  }
+});
+
+// Auto-dismiss alerts after 20 s
+document.querySelectorAll('.alert.alert-dismissible').forEach(el => {
+  setTimeout(() => bootstrap.Alert.getOrCreateInstance(el)?.close(), 20000);
+});
 </script>
-<!-- CSS -->
-<style>
-.app {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* Sidebar */
-.sidebar {
-  width: 250px;
-  background: #111;
-  color: #fff;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  overflow-y: auto;
-  z-index: 1050;
-  transform: translateX(0);
-  transition: transform 0.3s ease;
-}
-
-/* Hidden on mobile initially */
-@media (max-width: 992px) {
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  body.sidebar-open::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 1040;
-  }
-}
-
-/* Sidebar items */
-.brand {
-  padding: 1rem;
-  font-weight: 600;
-  background: #000;
-  border-bottom: 1px solid #222;
-}
-
-.side-link, .side-link.has-sub {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  padding: .7rem 1rem;
-  color: #d9d9d9;
-  text-decoration: none;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-
-.side-link:hover, .side-link.active {
-  background: #0b7a2a;
-  color: #fff;
-}
-
-/* Submenu */
-.sub-menu {
-  list-style: none;
-  padding-left: 1.5rem;
-  margin: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease-in-out;
-}
-.sub-menu.show {
-  max-height: 500px;
-}
-.sub-menu li a {
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  padding: .4rem 0;
-  color: #bfbfbf;
-  text-decoration: none;
-  font-size: 0.88rem;
-}
-.sub-menu li a:hover {
-  color: #fff;
-}
-
-/* Main content */
-.main {
-  flex-grow: 1;
-  margin-left: 250px;
-  transition: margin-left 0.3s ease;
-}
-@media (max-width: 992px) {
-  .main {
-    margin-left: 0;
-  }
-}
-
-/* Header */
-.header {
-  background: #fff;
-  border-bottom: 1px solid #eee;
-  padding: .75rem 1rem;
-  position: sticky;
-  top: 0;
-  z-index: 1030;
-}
-</style>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

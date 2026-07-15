@@ -1,4 +1,4 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ assessment.title }}{% endblock %}
 {% block page_title %}Take Assessment{% endblock %}
 {% block nav_assess_open %}show{% endblock %}

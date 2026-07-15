@@ -22,9 +22,9 @@
       <thead class="table-light">
         <tr>
           <th>Subject</th>
-          <th>Category</th>
-          <th>Child</th>
-          <th>Submitted</th>
+          <th class="hide-xs">Category</th>
+          <th class="hide-sm">Child</th>
+          <th class="hide-sm">Submitted</th>
           <th>Status</th>
           <th>Response</th>
         </tr>
@@ -32,10 +32,15 @@
       <tbody>
         {% for c in complaints %}
         <tr>
-          <td class="fw-semibold">{{ c.subject|truncatechars:40 }}</td>
-          <td><span class="badge bg-secondary">{{ c.get_category_display }}</span></td>
-          <td>{{ c.student.user.get_full_name|default:"—" }}</td>
-          <td>{{ c.created_at|date:"M d, Y" }}</td>
+          <td>
+            <span class="fw-semibold">{{ c.subject|truncatechars:35 }}</span>
+            <div class="d-sm-none text-muted" style="font-size:.75rem;">
+              {{ c.get_category_display }} &middot; {{ c.created_at|date:"M d, Y" }}
+            </div>
+          </td>
+          <td class="hide-xs"><span class="badge bg-secondary">{{ c.get_category_display }}</span></td>
+          <td class="hide-sm">{{ c.student.user.get_full_name|default:"—" }}</td>
+          <td class="hide-sm">{{ c.created_at|date:"M d, Y" }}</td>
           <td>
             <span class="badge {% if c.status == 'resolved' %}bg-success{% elif c.status == 'in_review' %}bg-warning text-dark{% elif c.status == 'closed' %}bg-secondary{% else %}bg-danger{% endif %}">
               {{ c.get_status_display }}

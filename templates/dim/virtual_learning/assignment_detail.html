@@ -1,7 +1,7 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"dim/base.html" %}
 {% block title %}{{ assignment.title }}{% endblock %}
 {% block page_title %}Assignment{% endblock %}
-{% block nav_asgn_open %}show{% endblock %}
+{% block nav_asgn_open %}{% if not portal_role %}show{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -51,7 +51,7 @@
     <!-- My submission (student) -->
     {% if profile.role == 'student' %}
     <div class="module-card">
-      <h6 class="fw-semibold mb-3"><i class="bi bi-send me-1 text-primary"></i>My Submission</h6>
+      <h6 class="fw-semibold mb-3"><i class="bi bi-send me-1 text-success"></i>My Submission</h6>
       {% if my_submission %}
       <div class="alert alert-success d-flex gap-2 align-items-start" style="font-size:.85rem;">
         <i class="bi bi-check-circle-fill mt-1"></i>
@@ -85,7 +85,7 @@
   <div class="col-lg-5">
     <div class="module-card">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-semibold mb-0"><i class="bi bi-inbox me-1 text-primary"></i>Submissions</h6>
+        <h6 class="fw-semibold mb-0"><i class="bi bi-inbox me-1 text-success"></i>Submissions</h6>
         <span class="badge bg-secondary-subtle text-secondary rounded-pill">{{ submissions.count }}</span>
       </div>
       {% if submissions %}
@@ -103,7 +103,7 @@
           {% else %}
           <span class="badge badge-pending rounded-pill" style="font-size:.7rem;">Pending</span>
           {% endif %}
-          <a href="{% url 'kiswate_digital_app:grade_submission' sub.pk %}" class="btn btn-sm btn-outline-primary" style="font-size:.75rem;">Grade</a>
+          <a href="{% url 'kiswate_digital_app:grade_submission' sub.pk %}" class="btn btn-sm btn-outline-success" style="font-size:.75rem;">Grade</a>
         </div>
       </div>
       {% endfor %}

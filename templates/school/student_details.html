@@ -1,0 +1,112 @@
+{% extends base_template|default:"school/base.html" %}
+{% load static %}
+{% block title %}{{ student }} | Student Details{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Student Details</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'school:school-users' %}">Students</a></li>
+          <li class="breadcrumb-item active">{{ student.user.get_full_name }}</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+  <a href="{% url 'school:update_student' student.pk %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-pencil me-1"></i>Edit
+  </a>
+</header>
+
+<div class="container-fluid py-3">
+  <div class="row g-4">
+
+    <!-- Profile card -->
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm text-center p-4">
+        {% if student.profile_picture %}
+          <img src="{{ student.profile_picture.url }}" alt="{{ student }}"
+               class="rounded-circle mx-auto mb-3" style="width:96px;height:96px;object-fit:cover;">
+        {% else %}
+          <div class="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center bg-secondary-subtle"
+               style="width:96px;height:96px;font-size:2.5rem;">
+            <i class="bi bi-person text-secondary"></i>
+          </div>
+        {% endif %}
+        <h5 class="fw-bold mb-0">{{ student.user.get_full_name }}</h5>
+        <p class="text-muted small mb-2">{{ student.student_id }}</p>
+        {% if student.suspended %}
+          <span class="badge bg-warning text-dark">Suspended</span>
+        {% elif student.expelled %}
+          <span class="badge bg-danger">Expelled</span>
+        {% elif student.is_active %}
+          <span class="badge bg-success">Active</span>
+        {% else %}
+          <span class="badge bg-secondary">Inactive</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Details -->
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent fw-semibold">Personal Information</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4 text-muted">Email</dt>
+            <dd class="col-sm-8">{{ student.user.email }}</dd>
+
+            <dt class="col-sm-4 text-muted">Gender</dt>
+            <dd class="col-sm-8">{{ student.get_gender_display|default:"—" }}</dd>
+
+            <dt class="col-sm-4 text-muted">Date of Birth</dt>
+            <dd class="col-sm-8">{{ student.date_of_birth|date:"d M Y"|default:"—" }}</dd>
+
+            <dt class="col-sm-4 text-muted">Enrollment Date</dt>
+            <dd class="col-sm-8">{{ student.enrollment_date|date:"d M Y"|default:"—" }}</dd>
+
+            <dt class="col-sm-4 text-muted">Grade</dt>
+            <dd class="col-sm-8">{{ student.grade_level }}</dd>
+
+            <dt class="col-sm-4 text-muted">Stream</dt>
+            <dd class="col-sm-8">{{ student.stream|default:"—" }}</dd>
+
+            {% if student.pathway %}
+            <dt class="col-sm-4 text-muted">Pathway</dt>
+            <dd class="col-sm-8">{{ student.pathway }}</dd>
+            {% endif %}
+
+            {% if student.bio %}
+            <dt class="col-sm-4 text-muted">Bio</dt>
+            <dd class="col-sm-8">{{ student.bio }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <!-- Parents -->
+      {% if student.parents.exists %}
+      <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-transparent fw-semibold">Parents / Guardians</div>
+        <ul class="list-group list-group-flush">
+          {% for parent in student.parents.all %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <i class="bi bi-person-heart me-2 text-muted"></i>
+              {{ parent.user.get_full_name }}
+            </div>
+            <span class="text-muted small">{{ parent.user.email }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

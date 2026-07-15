@@ -1,7 +1,7 @@
-{% extends "dim/base.html" %}
+{% extends base_template|default:"Dashboard/base.html" %}
 {% block title %}{{ action }} Assessment{% endblock %}
 {% block page_title %}{{ action }} Assessment{% endblock %}
-{% block nav_assess_open %}show{% endblock %}
+{% block nav_assess_open %}{% if not portal_role %}show{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">

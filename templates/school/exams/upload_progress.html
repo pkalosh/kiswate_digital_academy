@@ -1,0 +1,126 @@
+{% extends "school/base.html" %}
+{% block title %}Uploading Exam Results{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="max-width:680px;">
+
+  <div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'school:exam-session-detail' job.session.pk %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <h5 class="mb-0 fw-bold">Exam Upload — {{ job.session.name }}</h5>
+  </div>
+
+  <div class="card border-0 shadow-sm p-4">
+    <div class="text-center mb-4" id="status-icon">
+      <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;">
+        <span class="visually-hidden">Processing…</span>
+      </div>
+    </div>
+
+    <h6 class="fw-semibold text-center mb-1" id="status-label">Preparing upload…</h6>
+    <p class="text-muted text-center small mb-4" id="status-sub">
+      {{ job.subject.name }} &bull; {{ job.stream.name }}
+    </p>
+
+    <div class="progress mb-2" style="height:10px;border-radius:8px;">
+      <div id="progress-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+           role="progressbar" style="width:0%"></div>
+    </div>
+    <div class="d-flex justify-content-between small text-muted mb-4">
+      <span id="rows-done">0 / 0 rows</span>
+      <span id="pct-label">0%</span>
+    </div>
+
+    <div class="row g-3 text-center mb-4">
+      <div class="col-4">
+        <div class="p-3 rounded-3" style="background:#f0fdf4;">
+          <div class="h4 fw-bold text-success mb-0" id="count-saved">—</div>
+          <div class="small text-muted">Saved</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-3" style="background:#fff7ed;">
+          <div class="h4 fw-bold text-warning mb-0" id="count-skipped">—</div>
+          <div class="small text-muted">Skipped</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-3" style="background:#eff6ff;">
+          <div class="h4 fw-bold text-primary mb-0" id="count-total">—</div>
+          <div class="small text-muted">Total Rows</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-box" class="alert alert-danger d-none"></div>
+
+    <div id="done-actions" class="d-none text-center">
+      <a href="{% url 'school:exam-session-detail' job.session.pk %}" class="btn btn-success px-4">
+        <i class="bi bi-check-circle me-1"></i> View Results
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STATUS_URL = "{% url 'school:exam-upload-status' job.pk %}";
+  const bar      = document.getElementById('progress-bar');
+  const label    = document.getElementById('status-label');
+  const sub      = document.getElementById('status-sub');
+  const rowsDone = document.getElementById('rows-done');
+  const pctLbl   = document.getElementById('pct-label');
+  const iconBox  = document.getElementById('status-icon');
+  const errBox   = document.getElementById('error-box');
+  const doneAct  = document.getElementById('done-actions');
+  const saved    = document.getElementById('count-saved');
+  const skipped  = document.getElementById('count-skipped');
+  const total    = document.getElementById('count-total');
+
+  let timer;
+
+  function poll() {
+    fetch(STATUS_URL)
+      .then(r => r.json())
+      .then(data => {
+        const pct = data.progress || 0;
+        bar.style.width = pct + '%';
+        pctLbl.textContent = pct + '%';
+        rowsDone.textContent = data.processed + ' / ' + data.total_rows + ' rows';
+        saved.textContent   = data.saved;
+        skipped.textContent = data.skipped;
+        total.textContent   = data.total_rows;
+
+        if (data.status === 'pending' || data.status === 'processing') {
+          label.textContent = data.status === 'pending' ? 'Queued — starting shortly…' : 'Processing rows…';
+        } else if (data.status === 'done') {
+          clearInterval(timer);
+          bar.classList.remove('progress-bar-animated', 'bg-primary');
+          bar.classList.add('bg-success');
+          bar.style.width = '100%';
+          pctLbl.textContent = '100%';
+          label.textContent = 'Upload complete!';
+          sub.textContent   = data.saved + ' records saved, ' + data.skipped + ' skipped.';
+          iconBox.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size:3rem;"></i>';
+          doneAct.classList.remove('d-none');
+        } else if (data.status === 'failed') {
+          clearInterval(timer);
+          bar.classList.remove('progress-bar-animated', 'bg-primary');
+          bar.classList.add('bg-danger');
+          label.textContent = 'Upload failed';
+          iconBox.innerHTML = '<i class="bi bi-x-circle-fill text-danger" style="font-size:3rem;"></i>';
+          errBox.textContent = data.error || 'An unknown error occurred.';
+          errBox.classList.remove('d-none');
+          doneAct.classList.remove('d-none');
+        }
+      })
+      .catch(() => { /* network blip — keep polling */ });
+  }
+
+  poll();
+  timer = setInterval(poll, 1000);
+})();
+</script>
+{% endblock %}

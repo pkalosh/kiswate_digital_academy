@@ -1,0 +1,422 @@
+{% extends "school/base.html" %}
+{% block title %}DIL Enrollment{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h5 class="fw-bold mb-0"><i class="bi bi-mortarboard me-2"></i>DIL Enrollment</h5>
+    <small class="text-muted">{{ school.name }} — enroll students in DIL programs</small>
+  </div>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-outline-secondary btn-sm" target="_blank">
+    <i class="bi bi-search me-1"></i>Browse All Programs
+  </a>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+  <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+{% endif %}
+
+<div class="row g-3">
+  <!-- Enrollment Panel -->
+  <div class="col-12 col-lg-5">
+
+    <!-- Program selector (shared across all tabs) -->
+    <div class="card k-card mb-3">
+      <div class="card-header fw-semibold"><i class="bi bi-book me-2"></i>1. Select DIL Program</div>
+      <div class="card-body">
+        <select id="sharedProgram" class="form-select form-select-sm">
+          <option value="">— choose a program —</option>
+          {% for p in programs %}
+          <option value="{{ p.pk }}"
+                  data-price="{{ p.price }}"
+                  data-name="{{ p.name }}"
+                  data-subject="{{ p.subject.name }}"
+                  data-teacher="{% if p.teacher %}{{ p.teacher.full_name }}{% endif %}">
+            {{ p.name }} ({{ p.subject.name }}){% if p.price > 0 %} · KES {{ p.price }}{% else %} · Free{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <div id="programInfo" class="mt-2 d-none">
+          <div class="alert alert-info py-2 mb-0 small">
+            <strong id="pName"></strong><br>
+            <span id="pMeta" class="text-muted"></span>
+            <span id="pPriceBadge" class="badge ms-2"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enrollment mode tabs -->
+    <div class="card k-card">
+      <div class="card-header p-0">
+        <ul class="nav nav-tabs nav-fill border-0" id="enrollTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-semibold small py-2" id="tab-student" data-bs-toggle="tab"
+                    data-bs-target="#pane-student" type="button" role="tab">
+              <i class="bi bi-person me-1"></i>Per Student
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link fw-semibold small py-2" id="tab-stream" data-bs-toggle="tab"
+                    data-bs-target="#pane-stream" type="button" role="tab">
+              <i class="bi bi-people me-1"></i>By Stream
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link fw-semibold small py-2" id="tab-grade" data-bs-toggle="tab"
+                    data-bs-target="#pane-grade" type="button" role="tab">
+              <i class="bi bi-diagram-3 me-1"></i>By Grade
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="tab-content" id="enrollTabsContent">
+
+        <!-- ─── Per Student ─── -->
+        <div class="tab-pane fade show active" id="pane-student" role="tabpanel">
+          <form method="post" id="formStudent">
+            {% csrf_token %}
+            <input type="hidden" name="enroll_mode" value="student">
+            <input type="hidden" name="program" id="programStudent">
+            <div class="card-body pb-2">
+              <div class="mb-2 d-flex gap-2">
+                <input type="text" id="studentSearch" class="form-control form-control-sm"
+                       placeholder="Search by name…" autocomplete="off">
+                <span class="badge bg-secondary align-self-center text-nowrap" id="selectedCount">0 selected</span>
+              </div>
+              <div class="d-flex gap-2 mb-2">
+                <button type="button" class="btn btn-xs btn-outline-secondary" id="selectAll">All</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary" id="clearAll">Clear</button>
+              </div>
+              <div id="studentList" style="max-height:320px;overflow-y:auto;border:1px solid #dee2e6;border-radius:.5rem;padding:.5rem;">
+                {% for choice in form.students %}
+                <div class="student-item d-flex align-items-center gap-2 py-1 px-2 rounded hover-bg"
+                     style="cursor:pointer;">
+                  <div class="form-check mb-0 d-flex align-items-center gap-2 w-100">
+                    {{ choice.tag }}
+                    <label class="form-check-label w-100 small student-label" for="{{ choice.id_for_label }}"
+                           style="cursor:pointer;">{{ choice.choice_label }}</label>
+                  </div>
+                </div>
+                {% empty %}
+                <p class="text-muted small text-center py-3 mb-0">No active students found.</p>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="card-footer border-0 pt-0">
+              <div class="alert alert-success mb-2 small d-none" id="schoolPayNoteStudent">
+                <i class="bi bi-shield-check me-1"></i>School pays — a paid record is created per student.
+              </div>
+              <button type="submit" class="btn btn-success w-100 fw-semibold" id="submitStudent" disabled>
+                <i class="bi bi-check-circle me-1"></i>Enroll Selected Students
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ─── By Stream ─── -->
+        <div class="tab-pane fade" id="pane-stream" role="tabpanel">
+          <form method="post" id="formStream">
+            {% csrf_token %}
+            <input type="hidden" name="enroll_mode" value="stream">
+            <input type="hidden" name="program" id="programStream">
+            <div class="card-body">
+              <label class="form-label fw-semibold small">Select Stream <span class="text-danger">*</span></label>
+              {{ form.stream }}
+              {% if form.stream.errors %}
+              <div class="text-danger small mt-1">{{ form.stream.errors }}</div>
+              {% endif %}
+              <div id="streamInfo" class="mt-3 d-none">
+                <div class="alert alert-info small py-2 mb-0">
+                  <i class="bi bi-people me-1"></i>All active students in this stream will be enrolled.
+                </div>
+              </div>
+              <!-- stream student count badges -->
+              <div id="streamStudentList" class="mt-2"></div>
+            </div>
+            <div class="card-footer border-0 pt-0">
+              <div class="alert alert-success mb-2 small d-none" id="schoolPayNoteStream">
+                <i class="bi bi-shield-check me-1"></i>School pays — a paid record is created per student.
+              </div>
+              <button type="submit" class="btn btn-success w-100 fw-semibold" id="submitStream" disabled>
+                <i class="bi bi-check-circle me-1"></i>Enroll Entire Stream
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ─── By Grade ─── -->
+        <div class="tab-pane fade" id="pane-grade" role="tabpanel">
+          <form method="post" id="formGrade">
+            {% csrf_token %}
+            <input type="hidden" name="enroll_mode" value="grade">
+            <input type="hidden" name="program" id="programGrade">
+            <div class="card-body">
+              <label class="form-label fw-semibold small">Select Grade <span class="text-danger">*</span></label>
+              {{ form.grade }}
+              {% if form.grade.errors %}
+              <div class="text-danger small mt-1">{{ form.grade.errors }}</div>
+              {% endif %}
+              <div id="gradeInfo" class="mt-3 d-none">
+                <div class="alert alert-info small py-2 mb-0">
+                  <i class="bi bi-diagram-3 me-1"></i>All active students in every stream of this grade will be enrolled.
+                </div>
+              </div>
+            </div>
+            <div class="card-footer border-0 pt-0">
+              <div class="alert alert-success mb-2 small d-none" id="schoolPayNoteGrade">
+                <i class="bi bi-shield-check me-1"></i>School pays — a paid record is created per student.
+              </div>
+              <button type="submit" class="btn btn-success w-100 fw-semibold" id="submitGrade" disabled>
+                <i class="bi bi-check-circle me-1"></i>Enroll Entire Grade
+              </button>
+            </div>
+          </form>
+        </div>
+
+      </div><!-- /tab-content -->
+    </div><!-- /card -->
+
+    <!-- Available Programs -->
+    <div class="card k-card mt-3">
+      <div class="card-header fw-semibold"><i class="bi bi-book me-2"></i>Available DIL Programs</div>
+      <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+          {% for p in programs %}
+          <div class="list-group-item d-flex align-items-center justify-content-between py-2 px-3">
+            <div>
+              <div class="fw-semibold small">{{ p.name }}</div>
+              <div class="text-muted" style="font-size:.75rem;">
+                {{ p.subject.name }}{% if p.teacher %} · {{ p.teacher.full_name }}{% endif %}{% if p.level %} · {{ p.get_level_display }}{% endif %}
+              </div>
+            </div>
+            <div class="text-end flex-shrink-0 ms-2">
+              {% if p.price > 0 %}
+                <span class="badge bg-warning text-dark">KES {{ p.price }}</span>
+              {% else %}
+                <span class="badge bg-success">Free</span>
+              {% endif %}
+            </div>
+          </div>
+          {% empty %}
+          <div class="list-group-item text-muted small text-center py-3">No active DIL programs.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col-5 -->
+
+  <!-- Recent Enrollments -->
+  <div class="col-12 col-lg-7">
+    <div class="card k-card">
+      <div class="card-header fw-semibold"><i class="bi bi-clock-history me-2"></i>Recent Enrollments — {{ school.name }}</div>
+      {% if recent_enrollments %}
+      <div class="table-responsive">
+        <table class="table table-sm k-tight mb-0">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Program</th>
+              <th class="hide-sm">Subject</th>
+              <th>Payment</th>
+              <th>Enrolled</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for enr in recent_enrollments %}
+            <tr>
+              <td>
+                <div class="fw-semibold small">{{ enr.student.full_name }}</div>
+                <div class="text-muted" style="font-size:.72rem;">{{ enr.student.user.email }}</div>
+              </td>
+              <td class="small">{{ enr.program.name }}</td>
+              <td class="hide-sm text-muted small">{{ enr.program.subject.name }}</td>
+              <td>
+                {% if enr.payment %}
+                  {% if enr.payment.payment_method == 'school' %}
+                    <span class="badge bg-primary">School</span>
+                  {% elif enr.payment.status == 'paid' %}
+                    <span class="badge bg-success">Paid</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">{{ enr.payment.get_status_display }}</span>
+                  {% endif %}
+                {% elif enr.program.price == 0 %}
+                  <span class="badge bg-success">Free</span>
+                {% else %}
+                  <span class="badge bg-secondary">Unpaid</span>
+                {% endif %}
+              </td>
+              <td class="text-muted small text-nowrap">{{ enr.enrolled_at|date:"d M Y" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-person-plus fs-2 d-block mb-2 opacity-25"></i>
+        No DIL enrollments from this school yet.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Grade / Stream summary -->
+    <div class="card k-card mt-3">
+      <div class="card-header fw-semibold"><i class="bi bi-diagram-3 me-2"></i>Grades &amp; Streams</div>
+      <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+          {% for g in grades %}
+          <div class="list-group-item py-2 px-3">
+            <div class="fw-semibold small mb-1">{{ g.name }}</div>
+            <div class="d-flex flex-wrap gap-1">
+              {% for s in streams %}
+                {% if s.grade_id == g.pk %}
+                <span class="badge bg-light text-dark border">{{ s.name }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          {% empty %}
+          <div class="list-group-item text-muted small text-center py-3">No grades configured.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .hover-bg:hover { background: #f8f9fa; }
+  #studentList input[type="checkbox"] { width:1rem;height:1rem;flex-shrink:0; }
+  .student-item.hidden { display: none !important; }
+  .nav-tabs .nav-link { border-radius: 0; }
+</style>
+
+<script>
+  // ── Shared: sync program selection into each form's hidden input ──
+  const sharedProgram = document.getElementById('sharedProgram');
+  const programInputs = ['programStudent','programStream','programGrade'].map(id => document.getElementById(id));
+  const programInfo   = document.getElementById('programInfo');
+  const pName = document.getElementById('pName');
+  const pMeta = document.getElementById('pMeta');
+  const pPriceBadge = document.getElementById('pPriceBadge');
+
+  function onProgramChange() {
+    const opt = sharedProgram.selectedOptions[0];
+    const val = sharedProgram.value;
+    programInputs.forEach(el => { if(el) el.value = val; });
+
+    if (val) {
+      pName.textContent = opt.dataset.name;
+      pMeta.textContent = opt.dataset.subject + (opt.dataset.teacher ? ' · ' + opt.dataset.teacher : '');
+      const price = parseFloat(opt.dataset.price) || 0;
+      if (price > 0) {
+        pPriceBadge.textContent = 'KES ' + price;
+        pPriceBadge.className = 'badge bg-warning text-dark ms-2';
+      } else {
+        pPriceBadge.textContent = 'Free';
+        pPriceBadge.className = 'badge bg-success ms-2';
+      }
+      programInfo.classList.remove('d-none');
+    } else {
+      programInfo.classList.add('d-none');
+    }
+    updateSubmitButtons();
+    showPayNotes(price > 0);
+  }
+
+  function showPayNotes(show) {
+    ['schoolPayNoteStudent','schoolPayNoteStream','schoolPayNoteGrade'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('d-none', !show);
+    });
+  }
+
+  sharedProgram.addEventListener('change', onProgramChange);
+
+  // ── Per Student tab ──
+  const checkboxes = document.querySelectorAll('#studentList input[type="checkbox"]');
+  const countBadge = document.getElementById('selectedCount');
+
+  function updateCount() {
+    const n = document.querySelectorAll('#studentList input[type="checkbox"]:checked').length;
+    countBadge.textContent = n + ' selected';
+    updateSubmitButtons();
+  }
+  checkboxes.forEach(cb => cb.addEventListener('change', updateCount));
+
+  document.getElementById('selectAll').addEventListener('click', () => {
+    document.querySelectorAll('.student-item:not(.hidden) input[type="checkbox"]').forEach(cb => cb.checked = true);
+    updateCount();
+  });
+  document.getElementById('clearAll').addEventListener('click', () => {
+    checkboxes.forEach(cb => cb.checked = false);
+    updateCount();
+  });
+  document.getElementById('studentSearch').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.student-item').forEach(item => {
+      const label = item.querySelector('.student-label').textContent.toLowerCase();
+      item.classList.toggle('hidden', q && !label.includes(q));
+    });
+  });
+
+  // ── Stream / Grade tab ──
+  const streamSelect = document.getElementById('id_stream');
+  const gradeSelect  = document.getElementById('id_grade');
+
+  if (streamSelect) {
+    streamSelect.addEventListener('change', () => {
+      document.getElementById('streamInfo').classList.toggle('d-none', !streamSelect.value);
+      updateSubmitButtons();
+    });
+  }
+  if (gradeSelect) {
+    gradeSelect.addEventListener('change', () => {
+      document.getElementById('gradeInfo').classList.toggle('d-none', !gradeSelect.value);
+      updateSubmitButtons();
+    });
+  }
+
+  // ── Enable/disable submit buttons ──
+  function updateSubmitButtons() {
+    const hasProg = !!sharedProgram.value;
+    const studentChecked = document.querySelectorAll('#studentList input[type="checkbox"]:checked').length > 0;
+    const hasStream = streamSelect && streamSelect.value;
+    const hasGrade  = gradeSelect  && gradeSelect.value;
+
+    document.getElementById('submitStudent').disabled = !(hasProg && studentChecked);
+    document.getElementById('submitStream').disabled  = !(hasProg && hasStream);
+    document.getElementById('submitGrade').disabled   = !(hasProg && hasGrade);
+  }
+
+  // ── Keep active tab after POST redirect ──
+  const activeTab = sessionStorage.getItem('dilEnrollTab');
+  if (activeTab) {
+    const triggerEl = document.querySelector('#enrollTabs button[data-bs-target="' + activeTab + '"]');
+    if (triggerEl) { new bootstrap.Tab(triggerEl).show(); }
+    sessionStorage.removeItem('dilEnrollTab');
+  }
+  document.querySelectorAll('#enrollTabs button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', e => {
+      sessionStorage.setItem('dilEnrollTab', e.target.dataset.bsTarget);
+    });
+  });
+
+  // Save active tab before form submit
+  ['formStudent','formStream','formGrade'].forEach(id => {
+    const f = document.getElementById(id);
+    if (f) f.addEventListener('submit', () => {
+      const active = document.querySelector('#enrollTabs .nav-link.active');
+      if (active) sessionStorage.setItem('dilEnrollTab', active.dataset.bsTarget);
+    });
+  });
+</script>
+{% endblock %}

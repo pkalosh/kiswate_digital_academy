@@ -1,0 +1,63 @@
+{% extends 'school/base.html' %}
+{% block title %}Exams | {{ school.name }}{% endblock %}
+
+{% block content %}
+<header class="header d-flex align-items-center justify-content-between">
+  <div class="d-flex gap-2 align-items-center">
+    <button class="btn btn-sm btn-dark d-lg-none" id="toggleSidebar"><i class="bi bi-list"></i></button>
+    <div>
+      <h6 class="m-0 fw-bold">Exams</h6>
+      <nav aria-label="breadcrumb" class="small">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'school:dashboard' %}">Dashboard</a></li>
+          <li class="breadcrumb-item active">Exams</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<section class="content container-fluid py-4">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show">{{ message }}<button class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="card shadow-sm rounded-4 border-0">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i> Exams</h5>
+    </div>
+    <div class="card-body">
+      {% if exams %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Title</th>
+                <th>Subject</th>
+                <th>Grade</th>
+                <th>Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for exam in exams %}
+              <tr>
+                <td>{{ exam.title }}</td>
+                <td>{{ exam.subject }}</td>
+                <td>{{ exam.grade }}</td>
+                <td>{{ exam.date }}</td>
+                <td>{{ exam.status }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted text-center py-5">No exams scheduled yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

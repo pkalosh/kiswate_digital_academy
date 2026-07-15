@@ -1,0 +1,205 @@
+{% extends base_template|default:"dim/tuition/portal_base.html" %}
+{% block title %}My Payments{% endblock %}
+{% block nav_s_pay %}active{% endblock %}
+{% block mnav_s_pay %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pay-card { background:#fff; border-radius:14px; border:1px solid #e5e7eb; overflow:hidden; margin-bottom:1rem; }
+  .pay-card-header { padding:1rem 1.25rem .75rem; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+  .pay-card-body { padding:1rem 1.25rem; }
+  .pay-row { display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.4rem 0; border-bottom:1px solid #f9fafb; font-size:.83rem; }
+  .pay-row:last-child { border-bottom:none; padding-bottom:0; }
+  .pay-label { color:#6b7280; font-size:.75rem; }
+  .status-paid { background:#d1fae5; color:#065f46; }
+  .status-pending { background:#fef3c7; color:#92400e; }
+  .status-failed { background:#fee2e2; color:#991b1b; }
+  .status-refunded { background:#e0e7ff; color:#3730a3; }
+  .prog-title { font-weight:700; font-size:.92rem; color:#111; }
+  .prog-teacher { font-size:.77rem; color:#9ca3af; }
+  .empty-state { text-align:center; padding:3rem 1rem; color:#9ca3af; }
+  .empty-state i { font-size:2.5rem; display:block; margin-bottom:.75rem; opacity:.3; }
+  .free-badge { background:#d1fae5; color:#065f46; font-size:.72rem; font-weight:700; padding:.2rem .6rem; border-radius:20px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+  <h5 class="mb-0 fw-bold"><i class="bi bi-credit-card me-2 text-success"></i>My Payments</h5>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-search me-1"></i>Browse Programs
+  </a>
+</div>
+
+{% if enr_data %}
+
+{% for item in enr_data %}
+{% with enr=item.enrollment pay=item.payment %}
+<div class="pay-card">
+  <div class="pay-card-header">
+    <div class="min-w-0">
+      <div class="prog-title text-truncate">{{ enr.program.name }}</div>
+      {% if enr.program.teacher %}
+      <div class="prog-teacher"><i class="bi bi-person-badge me-1"></i>{{ enr.program.teacher.full_name }}</div>
+      {% endif %}
+    </div>
+    {% if enr.program.price and enr.program.price > 0 %}
+      {% if pay %}
+        {% if pay.status == 'paid' %}
+          <span class="badge rounded-pill status-paid" style="font-size:.72rem;white-space:nowrap;">
+            <i class="bi bi-check-circle me-1"></i>Paid
+          </span>
+        {% elif pay.status == 'pending' %}
+          <span class="badge rounded-pill status-pending" style="font-size:.72rem;white-space:nowrap;">
+            <i class="bi bi-clock me-1"></i>Pending
+          </span>
+        {% elif pay.status == 'failed' %}
+          <span class="badge rounded-pill status-failed" style="font-size:.72rem;white-space:nowrap;">
+            <i class="bi bi-x-circle me-1"></i>Failed
+          </span>
+        {% else %}
+          <span class="badge rounded-pill status-refunded" style="font-size:.72rem;white-space:nowrap;">
+            {{ pay.get_status_display }}
+          </span>
+        {% endif %}
+      {% else %}
+        <span class="badge rounded-pill status-pending" style="font-size:.72rem;white-space:nowrap;">
+          <i class="bi bi-clock me-1"></i>No Payment
+        </span>
+      {% endif %}
+    {% else %}
+      <span class="free-badge"><i class="bi bi-gift me-1"></i>Free</span>
+    {% endif %}
+  </div>
+
+  <div class="pay-card-body">
+    {% if enr.program.price and enr.program.price > 0 %}
+    {% if pay %}
+    <div class="pay-row">
+      <span class="pay-label">Amount</span>
+      <span class="fw-semibold">KES {{ pay.amount }}</span>
+    </div>
+    <div class="pay-row">
+      <span class="pay-label">Method</span>
+      <span>{{ pay.get_payment_method_display }}</span>
+    </div>
+    {% if pay.transaction_id %}
+    <div class="pay-row">
+      <span class="pay-label">Transaction ID</span>
+      <code style="font-size:.78rem;">{{ pay.transaction_id }}</code>
+    </div>
+    {% endif %}
+    {% if pay.payer_phone %}
+    <div class="pay-row">
+      <span class="pay-label">Payer Phone</span>
+      <span>{{ pay.payer_phone }}</span>
+    </div>
+    {% endif %}
+    {% if pay.paid_at %}
+    <div class="pay-row">
+      <span class="pay-label">Paid On</span>
+      <span>{{ pay.paid_at|date:"d M Y H:i" }}</span>
+    </div>
+    {% endif %}
+    {% if pay.status == 'pending' or pay.status == 'failed' %}
+    <div class="mt-3">
+      <button class="btn btn-sm btn-success w-100 stk-btn"
+              data-enrollment="{{ enr.pk }}"
+              data-amount="{{ enr.program.price }}"
+              data-program="{{ enr.program.name|escapejs }}">
+        <i class="bi bi-phone me-1"></i>Pay KES {{ enr.program.price }} via M-Pesa STK Push
+      </button>
+    </div>
+    {% endif %}
+    {% else %}
+    <!-- No payment record yet -->
+    <div class="mt-3">
+      <div class="mb-2 small text-warning fw-semibold">
+        <i class="bi bi-exclamation-triangle me-1"></i>Payment Required — KES {{ enr.program.price }}
+      </div>
+      <button class="btn btn-sm btn-success w-100 stk-btn"
+              data-enrollment="{{ enr.pk }}"
+              data-amount="{{ enr.program.price }}"
+              data-program="{{ enr.program.name|escapejs }}">
+        <i class="bi bi-phone me-1"></i>Pay KES {{ enr.program.price }} via M-Pesa STK Push
+      </button>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="text-muted" style="font-size:.83rem;">
+      <i class="bi bi-gift text-success me-1"></i>This program is free — no payment required.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+
+{% else %}
+<div class="empty-state">
+  <i class="bi bi-credit-card"></i>
+  <h6 class="text-muted">No enrolled programs</h6>
+  <p class="small">Enroll in a program to see your payment status here.</p>
+  <a href="{% url 'kiswate_digital_app:tuition_browse' %}" class="btn btn-brand btn-sm mt-2">
+    <i class="bi bi-search me-1"></i>Browse Programs
+  </a>
+</div>
+{% endif %}
+
+<!-- ── STK PUSH MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal fade" id="stkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-phone text-success me-2"></i>M-Pesa STK Push Payment</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="stkForm" method="post" action="">
+        {% csrf_token %}
+        <div class="modal-body pt-2">
+          <p class="text-muted small mb-3">
+            An STK push will be sent to your phone. Approve the payment prompt to complete enrollment in
+            <strong id="stkProgram"></strong>.
+          </p>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">M-Pesa Phone Number</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-phone"></i></span>
+              <input type="tel" name="phone" id="stkPhone" class="form-control"
+                     placeholder="e.g. 0712345678" required
+                     value="{{ request.user.phone_number|default:'' }}">
+            </div>
+            <div class="form-text">Enter the number registered to your M-Pesa account.</div>
+          </div>
+          <div class="p-2 rounded-3 bg-success bg-opacity-10 small">
+            <i class="bi bi-info-circle text-success me-1"></i>
+            Amount: <strong id="stkAmount" class="text-success"></strong>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-success px-4">
+            <i class="bi bi-send me-1"></i>Send STK Push
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}{# content #}
+
+{% block extra_js %}
+<script>
+const stkBaseUrl = "{% url 'kiswate_digital_app:tuition_stk_push' enrollment_pk=0 %}";
+document.querySelectorAll('.stk-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const enrollPk = this.dataset.enrollment;
+    document.getElementById('stkProgram').textContent = this.dataset.program;
+    document.getElementById('stkAmount').textContent = 'KES ' + this.dataset.amount;
+    document.getElementById('stkForm').action = stkBaseUrl.replace('/0/', '/' + enrollPk + '/');
+    new bootstrap.Modal(document.getElementById('stkModal')).show();
+  });
+});
+</script>
+{% endblock %}
