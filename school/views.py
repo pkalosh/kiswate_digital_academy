@@ -3541,12 +3541,13 @@ def lesson_edit(request, lesson_id):
         })
 
     # GET → load form
+    lesson_school = lesson.timetable.school
     context = {
         "lesson": lesson,
-        "subjects": Subject.objects.all(),
-        "streams": Streams.objects.all(),
-        "teachers": StaffProfile.objects.select_related("user"),
-        "timeslots": TimeSlot.objects.all(),
+        "subjects": Subject.objects.filter(school=lesson_school, is_active=True),
+        "streams": Streams.objects.filter(school=lesson_school),
+        "teachers": StaffProfile.objects.filter(school=lesson_school).select_related("user"),
+        "timeslots": TimeSlot.objects.filter(school=lesson_school),
         "weekday_choices": WEEKDAY_CHOICES,
     }
 
@@ -6463,12 +6464,16 @@ def assign_class_teacher_for_teacher(request, teacher_id):
 def ajax_subjects(request):
     school_id = request.GET.get("school_id")
     grade_id = request.GET.get("grade_id")
-    qs = Subject.objects.all()
+    # If no school_id provided, fall back to the requesting user's school
+    if not school_id:
+        user_school = get_user_school(request.user)
+        school_id = user_school.id if user_school else None
+    qs = Subject.objects.filter(is_active=True)
     if school_id:
         qs = qs.filter(school_id=school_id)
     if grade_id:
         qs = qs.filter(grade__id=grade_id)
-    subjects = qs.values("id","name").order_by("name")
+    subjects = qs.values("id", "name").order_by("name")
     return JsonResponse(list(subjects), safe=False)
 
 def is_policymaker(user):
