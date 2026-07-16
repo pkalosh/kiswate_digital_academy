@@ -16,7 +16,7 @@ from django.db import models
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
-from school.models import School,Scholarship,SubscriptionPlan,ContactMessage, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward
+from school.models import School,Scholarship,SubscriptionPlan,ContactMessage, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward, SubjectCatalog
 from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 from django.contrib.auth.hashers import make_password
@@ -41,7 +41,7 @@ from .forms import (
     LessonForm, AssignmentForm, SubmissionForm, GradeSubmissionForm,
     AssessmentForm, QuestionForm, ChoiceForm, ChoiceFormSet, PublishResultsForm,
     NotificationTemplateForm, BulkNotificationForm,
-    TuitionProgramForm, TuitionPaymentForm, SubjectForm, PrincipalTuitionEnrollForm,
+    TuitionProgramForm, TuitionPaymentForm, SubjectForm, SubjectCatalogForm, PrincipalTuitionEnrollForm,
 )
 from .utils import (
     auto_grade_attempt, record_join_attendance, get_attendance_summary,
@@ -2680,20 +2680,20 @@ def _is_kiswate_admin_only(user):
 
 @login_required
 def subject_list(request):
-    """Kiswate admin: view, create, and manage global tuition subjects."""
+    """Kiswate admin: view, create, and manage global subject catalog."""
     if not _is_kiswate_admin_only(request.user):
         messages.error(request, "Access denied. This area is restricted to Kiswate administrators.")
         return redirect('userauths:sign-in')
 
     q = request.GET.get('q', '')
-    subjects = Subject.objects.order_by('name')
+    subjects = SubjectCatalog.objects.filter(is_active=True).order_by('name')
     if q:
         subjects = subjects.filter(Q(name__icontains=q) | Q(code__icontains=q))
 
     total = subjects.count()
     paginator = Paginator(subjects, 25)
     page_obj = paginator.get_page(request.GET.get('page'))
-    form = SubjectForm()
+    form = SubjectCatalogForm()
     return render(request, 'dim/subjects/subject_list.html', {
         'subjects': page_obj, 'page_obj': page_obj, 'q': q, 'form': form, 'total': total,
     })
@@ -2705,7 +2705,7 @@ def subject_create(request):
         messages.error(request, "Access denied.")
         return redirect('userauths:sign-in')
     if request.method == 'POST':
-        form = SubjectForm(request.POST)
+        form = SubjectCatalogForm(request.POST)
         if form.is_valid():
             s = form.save()
             messages.success(request, f"Subject '{s.name}' created.")
@@ -2719,9 +2719,9 @@ def subject_edit(request, pk):
     if not _is_kiswate_admin_only(request.user):
         messages.error(request, "Access denied.")
         return redirect('userauths:sign-in')
-    subj = get_object_or_404(Subject, pk=pk)
+    subj = get_object_or_404(SubjectCatalog, pk=pk)
     if request.method == 'POST':
-        form = SubjectForm(request.POST, instance=subj)
+        form = SubjectCatalogForm(request.POST, instance=subj)
         if form.is_valid():
             form.save()
             messages.success(request, f"Subject '{subj.name}' updated.")
@@ -2735,14 +2735,12 @@ def subject_delete(request, pk):
     if not _is_kiswate_admin_only(request.user):
         messages.error(request, "Access denied.")
         return redirect('userauths:sign-in')
-    subj = get_object_or_404(Subject, pk=pk)
+    subj = get_object_or_404(SubjectCatalog, pk=pk)
     if request.method == 'POST':
         name = subj.name
-        if subj.programs.exists():
-            messages.error(request, f"Cannot delete '{name}' — it has programs linked to it.")
-        else:
-            subj.delete()
-            messages.success(request, f"Subject '{name}' deleted.")
+        subj.is_active = False
+        subj.save(update_fields=['is_active'])
+        messages.success(request, f"Subject '{name}' deactivated from catalog.")
     return redirect('kiswate_digital_app:subject_list')
 
 
@@ -2795,9 +2793,9 @@ def subject_bulk_upload(request):
                 skipped += 1
                 continue
 
-            obj, is_new = Subject.objects.update_or_create(
+            obj, is_new = SubjectCatalog.objects.update_or_create(
                 code=code,
-                defaults={'name': name, 'description': description},
+                defaults={'name': name, 'description': description, 'is_active': True},
             )
             if is_new:
                 created += 1

@@ -10,7 +10,7 @@ from django.core.validators import MinValueValidator
 from django.conf import settings
 from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
-from school.models import School, Scholarship, SchoolSubscription, SubscriptionPlan, County, City, Constituency, SubCounty, Ward, Streams, Grade, StaffProfile
+from school.models import School, Scholarship, SchoolSubscription, SubscriptionPlan, County, City, Constituency, SubCounty, Ward, Streams, Grade, StaffProfile, SubjectCatalog
 from userauths.models import User
 from django.forms import inlineformset_factory
 
@@ -953,6 +953,19 @@ class SubjectForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. Mathematics'}),
             'code': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. MATH'}),
             'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2, 'placeholder': 'Optional description'}),
+        }
+
+
+class SubjectCatalogForm(forms.ModelForm):
+    class Meta:
+        model = SubjectCatalog
+        fields = ['name', 'code', 'description', 'curriculum', 'is_core', 'is_elective', 'sessions_per_week_default', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. Mathematics'}),
+            'code': forms.TextInput(attrs={'class': INPUT, 'placeholder': 'e.g. MATH'}),
+            'description': forms.Textarea(attrs={'class': TEXTAREA, 'rows': 2, 'placeholder': 'Optional description'}),
+            'curriculum': forms.Select(attrs={'class': SELECT}),
+            'sessions_per_week_default': forms.NumberInput(attrs={'class': INPUT, 'min': 1}),
         }
 
 

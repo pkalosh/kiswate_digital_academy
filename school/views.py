@@ -948,42 +948,48 @@ def school_users(request):
     tab = request.GET.get('tab', 'staff')
     query = request.GET.get('q', '').strip()
 
-    staff_qs = StaffProfile.objects.filter(school=school).select_related('user').order_by('user__first_name')
-    students_qs = Student.objects.filter(school=school).select_related('user', 'grade_level', 'stream').order_by('user__first_name')
-    parents_qs = Parent.objects.filter(school=school).select_related('user').order_by('user__first_name')
-
-    if query:
-        staff_qs = staff_qs.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query) |
-            Q(user__email__icontains=query) |
-            Q(staff_id__icontains=query) |
-            Q(position__icontains=query)
-        )
-        students_qs = students_qs.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query) |
-            Q(user__email__icontains=query) |
-            Q(student_id__icontains=query)
-        )
-        parents_qs = parents_qs.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query) |
-            Q(user__email__icontains=query) |
-            Q(parent_id__icontains=query)
-        )
-
+    # Fast COUNT queries for nav badges (always needed)
     staff_count = StaffProfile.objects.filter(school=school).count()
     students_count = Student.objects.filter(school=school).count()
     parents_count = Parent.objects.filter(school=school).count()
 
-    staff_list = paginate(request, staff_qs, per_page=25, page_param='sp')
-    students_list = paginate(request, students_qs, per_page=25, page_param='stp')
-    parents_list = paginate(request, parents_qs, per_page=25, page_param='pp')
+    # Only fetch data for the active tab to avoid redundant DB work
+    staff_list = students_list = parents_list = []
 
-    staff_form = StaffCreationForm(school=school)
-    student_form = StudentCreationForm(school=school)
-    parent_form = ParentCreationForm(school=school)
+    if tab == 'staff':
+        staff_qs = StaffProfile.objects.filter(school=school).select_related('user').order_by('user__first_name')
+        if query:
+            staff_qs = staff_qs.filter(
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__email__icontains=query) |
+                Q(staff_id__icontains=query) |
+                Q(position__icontains=query)
+            )
+        staff_list = paginate(request, staff_qs, per_page=25, page_param='sp')
+    elif tab == 'students':
+        students_qs = Student.objects.filter(school=school).select_related('user', 'grade_level', 'stream').order_by('user__first_name')
+        if query:
+            students_qs = students_qs.filter(
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__email__icontains=query) |
+                Q(student_id__icontains=query)
+            )
+        students_list = paginate(request, students_qs, per_page=25, page_param='stp')
+    elif tab == 'parents':
+        parents_qs = Parent.objects.filter(school=school).select_related('user').prefetch_related('children').order_by('user__first_name')
+        if query:
+            parents_qs = parents_qs.filter(
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__email__icontains=query) |
+                Q(parent_id__icontains=query)
+            )
+        parents_list = paginate(request, parents_qs, per_page=25, page_param='pp')
+
+    # Build forms lazily — only for the active tab, only when needed
+    staff_form = student_form = parent_form = None
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -1014,6 +1020,13 @@ def school_users(request):
                 return redirect(f"{request.path}?tab=parents")
             else:
                 tab = 'parents'
+
+    if staff_form is None and tab == 'staff':
+        staff_form = StaffCreationForm(school=school)
+    if student_form is None and tab == 'students':
+        student_form = StudentCreationForm(school=school)
+    if parent_form is None and tab == 'parents':
+        parent_form = ParentCreationForm(school=school)
 
     context = {
         'school': school,

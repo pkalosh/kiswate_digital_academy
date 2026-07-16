@@ -216,7 +216,7 @@
             <td><code>{{ p.parent_id }}</code></td>
             <td>{{ p.user.email }}</td>
             <td>{{ p.phone }}</td>
-            <td>{{ p.children.count }}</td>
+            <td>{{ p.children.all|length }}</td>
             <td>
               <a href="{% url 'school:update_parent' p.pk %}"
                  class="btn btn-xs btn-outline-primary" title="Edit">
@@ -266,6 +266,7 @@
 </div>
 
 <!-- ─── ADD STAFF MODAL ──────────────────────────────────────────────── -->
+{% if tab == 'staff' and staff_form %}
 <div class="modal fade" id="addStaffModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -297,8 +298,10 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- ─── ADD STUDENT MODAL ────────────────────────────────────────────── -->
+{% if tab == 'students' and student_form %}
 <div class="modal fade" id="addStudentModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -330,8 +333,10 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- ─── ADD PARENT MODAL ─────────────────────────────────────────────── -->
+{% if tab == 'parents' and parent_form %}
 <div class="modal fade" id="addParentModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -363,6 +368,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <style>
 .btn-xs { padding: .2rem .4rem; font-size: .75rem; }

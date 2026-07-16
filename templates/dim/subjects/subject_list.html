@@ -6,7 +6,7 @@
 <div class="page-header">
   <div>
     <h5 class="mb-0"><i class="bi bi-book me-2"></i>Global Subjects</h5>
-    <small class="text-muted">{{ total }} subject{{ total|pluralize }} · used across all tuition programs</small>
+    <small class="text-muted">{{ total }} active subject{{ total|pluralize }} in catalog</small>
   </div>
   <div class="d-flex gap-2">
     <button class="btn btn-brand btn-sm" data-bs-toggle="modal" data-bs-target="#addSubjectModal">
@@ -32,8 +32,9 @@
         <th>#</th>
         <th>Subject Name</th>
         <th>Code</th>
+        <th>Curriculum</th>
+        <th>Type</th>
         <th>Description</th>
-        <th>Programs</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -43,10 +44,13 @@
         <td class="text-muted small">{{ forloop.counter }}</td>
         <td class="fw-semibold">{{ s.name }}</td>
         <td><span class="badge bg-secondary">{{ s.code }}</span></td>
-        <td class="text-muted small">{{ s.description|truncatechars:60|default:"—" }}</td>
+        <td class="small">{{ s.get_curriculum_display }}</td>
         <td>
-          <span class="badge bg-success text-white">{{ s.programs.count }}</span>
+          {% if s.is_core %}<span class="badge bg-primary me-1">Core</span>{% endif %}
+          {% if s.is_elective %}<span class="badge bg-info text-dark">Elective</span>{% endif %}
+          {% if not s.is_core and not s.is_elective %}<span class="text-muted">—</span>{% endif %}
         </td>
+        <td class="text-muted small">{{ s.description|truncatechars:60|default:"—" }}</td>
         <td>
           <div class="d-flex gap-1">
             <button class="btn btn-xs btn-outline-success" data-bs-toggle="modal" data-bs-target="#editModal{{ s.pk }}">
@@ -55,8 +59,8 @@
             <form method="post" action="{% url 'kiswate_digital_app:subject_delete' s.pk %}" class="d-inline">
               {% csrf_token %}
               <button type="submit" class="btn btn-xs btn-outline-danger"
-                      onclick="return confirm('Delete {{ s.name }}? This cannot be undone.')">
-                <i class="bi bi-trash"></i>
+                      onclick="return confirm('Deactivate {{ s.name }} from catalog?')">
+                <i class="bi bi-eye-slash"></i>
               </button>
             </form>
           </div>
@@ -64,9 +68,9 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="6" class="text-center text-muted py-5">
+        <td colspan="7" class="text-center text-muted py-5">
           <i class="bi bi-book fs-2 d-block mb-2 opacity-25"></i>
-          No subjects yet. Add one or upload a spreadsheet.
+          No active subjects in catalog. Add one or upload a spreadsheet.
         </td>
       </tr>
       {% endfor %}
@@ -103,7 +107,7 @@
       {% csrf_token %}
       <div class="modal-content">
         <div class="modal-header">
-          <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Subject</h6>
+          <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Subject to Catalog</h6>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -145,7 +149,6 @@
             <label class="form-label fw-semibold">Upload File <span class="text-danger">*</span></label>
             <input type="file" name="file" class="form-control" accept=".csv,.xlsx,.xls" required>
           </div>
-          <!-- Download template hint -->
           <div class="text-muted small">
             <i class="bi bi-info-circle me-1"></i>
             Example row: <code>Mathematics, MATH, Core subject for all levels</code>
@@ -180,6 +183,28 @@
           <div class="mb-3">
             <label class="form-label">Code <span class="text-danger">*</span></label>
             <input type="text" name="code" value="{{ s.code }}" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Curriculum</label>
+            <select name="curriculum" class="form-select form-select-sm">
+              <option value="cbc" {% if s.curriculum == "cbc" %}selected{% endif %}>CBC (Competency-Based)</option>
+              <option value="kcse" {% if s.curriculum == "kcse" %}selected{% endif %}>KCSE</option>
+              <option value="kcpe" {% if s.curriculum == "kcpe" %}selected{% endif %}>KCPE</option>
+              <option value="igcse" {% if s.curriculum == "igcse" %}selected{% endif %}>IGCSE</option>
+              <option value="other" {% if s.curriculum == "other" %}selected{% endif %}>Other</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sessions / Week</label>
+            <input type="number" name="sessions_per_week_default" value="{{ s.sessions_per_week_default }}" class="form-control form-control-sm" min="1">
+          </div>
+          <div class="mb-2 form-check">
+            <input type="checkbox" name="is_core" class="form-check-input" id="core{{ s.pk }}" {% if s.is_core %}checked{% endif %}>
+            <label class="form-check-label" for="core{{ s.pk }}">Core subject</label>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" name="is_elective" class="form-check-input" id="elec{{ s.pk }}" {% if s.is_elective %}checked{% endif %}>
+            <label class="form-check-label" for="elec{{ s.pk }}">Elective</label>
           </div>
           <div class="mb-3">
             <label class="form-label">Description</label>
