@@ -1,0 +1,36 @@
+# ─── systemd service for ZKTeco biometric sync ───────────────────────────────
+#
+# Install:
+#   sudo cp deployment/zkteco.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable zkteco
+#   sudo systemctl start zkteco
+#
+# Monitor:
+#   sudo systemctl status zkteco
+#   sudo journalctl -u zkteco -f
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=Kiswate ZKTeco Biometric Sync
+After=network.target mysql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=kiswate
+WorkingDirectory=/home/kiswate/kiswate_digital
+ExecStart=/home/kiswate/venv/bin/python /home/kiswate/kiswate_digital/zkteco_to_cloud.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=DJANGO_SETTINGS_MODULE=src.settings
+
+# Kill gracefully on stop
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

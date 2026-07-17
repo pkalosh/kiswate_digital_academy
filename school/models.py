@@ -1408,11 +1408,36 @@ class Complaint(models.Model):
         ('bullying', 'Bullying'),
         ('teacher', 'Teacher Conduct'),
         ('facilities', 'Facilities'),
+        ('workplace', 'Workplace Issue'),
+        ('policy', 'Policy & Platform'),
         ('other', 'Other'),
     ]
+    COMPLAINANT_TYPE_CHOICES = [
+        ('parent', 'Parent'),
+        ('teacher', 'Teacher'),
+        ('student', 'Student'),
+        ('principal', 'Principal / Admin'),
+    ]
+    TARGET_CHOICES = [
+        ('school_admin', 'School Administration'),
+        ('kiswate_admin', 'Kiswate Support'),
+    ]
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='complaints')
-    parent = models.ForeignKey(Parent, on_delete=models.CASCADE, related_name='complaints')
+    complainant_type = models.CharField(max_length=15, choices=COMPLAINANT_TYPE_CHOICES, default='parent')
+    # Parent complaints
+    parent = models.ForeignKey(Parent, on_delete=models.CASCADE, null=True, blank=True, related_name='complaints')
+    # Teacher / principal complaints
+    teacher_complainant = models.ForeignKey(
+        StaffProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='filed_complaints'
+    )
+    # Student complaints
+    student_complainant = models.ForeignKey(
+        Student, on_delete=models.SET_NULL, null=True, blank=True, related_name='filed_complaints'
+    )
+    # Who the complaint is about (optional — e.g. a specific student or incident subject)
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True, related_name='complaints')
+    # Destination: school admin or Kiswate admin (for principal escalations)
+    target = models.CharField(max_length=15, choices=TARGET_CHOICES, default='school_admin')
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
     subject = models.CharField(max_length=255)
     description = models.TextField()
@@ -1430,8 +1455,19 @@ class Complaint(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['school', 'status']),
-            models.Index(fields=['parent', 'created_at']),
+            models.Index(fields=['school', 'target']),
         ]
+
+    def get_complainant_name(self):
+        if self.is_anonymous:
+            return 'Anonymous'
+        if self.complainant_type == 'parent' and self.parent:
+            return self.parent.user.get_full_name()
+        if self.complainant_type in ('teacher', 'principal') and self.teacher_complainant:
+            return self.teacher_complainant.user.get_full_name()
+        if self.complainant_type == 'student' and self.student_complainant:
+            return self.student_complainant.user.get_full_name()
+        return 'Unknown'
 
     def __str__(self):
         return f"{self.get_category_display()} - {self.subject} ({self.get_status_display()})"

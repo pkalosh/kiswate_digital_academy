@@ -1097,6 +1097,33 @@ class ComplaintForm(forms.ModelForm):
             self.fields['student'].empty_label = '— All children / General —'
 
 
+class StaffComplaintForm(forms.ModelForm):
+    """Used by teachers and principals filing a complaint."""
+    class Meta:
+        model = Complaint
+        fields = ['category', 'subject', 'description', 'is_anonymous']
+        widgets = {
+            'subject': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Brief summary of the issue'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4,
+                                                  'placeholder': 'Describe the issue in detail…'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'is_anonymous': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+class StudentComplaintForm(forms.ModelForm):
+    """Used by students filing a complaint to school administration."""
+    class Meta:
+        model = Complaint
+        fields = ['category', 'subject', 'description']
+        widgets = {
+            'subject': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Brief summary of the issue'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4,
+                                                  'placeholder': 'Describe the issue in detail…'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
 # ─── BULK SUBJECT UPLOAD FORM ────────────────────────────────────────────────
 
 class BulkSubjectUploadForm(forms.Form):

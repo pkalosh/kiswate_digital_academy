@@ -224,6 +224,9 @@
       <a class="side-link" href="{% url 'school:parent-fees' %}">
         <i class="bi bi-cash-stack me-1"></i> Fee Balance
       </a>
+      <a class="side-link" href="{% url 'school:student-complaints' %}">
+        <i class="bi bi-chat-square-text me-1"></i> Complaints
+      </a>
       <hr class="border-secondary my-1">
       <div class="side-section">DIL</div>
       <a class="side-link" href="{% url 'kiswate_digital_app:student_tuition_dashboard' %}">
@@ -335,6 +338,9 @@
     </a>
     <a href="{% url 'school:parent-fees' %}">
       <i class="bi bi-cash-stack"></i><span>Fees</span>
+    </a>
+    <a href="{% url 'school:student-complaints' %}">
+      <i class="bi bi-chat-square-text"></i><span>Complaints</span>
     </a>
   </nav>
 

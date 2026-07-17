@@ -274,6 +274,13 @@ urlpatterns = [
     # Admin: view complaints
     path('manage-complaints/', views.admin_complaints_list, name='admin-complaints'),
 
+    # Teacher and student complaint submission
+    path('teacher/complaints/', views.teacher_complaints, name='teacher-complaints'),
+    path('student/complaints/', views.student_complaints, name='student-complaints'),
+
+    # Principal escalations to Kiswate support
+    path('escalations/', views.principal_escalation, name='principal-escalation'),
+
     # Bulk notifications
     path('notifications/bulk/', views.bulk_notify, name='bulk-notify'),
 

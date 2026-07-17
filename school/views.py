@@ -88,7 +88,7 @@ from .forms import (
     AttendanceForm, DisciplineRecordForm, NotificationForm, PaymentForm,
     AssignmentForm, SubmissionForm, RoleForm, InvoiceForm, SchoolSubscriptionForm,
     ContactMessageForm,ParentStudentCreationForm,TermForm,TimeSlotForm,AssignParentStudentForm,
-    SubjectCatalogForm,SubjectActivationForm,ComplaintForm,BulkSubjectUploadForm,
+    SubjectCatalogForm,SubjectActivationForm,ComplaintForm,StaffComplaintForm,StudentComplaintForm,BulkSubjectUploadForm,
     BulkNotificationForm,
     ExamSessionForm, ExamResultForm, ExamUploadForm,
     FeeStructureForm, BulkInvoiceGenerateForm, FeePaymentUploadForm, FeeInvoiceForm,
@@ -8335,7 +8335,7 @@ def parent_attendance(request):
 
 @login_required
 def admin_complaints_list(request):
-    """Principal/admin view of all parent complaints."""
+    """Principal/admin view of all complaints received by the school."""
     user = request.user
     if not (user.is_admin or user.is_principal or user.is_deputy_principal):
         messages.error(request, "Access denied.")
@@ -8347,11 +8347,15 @@ def admin_complaints_list(request):
         return redirect('school:dashboard')
 
     status_filter = request.GET.get('status', '')
-    qs = Complaint.objects.filter(school=school).select_related(
-        'parent__user', 'student__user', 'responded_by__user'
+    type_filter = request.GET.get('type', '')
+    qs = Complaint.objects.filter(school=school, target='school_admin').select_related(
+        'parent__user', 'student__user', 'teacher_complainant__user',
+        'student_complainant__user', 'responded_by__user'
     ).order_by('-created_at')
     if status_filter:
         qs = qs.filter(status=status_filter)
+    if type_filter:
+        qs = qs.filter(complainant_type=type_filter)
 
     if request.method == 'POST':
         complaint_id = request.POST.get('complaint_id')
@@ -8382,8 +8386,134 @@ def admin_complaints_list(request):
     return render(request, 'school/complaints.html', {
         'complaints': page,
         'status_filter': status_filter,
+        'type_filter': type_filter,
         'school': school,
         'status_choices': Complaint.STATUS_CHOICES,
+        'type_choices': Complaint.COMPLAINANT_TYPE_CHOICES,
+    })
+
+
+@login_required
+def teacher_complaints(request):
+    """Teacher: submit and track complaints to school administration."""
+    if not getattr(request.user, 'is_teacher', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    try:
+        staff = request.user.staffprofile
+    except Exception:
+        messages.error(request, "Staff profile not found.")
+        return redirect('school:dashboard')
+
+    school = staff.school
+    form = StaffComplaintForm()
+
+    if request.method == 'POST':
+        form = StaffComplaintForm(request.POST)
+        if form.is_valid():
+            complaint = form.save(commit=False)
+            complaint.school = school
+            complaint.complainant_type = 'teacher'
+            complaint.teacher_complainant = staff
+            complaint.target = 'school_admin'
+            complaint.save()
+            messages.success(request, "Complaint submitted. The administration will respond shortly.")
+            return redirect('school:teacher-complaints')
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    complaints = Complaint.objects.filter(teacher_complainant=staff).select_related('responded_by__user')
+    paginator = Paginator(complaints, 15)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/teacher/complaints.html', {
+        'form': form,
+        'complaints': page,
+    })
+
+
+@login_required
+def student_complaints(request):
+    """Student: submit and track complaints to school administration."""
+    if not getattr(request.user, 'is_student', False):
+        messages.error(request, "Access denied.")
+        return redirect('userauths:sign-in')
+
+    try:
+        student = request.user.student
+    except Exception:
+        messages.error(request, "Student profile not found.")
+        return redirect('school:dashboard')
+
+    school = student.school
+    form = StudentComplaintForm()
+
+    if request.method == 'POST':
+        form = StudentComplaintForm(request.POST)
+        if form.is_valid():
+            complaint = form.save(commit=False)
+            complaint.school = school
+            complaint.complainant_type = 'student'
+            complaint.student_complainant = student
+            complaint.target = 'school_admin'
+            complaint.save()
+            messages.success(request, "Complaint submitted. The administration will respond shortly.")
+            return redirect('school:student-complaints')
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    complaints = Complaint.objects.filter(student_complainant=student).select_related('responded_by__user')
+    paginator = Paginator(complaints, 15)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/student/complaints.html', {
+        'form': form,
+        'complaints': page,
+    })
+
+
+@login_required
+def principal_escalation(request):
+    """Principal/admin: file escalation tickets to Kiswate support."""
+    user = request.user
+    if not (user.is_principal or user.is_admin or user.is_deputy_principal):
+        messages.error(request, "Access denied.")
+        return redirect('school:dashboard')
+
+    school = get_user_school(user)
+    if not school:
+        messages.error(request, "No school profile found.")
+        return redirect('school:dashboard')
+
+    try:
+        staff = user.staffprofile
+    except Exception:
+        staff = None
+
+    form = StaffComplaintForm()
+
+    if request.method == 'POST':
+        form = StaffComplaintForm(request.POST)
+        if form.is_valid():
+            complaint = form.save(commit=False)
+            complaint.school = school
+            complaint.complainant_type = 'principal'
+            complaint.teacher_complainant = staff
+            complaint.target = 'kiswate_admin'
+            complaint.save()
+            messages.success(request, "Escalation submitted. Kiswate support will respond shortly.")
+            return redirect('school:principal-escalation')
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    escalations = Complaint.objects.filter(school=school, target='kiswate_admin').select_related('responded_by__user')
+    paginator = Paginator(escalations, 15)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'school/principal_escalation.html', {
+        'form': form,
+        'complaints': page,
     })
 
 

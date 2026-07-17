@@ -37,6 +37,7 @@ urlpatterns = [
     path("payment-history/", views.payment_history, name="payment_history"),
     path("reports/", views.reports, name="reports"),
     path("support/", views.support, name="support"),
+    path("dim/escalations/", views.kiswate_escalations, name="kiswate_escalations"),
     #scholarships
     path('scholarship-list/', views.scholarship_list_create, name='scholarship_list_create'),
     path('scholarship/<int:pk>/edit/', views.scholarship_edit, name='scholarship_edit'),
@@ -145,11 +146,12 @@ urlpatterns = [
     path('tuition/parent/payments/<int:enrollment_pk>/stk-push/', views.parent_stk_push, name='parent_stk_push'),
 
     # ── GLOBAL SUBJECTS ────────────────────────────────────────────────────────
-    path('subjects/', views.subject_list, name='subject_list'),
-    path('subjects/create/', views.subject_create, name='subject_create'),
-    path('subjects/<int:pk>/edit/', views.subject_edit, name='subject_edit'),
-    path('subjects/<int:pk>/delete/', views.subject_delete, name='subject_delete'),
-    path('subjects/upload/', views.subject_bulk_upload, name='subject_bulk_upload'),
+    # Prefixed with 'dim/' to avoid shadowing school's /subjects/ URL
+    path('dim/subjects/', views.subject_list, name='subject_list'),
+    path('dim/subjects/create/', views.subject_create, name='subject_create'),
+    path('dim/subjects/<int:pk>/edit/', views.subject_edit, name='subject_edit'),
+    path('dim/subjects/<int:pk>/delete/', views.subject_delete, name='subject_delete'),
+    path('dim/subjects/upload/', views.subject_bulk_upload, name='subject_bulk_upload'),
 
     # ── PRINCIPAL TUITION ENROLLMENT ───────────────────────────────────────────
     path('tuition/principal/enroll/', views.principal_enroll_tuition, name='principal_enroll_tuition'),

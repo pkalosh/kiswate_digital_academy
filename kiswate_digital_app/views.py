@@ -16,7 +16,7 @@ from django.db import models
 from decimal import Decimal
 from django.urls import reverse
 from django.conf import settings
-from school.models import School,Scholarship,SubscriptionPlan,ContactMessage, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward, SubjectCatalog
+from school.models import School,Scholarship,SubscriptionPlan,ContactMessage, SchoolSubscription, StaffProfile, Student, Parent, Scholarship, County, City,Constituency,SubCounty,Ward, SubjectCatalog, Complaint
 from userauths.models import User
 from .forms import SchoolCreationForm, SchoolEditForm,AdminEditForm,ScholarshipForm,SubscriptionPlanForm, SchoolSubscriptionForm
 from django.contrib.auth.hashers import make_password
@@ -493,6 +493,48 @@ def support(request):
     from django.core.paginator import Paginator
     page = Paginator(messages_qs, 20).get_page(request.GET.get('page'))
     return render(request, "Dashboard/support.html", {'contact_messages': page})
+
+
+@login_required
+def kiswate_escalations(request):
+    """Kiswate admins view and respond to principal escalation complaints."""
+    user = request.user
+    if not (user.is_superuser or user.is_kiswate_admin or user.is_kiswate_user):
+        messages.error(request, "Access denied.")
+        return redirect('kiswate_digital_app:kiswate_admin_dashboard')
+
+    status_filter = request.GET.get('status', '')
+    qs = Complaint.objects.filter(target='kiswate_admin').select_related(
+        'school', 'teacher_complainant__user', 'responded_by__user'
+    ).order_by('-created_at')
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+
+    if request.method == 'POST':
+        complaint_id = request.POST.get('complaint_id')
+        response_text = request.POST.get('response', '').strip()
+        new_status = request.POST.get('status', 'resolved')
+        complaint = get_object_or_404(Complaint, pk=complaint_id, target='kiswate_admin')
+        if response_text:
+            try:
+                staff = user.staffprofile
+            except Exception:
+                staff = None
+            complaint.response = response_text
+            complaint.status = new_status
+            complaint.responded_by = staff
+            from django.utils import timezone
+            complaint.responded_at = timezone.now()
+            complaint.save()
+            messages.success(request, "Response saved.")
+        return redirect('kiswate_digital_app:kiswate_escalations')
+
+    page = Paginator(qs, 20).get_page(request.GET.get('page'))
+    return render(request, 'dim/escalations.html', {
+        'complaints': page,
+        'status_filter': status_filter,
+        'status_choices': Complaint.STATUS_CHOICES,
+    })
 
 
 @login_required

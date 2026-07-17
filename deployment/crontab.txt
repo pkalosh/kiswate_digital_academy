@@ -1,0 +1,36 @@
+# ─── Kiswate Digital — background process crontab ───────────────────────────
+#
+# Install with:
+#   crontab deployment/crontab.txt
+#
+# Adjust VENV and PROJECT to match your server paths.
+# Logs rotate automatically if logrotate is configured for /var/log/kiswate/.
+#
+# ─── Variables ───────────────────────────────────────────────────────────────
+
+SHELL=/bin/bash
+VENV=/home/kiswate/venv
+PROJECT=/home/kiswate/kiswate_digital
+MANAGE=$VENV/bin/python $PROJECT/manage.py
+LOG=/var/log/kiswate
+
+# ─── Every minute ─────────────────────────────────────────────────────────────
+
+# Dispatch pending school Notification records via SMS + email
+* * * * * $MANAGE send_notifications --limit 100 >> $LOG/notifications.log 2>&1
+
+# Dispatch pending DIL NotificationLog entries via SMS + email
+* * * * * $MANAGE send_dil_reminders --limit 100 >> $LOG/dil_reminders.log 2>&1
+
+# Process any pending ExamUploadJob entries (Excel → ExamResult rows)
+* * * * * $MANAGE process_exam_uploads --limit 10 >> $LOG/exam_uploads.log 2>&1
+
+# ─── Every weekday at 16:00 (after school) ───────────────────────────────────
+
+# Check attendance rates; alert principals and class teachers; notify parents of streaks
+0 16 * * 1-5 $MANAGE check_attendance_alerts --threshold 70 >> $LOG/attendance_alerts.log 2>&1
+
+# ─── Every weekday at 07:30 (before school) ──────────────────────────────────
+
+# Diagnostic: check lesson coverage and teacher assignments for the current term
+30 7 * * 1-5 $MANAGE check_lessons >> $LOG/check_lessons.log 2>&1
